@@ -1,0 +1,179 @@
+{
+  "schema_version": "0.3.0",
+  "catalog_id": "epa-net1-operations-v3",
+  "network_id": "epa-net1",
+  "facilities": [
+    {
+      "link_id": "10",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "11",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "12",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "21",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "22",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "31",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "110",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "111",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "112",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "113",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "121",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "122",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [],
+      "requires_explicit_override": false
+    },
+    {
+      "link_id": "9",
+      "kind": "pump",
+      "allowed_actions": [
+        "pump_on",
+        "pump_off"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "Timed fixed status; source controls require an exact task-level override acknowledgment.",
+      "native_control_names": [
+        "control 1",
+        "control 2"
+      ],
+      "requires_explicit_override": true
+    }
+  ]
+}

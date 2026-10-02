@@ -8,6 +8,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,6 +19,8 @@ jobs:
       - run: python -m services.hydraulics.datasets
       - run: python -m unittest discover -s services/hydraulics/tests -v
       - run: python -m services.hydraulics.demo --export artifacts/public-hydraulics.zip
+      - run: python -m services.hydraulics.acceptance --export artifacts/student1.zip
+      - run: python -m services.hydraulics.pair --export artifacts/feedback-pair.zip
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,0 +1,72 @@
+{
+  "schema_version": "0.3.0",
+  "mode": "benchmark",
+  "run_id": "physical-feedback-pair",
+  "cases": [
+    {
+      "case": "real-candidate-a",
+      "simulation_id": "sim-ac2868ca1179461b98ab4c83778270e8",
+      "network_id": "epa-net3",
+      "engine": "wntr",
+      "metrics": {
+        "shortage_m3": 187.305852698,
+        "supply_ratio": 0.9657389616564475,
+        "min_pressure_m": -24.472849915648634,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "result_ref": "sim-ac2868ca1179461b98ab4c83778270e8/result.json",
+      "verification_ref": "sim-ac2868ca1179461b98ab4c83778270e8/verification.json"
+    },
+    {
+      "case": "real-candidate-b",
+      "simulation_id": "sim-970c2250885444f4b01071b4ef5d2c80",
+      "network_id": "epa-net3",
+      "engine": "wntr",
+      "metrics": {
+        "shortage_m3": 7.702061695,
+        "supply_ratio": 0.9985911778662665,
+        "min_pressure_m": 2.63391475932184,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 1
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "result_ref": "sim-970c2250885444f4b01071b4ef5d2c80/result.json",
+      "verification_ref": "sim-970c2250885444f4b01071b4ef5d2c80/verification.json"
+    }
+  ],
+  "prewarm_comparison": {
+    "numerically_identical": false,
+    "numerically_equivalent": true,
+    "absolute_tolerance": 1e-10,
+    "relative_tolerance": 1e-12,
+    "max_absolute_difference_by_field": {
+      "pressure_m": 1.4210854715202004e-14,
+      "expected_demand_m3s": 0,
+      "delivered_demand_m3s": 0,
+      "leak_flow_m3s": 0,
+      "flow_m3s": 2.325234189221037e-14,
+      "downstream_flow_m3s": 2.325234189221037e-14,
+      "head_m": 7.105427357601002e-15,
+      "level_m": 7.105427357601002e-15,
+      "volume_m3": 1.1368683772161603e-12,
+      "net_inflow_m3s": 3.608224830031759e-16
+    }
+  },
+  "task_constraint_hash": "sha256:ff172c7f90e03068db3ebc691112b6a5a46f322471380dc94bfa4c0284fc3457",
+  "conclusion": "B improves shortage; both retain pressure violations and are not recommendations.",
+  "attribution": "Fixed engineering comparison; AGH must select its own next action from tool feedback in the eventual Live run."
+}

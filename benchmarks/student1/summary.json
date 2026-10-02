@@ -1,0 +1,889 @@
+{
+  "schema_version": "0.3.0",
+  "run_id": "student1-acceptance",
+  "mode": "benchmark",
+  "created_at": "2026-10-02T16:42:27.205607+00:00",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "cases": [
+    {
+      "network_id": "epa-net1",
+      "case": "normal",
+      "engine": "wntr",
+      "simulation_id": "sim-2f7d09e7b6ab401c9cd2962ac9ff12e6",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.68832293912243,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.3877787807814457e-17,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-2f7d09e7b6ab401c9cd2962ac9ff12e6/result.json",
+      "verification_ref": "sim-2f7d09e7b6ab401c9cd2962ac9ff12e6/verification.json",
+      "evidence_ref": "sim-2f7d09e7b6ab401c9cd2962ac9ff12e6/evidence-manifest.json",
+      "result_hash": "sha256:169da4204bddfab09d974ff18ab48311a79a6520145bf82a60c9d548eec7d59f",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "closure",
+      "engine": "wntr",
+      "simulation_id": "sim-5b6aba31cf234dc3bf34a357822111d5",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.45097719495328,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.734723475976807e-17,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-5b6aba31cf234dc3bf34a357822111d5/result.json",
+      "verification_ref": "sim-5b6aba31cf234dc3bf34a357822111d5/verification.json",
+      "evidence_ref": "sim-5b6aba31cf234dc3bf34a357822111d5/evidence-manifest.json",
+      "result_hash": "sha256:928400a53ebec5d618f4aab5ebc718e77e534703b761aaebe87d9edfb959c701",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "leak",
+      "engine": "wntr",
+      "simulation_id": "sim-2c250ffecb274c07954e771979577a57",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.40646459521622,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.3877787807814457e-17,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 4.582180950223916e-16,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 54.590747764087325,
+      "result_ref": "sim-2c250ffecb274c07954e771979577a57/result.json",
+      "verification_ref": "sim-2c250ffecb274c07954e771979577a57/verification.json",
+      "evidence_ref": "sim-2c250ffecb274c07954e771979577a57/evidence-manifest.json",
+      "result_hash": "sha256:05feefca001b2b8da02bdf0396db592cff89624fafdbf7d11bceb4f2dadb66c6",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "rupture",
+      "engine": "wntr",
+      "simulation_id": "sim-554f52bca25a4426b8cbb6069b7ce774",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 7.252003941,
+        "supply_ratio": 0.986805945145602,
+        "min_pressure_m": 9.093501666801444,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 4.163336342344337e-17,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 2.1487613881436424e-08,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 1017.3170377618598,
+      "result_ref": "sim-554f52bca25a4426b8cbb6069b7ce774/result.json",
+      "verification_ref": "sim-554f52bca25a4426b8cbb6069b7ce774/verification.json",
+      "evidence_ref": "sim-554f52bca25a4426b8cbb6069b7ce774/evidence-manifest.json",
+      "result_hash": "sha256:6d0e6a0018fa2c4e39cb5f77c031094b21ada0b6f1c9fe3252537b4d583216ee",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "isolation",
+      "engine": "wntr",
+      "simulation_id": "sim-301f662ebb374361a0ec3dc437631b69",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 45.424941408,
+        "supply_ratio": 0.9173553719008266,
+        "min_pressure_m": 0.0,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 8.673617379884035e-18,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-301f662ebb374361a0ec3dc437631b69/result.json",
+      "verification_ref": "sim-301f662ebb374361a0ec3dc437631b69/verification.json",
+      "evidence_ref": "sim-301f662ebb374361a0ec3dc437631b69/evidence-manifest.json",
+      "result_hash": "sha256:9b83361d9b7795cdb22a5e0a58b4e4896974ab3f106d2453357c0d6ad5f9785c",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "pump-cycle",
+      "engine": "wntr",
+      "simulation_id": "sim-4c2b0197b6c34f45aa1f8c243eca0793",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 76.43305731938335,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 2.0816681711721685e-17,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-4c2b0197b6c34f45aa1f8c243eca0793/result.json",
+      "verification_ref": "sim-4c2b0197b6c34f45aa1f8c243eca0793/verification.json",
+      "evidence_ref": "sim-4c2b0197b6c34f45aa1f8c243eca0793/evidence-manifest.json",
+      "result_hash": "sha256:baeb704b658c8d9f9ac3f6930cb607ee2aed6404652f70b3c8786947715f0311",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "link-cycle",
+      "engine": "wntr",
+      "simulation_id": "sim-14f0b0bca69d4800a7117f8019fc8a03",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.45097719495323,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.3877787807814457e-17,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-14f0b0bca69d4800a7117f8019fc8a03/result.json",
+      "verification_ref": "sim-14f0b0bca69d4800a7117f8019fc8a03/verification.json",
+      "evidence_ref": "sim-14f0b0bca69d4800a7117f8019fc8a03/evidence-manifest.json",
+      "result_hash": "sha256:6a3e0bf1a8c905b96390c15659fc299f2dbc417d497825950b7d1587762c8b22",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "normal",
+      "engine": "epanet",
+      "simulation_id": "sim-e90d41caede84f87ae74b20a35c18c32",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.68827056884766,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 8.381903171539307e-09,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-e90d41caede84f87ae74b20a35c18c32/result.json",
+      "verification_ref": "sim-e90d41caede84f87ae74b20a35c18c32/verification.json",
+      "evidence_ref": "sim-e90d41caede84f87ae74b20a35c18c32/evidence-manifest.json",
+      "result_hash": "sha256:b0cdeec0aec6604662dcceda1bb8190c35d8da40712d3d48dbdac0f42de720ca",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "closure",
+      "engine": "epanet",
+      "simulation_id": "sim-ddbcfca813aa4f80a8fffbec6bb0f134",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.450927734375,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.1175870895385742e-08,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-ddbcfca813aa4f80a8fffbec6bb0f134/result.json",
+      "verification_ref": "sim-ddbcfca813aa4f80a8fffbec6bb0f134/verification.json",
+      "evidence_ref": "sim-ddbcfca813aa4f80a8fffbec6bb0f134/evidence-manifest.json",
+      "result_hash": "sha256:45f43b5ff4efeba40dc66be3a6c721603aeaa824b3129308afb532f0aaaae07e",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "pump-cycle",
+      "engine": "epanet",
+      "simulation_id": "sim-9acedabb083442238fa4e618aae0fcb7",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 76.43302917480469,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 4.856217827864384e-08,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-9acedabb083442238fa4e618aae0fcb7/result.json",
+      "verification_ref": "sim-9acedabb083442238fa4e618aae0fcb7/verification.json",
+      "evidence_ref": "sim-9acedabb083442238fa4e618aae0fcb7/evidence-manifest.json",
+      "result_hash": "sha256:3e9a96a9240f37373467b3f9f9d05b4ab97a519d37fd159903f2061684b52998",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "link-cycle",
+      "engine": "epanet",
+      "simulation_id": "sim-c7e4fa7081c3479bbbed8835014e8d9e",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.450927734375,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.1175870895385742e-08,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 1.4210854715202004e-14,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-c7e4fa7081c3479bbbed8835014e8d9e/result.json",
+      "verification_ref": "sim-c7e4fa7081c3479bbbed8835014e8d9e/verification.json",
+      "evidence_ref": "sim-c7e4fa7081c3479bbbed8835014e8d9e/evidence-manifest.json",
+      "result_hash": "sha256:4aeb9cc68789a93c793084ef571acb5e3615833e3bcbe3af9bfa0bba7b86dfa8",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "normal",
+      "engine": "wntr",
+      "simulation_id": "sim-4fd47d55aed743c79dec18bf449d1666",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 4.1807417387133015,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 2.220446049250313e-16,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-4fd47d55aed743c79dec18bf449d1666/result.json",
+      "verification_ref": "sim-4fd47d55aed743c79dec18bf449d1666/verification.json",
+      "evidence_ref": "sim-4fd47d55aed743c79dec18bf449d1666/evidence-manifest.json",
+      "result_hash": "sha256:eca637b7320b9b272429a71d19c03fdecdf299fd32dafd39515199ca798e7333",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "closure",
+      "engine": "wntr",
+      "simulation_id": "sim-0a87517542e043868a8050a036ff3080",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 7.702061695,
+        "supply_ratio": 0.9985911778662665,
+        "min_pressure_m": 2.63391475932184,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.1102230246251565e-16,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-0a87517542e043868a8050a036ff3080/result.json",
+      "verification_ref": "sim-0a87517542e043868a8050a036ff3080/verification.json",
+      "evidence_ref": "sim-0a87517542e043868a8050a036ff3080/evidence-manifest.json",
+      "result_hash": "sha256:8fc2b6bfc78803adf7e492533e14f8959e153f95af1fc4b1d8434a43c784e6c3",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "leak",
+      "engine": "wntr",
+      "simulation_id": "sim-57acc98c5ba64269999c8019cfec6186",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 4.18074111653241,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.1102230246251565e-16,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 6.978426276194757e-15,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 42.075217318378066,
+      "result_ref": "sim-57acc98c5ba64269999c8019cfec6186/result.json",
+      "verification_ref": "sim-57acc98c5ba64269999c8019cfec6186/verification.json",
+      "evidence_ref": "sim-57acc98c5ba64269999c8019cfec6186/evidence-manifest.json",
+      "result_hash": "sha256:df50e6ea1ed49d9ca77f67dbdb96c994bc54f44c1e285cff08f27b6218dd4760",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "rupture",
+      "engine": "wntr",
+      "simulation_id": "sim-13daa07a33a74e8aa707a32415ddf459",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 1645.295940736,
+        "supply_ratio": 0.6990507957968476,
+        "min_pressure_m": -14.926372103755828,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 2.220446049250313e-16,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 1.0849326569873246e-13,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 10773.155549865507,
+      "result_ref": "sim-13daa07a33a74e8aa707a32415ddf459/result.json",
+      "verification_ref": "sim-13daa07a33a74e8aa707a32415ddf459/verification.json",
+      "evidence_ref": "sim-13daa07a33a74e8aa707a32415ddf459/evidence-manifest.json",
+      "result_hash": "sha256:52a6418798eb3a415f42cf665d1c21152be9d9bf5cc7ac87183907c397d51709",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "isolation",
+      "engine": "wntr",
+      "simulation_id": "sim-14f9833737b947229149d14ae01b1dc6",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 96.670305013,
+        "supply_ratio": 0.9823175571984711,
+        "min_pressure_m": 0.0,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.1102230246251565e-16,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-14f9833737b947229149d14ae01b1dc6/result.json",
+      "verification_ref": "sim-14f9833737b947229149d14ae01b1dc6/verification.json",
+      "evidence_ref": "sim-14f9833737b947229149d14ae01b1dc6/evidence-manifest.json",
+      "result_hash": "sha256:95ab6daa751fa2e165073ca5eeb2ba9670f95c1ce019b3e9c65cccda940bcf64",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "pump-cycle",
+      "engine": "wntr",
+      "simulation_id": "sim-336ed831cf7c4f969ed8db85814fa283",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 3.4607498634037057,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.3877787807814457e-16,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-336ed831cf7c4f969ed8db85814fa283/result.json",
+      "verification_ref": "sim-336ed831cf7c4f969ed8db85814fa283/verification.json",
+      "evidence_ref": "sim-336ed831cf7c4f969ed8db85814fa283/evidence-manifest.json",
+      "result_hash": "sha256:8ae17f6c606eec00521958220ce44b2c8a5b6732d5752a88411e6952c9a61d43",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "link-cycle",
+      "engine": "wntr",
+      "simulation_id": "sim-a4ae977484514387b06354308dd868fe",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 7.702061695,
+        "supply_ratio": 0.9985911778662665,
+        "min_pressure_m": 2.63391475932184,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 1.3877787807814457e-16,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-a4ae977484514387b06354308dd868fe/result.json",
+      "verification_ref": "sim-a4ae977484514387b06354308dd868fe/verification.json",
+      "evidence_ref": "sim-a4ae977484514387b06354308dd868fe/evidence-manifest.json",
+      "result_hash": "sha256:f2b219402b533e716150eb7da96b2a3d1d4c23f4f9ca73127efec5b79673de81",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "normal",
+      "engine": "epanet",
+      "simulation_id": "sim-b65596a1756c4f789d6d96e64d9da66f",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 4.1807475090026855,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 7.497146725654602e-08,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-b65596a1756c4f789d6d96e64d9da66f/result.json",
+      "verification_ref": "sim-b65596a1756c4f789d6d96e64d9da66f/verification.json",
+      "evidence_ref": "sim-b65596a1756c4f789d6d96e64d9da66f/evidence-manifest.json",
+      "result_hash": "sha256:eca57e4d370ef85f20564a8f92194d039bb4e0f725b633c5086a822486942d9c",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "closure",
+      "engine": "epanet",
+      "simulation_id": "sim-3e832ff3a46842f785961edafd1a37f4",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 7.698097579,
+        "supply_ratio": 0.998591902962394,
+        "min_pressure_m": 2.6339163780212402,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 8.800998330116272e-08,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-3e832ff3a46842f785961edafd1a37f4/result.json",
+      "verification_ref": "sim-3e832ff3a46842f785961edafd1a37f4/verification.json",
+      "evidence_ref": "sim-3e832ff3a46842f785961edafd1a37f4/evidence-manifest.json",
+      "result_hash": "sha256:235aa77b2b77298b2e6379a6dce584363f81ce98c6c3cb19e7e5972a8587d831",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "pump-cycle",
+      "engine": "epanet",
+      "simulation_id": "sim-bce676f7a6e040c88bb30e88ae2bb9ed",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 3.460754156112671,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 7.497146725654602e-08,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-bce676f7a6e040c88bb30e88ae2bb9ed/result.json",
+      "verification_ref": "sim-bce676f7a6e040c88bb30e88ae2bb9ed/verification.json",
+      "evidence_ref": "sim-bce676f7a6e040c88bb30e88ae2bb9ed/evidence-manifest.json",
+      "result_hash": "sha256:791c5e6b53a87ca0481f8a5b3ca346e4193e000f05dcbc99fd2021c8fcdecdc8",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "link-cycle",
+      "engine": "epanet",
+      "simulation_id": "sim-0e290eb94da845ca82389060203bfccb",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 7.698097579,
+        "supply_ratio": 0.998591902962394,
+        "min_pressure_m": 2.6339163780212402,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 2
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "physical_checks": {
+        "kind": "physical_checks",
+        "mass_balance_max_abs_m3s": 8.800998330116272e-08,
+        "mass_balance_tolerance_m3s": 2e-06,
+        "leak_law_max_relative_error": 0.0,
+        "leak_law_tolerance": 0.0001,
+        "pump_curve_max_fit_error_m": 3.552713678800501e-15,
+        "pump_curve_fit_tolerance_m": 0.0001,
+        "inactive_leak_max_m3s": 0.0,
+        "passed": true,
+        "interpretation": "Junction continuity and active positive-pressure orifice law; not independent field validation."
+      },
+      "leakage_volume_m3": 0,
+      "result_ref": "sim-0e290eb94da845ca82389060203bfccb/result.json",
+      "verification_ref": "sim-0e290eb94da845ca82389060203bfccb/verification.json",
+      "evidence_ref": "sim-0e290eb94da845ca82389060203bfccb/evidence-manifest.json",
+      "result_hash": "sha256:683cd2aa69e66a1659a30051df76018fa4c31197e6ba9c3f60a698dbfd18ff26",
+      "errors": []
+    }
+  ]
+}

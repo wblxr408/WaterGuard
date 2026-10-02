@@ -1,0 +1,117 @@
+"""One engine run per process. Called by PhysicalAdapter, not an HTTP endpoint."""
+from __future__ import annotations
+import json
+import math
+from pathlib import Path
+import sys
+import warnings
+
+import wntr
+from scipy.optimize import OptimizeWarning
+from .adapter import write
+from .compiler import compile_task
+from .physical import assess
+from .runtime import finish
+from waterguard_contracts.core import load, require, validate
+
+
+def compute(folder):
+    folder = Path(folder)
+    request=load(folder/'request.json')
+    task,plan=request['task'],request['plan']
+    captured=[]
+    raw_converged=None
+    code='INPUT_INVALID'
+    try:
+        wn,source,scene,catalog,mapping=compile_task(task,plan)
+        write(folder/'entity-map.json',mapping)
+        write(folder/'scene.json',scene)
+        write(folder/'action-catalog.json',catalog)
+        write(folder/'compiled-network.json',wn.to_dict())
+        code='SIMULATION_FAILED'
+        engine=task['hydraulic_options']['engine']
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            try:
+                for _,pump in wn.pumps():
+                    pump.get_head_curve_coefficients()
+                if engine=='epanet':
+                    raw=wntr.sim.EpanetSimulator(wn).run_sim(file_prefix=str(folder/'engine'),version=2.2,convergence_error=True)
+                else:
+                    raw=wntr.sim.WNTRSimulator(wn).run_sim(convergence_error=True)
+            finally:
+                captured=[str(w.message) for w in caught]
+        require(raw.error_code in (None,0),f'Engine error_code={raw.error_code}')
+        raw_converged=True
+        for category,tables in [('node',raw.node),('link',raw.link)]:
+            for field,table in tables.items():
+                table.to_csv(folder/f'raw-{category}-{field}.csv',index_label='time_s',lineterminator='\n')
+        if engine=='epanet':
+            require('WARNING' not in (folder/'engine.rpt').read_text(errors='replace').upper(),'EPANET report warning')
+        # Three points determine three pump coefficients exactly; covariance cannot be
+        # estimated with zero residual degrees of freedom. Preserve that specific warning
+        # and independently check all curve points below. Never whitelist convergence warnings.
+        unexpected=[w for w in caught if not (w.category is OptimizeWarning and
+            str(w.message)=='Covariance of the parameters could not be estimated' and
+            w.filename.replace('\\','/').endswith('/wntr/network/elements.py'))]
+        require(not unexpected, 'Engine warnings require inspection: '+'; '.join(str(w.message) for w in unexpected))
+        w=task['time_window']
+        times=list(range(0,w['end_s']+1,w['step_s']))
+        for tables in (raw.node,raw.link):
+            for field,table in tables.items():
+                require(list(table.index)==times,'Missing or reordered result times in '+field)
+                require(all(math.isfinite(float(v)) for v in table.to_numpy().ravel()),'Non-finite raw result in '+field)
+        checks=assess(wn,raw,mapping,times)
+        write(folder/'physical-checks.json',checks)
+        require(checks['passed'],'Physical invariant check failed; inspect physical-checks.json')
+        expected=wntr.metrics.expected_demand(wn,start_time=0,end_time=w['end_s'],timestep=w['step_s'])
+        expected.to_csv(folder/'expected-demand.csv',index_label='time_s',lineterminator='\n')
+        fault=task['fault']
+        rounded=0
+
+        def nonnegative(value):
+            nonlocal rounded
+            value=float(value)
+            require(value>=-1e-9,'Negative demand beyond numerical tolerance')
+            if value<0:
+                rounded+=1
+                return 0.0
+            return value
+
+        frames=[]
+        for t in times[:-1]:
+            active=fault is not None and fault['start_s']<=t<fault['end_s']
+            nodes=[dict(node_id=name,pressure_m=float(raw.node['pressure'].at[t,name]),expected_demand_m3s=nonnegative(expected.at[t,name]),
+                        delivered_demand_m3s=nonnegative(raw.node['demand'].at[t,name]),leak_flow_m3s=0.0) for name in mapping['original_junction_ids']]
+            links=[]
+            for name,segments in mapping['segments'].items():
+                status=int(raw.link['status'].at[t,segments[0]])
+                require(status in (0,1,2),'Unrecognized engine status')
+                state='closed' if status==0 else 'intact'
+                is_target=active and fault['link_id']==name
+                if is_target and fault['kind'] in ('leak','rupture'):
+                    state='leaking' if fault['kind']=='leak' else 'ruptured'
+                if active and fault['kind']=='isolation' and name in fault['boundary_link_ids']:
+                    state='isolated'
+                links.append(dict(link_id=name,flow_m3s=float(raw.link['flowrate'].at[t,segments[0]]),
+                    downstream_flow_m3s=float(raw.link['flowrate'].at[t,segments[-1]]),status='broken' if state=='ruptured' else ('closed' if status==0 else 'open'),physical_state=state))
+            leaks=[dict(**spec,pressure_m=float(raw.node['pressure'].at[t,spec['node_id']]),leak_flow_m3s=nonnegative(raw.node['leak_demand'].at[t,spec['node_id']])) for spec in mapping['leaks']]
+            tanks=[]
+            for name,tank in wn.tanks():
+                level=float(raw.node['head'].at[t,name])-tank.elevation
+                tanks.append(dict(node_id=name,head_m=float(raw.node['head'].at[t,name]),level_m=level,
+                    volume_m3=float(tank.get_volume(level)),net_inflow_m3s=float(raw.node['demand'].at[t,name])))
+            frames.append(dict(time_s=t,duration_s=w['step_s'],nodes=nodes,links=links,leaks=leaks,tanks=tanks))
+        if rounded:
+            captured.append(f'{rounded} values in [-1e-9,0) m3/s set to zero; raw CSV remains unchanged.')
+        series=dict(schema_version='0.3.0',simulation_id=folder.name,mode='benchmark',units=source['units'],sampling='interval_start_hold',frames=frames)
+        validate('Series',series)
+        return finish(folder,series=series,warnings=captured,raw_converged=True)
+    except Exception as exc:
+        if code=='SIMULATION_FAILED' and raw_converged is None:
+            raw_converged=False
+        return finish(folder,errors=[f'{type(exc).__name__}: {exc}'],warnings=captured,raw_converged=raw_converged,error_code=code)
+
+
+if __name__=='__main__':
+    compute(sys.argv[1])

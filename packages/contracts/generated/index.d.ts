@@ -18,7 +18,7 @@ export type Hash = string;
 export type TaskSpec = {
   [k: string]: unknown;
 } & {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   task_id: string;
   revision: number;
   network_ref: NetworkRef;
@@ -43,11 +43,29 @@ export type TaskSpec = {
   assumptions: [string, ...string[]];
   budget: Budget;
   constraint_hash: Hash;
+  hydraulic_options?: HydraulicOptions;
+  control_policy?: ControlPolicy;
+};
+export type Fault = {
+  [k: string]: unknown;
+} & {
+  kind: "leak" | "rupture" | "closure" | "isolation";
+  link_id: string;
+  start_s: number;
+  end_s: number;
+  mapping: string;
+  location_fraction?: number;
+  leak_area_m2?: number;
+  discharge_coefficient?: number;
+  /**
+   * @minItems 1
+   */
+  boundary_link_ids?: [string, ...string[]];
 };
 export type NetworkScene = {
   [k: string]: unknown;
 } & {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   network_id: string;
   mode: Mode;
   coordinate_system: string;
@@ -63,12 +81,63 @@ export type NetworkScene = {
   display_coordinate_note?: string;
 };
 export type Mode = "live" | "replay" | "fixture" | "benchmark";
+export type SimulationArtifact = {
+  [k: string]: unknown;
+} & {
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  simulation_id: string;
+  candidate_id: string;
+  task_ref: TaskRef;
+  perturbation_id: string | null;
+  mode: Mode;
+  engine_version: string;
+  input_hash: Hash;
+  status: "SUCCEEDED" | "FAILED" | "CANCELLED";
+  series_ref: string | null;
+  diagnostics_ref: string;
+  time_axis: TimeWindow;
+  entity_map_ref?: string;
+  physical_checks_ref?: string;
+  input_manifest_ref?: string;
+};
+export type Series = {
+  [k: string]: unknown;
+} & {
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  simulation_id: string;
+  mode: Mode;
+  units: Units;
+  sampling: "interval_start_hold";
+  /**
+   * @minItems 1
+   */
+  frames: [SeriesFrame, ...SeriesFrame[]];
+};
+export type Diagnostics = {
+  [k: string]: unknown;
+} & {
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  simulation_id: string;
+  mode: Mode;
+  converged: boolean | null;
+  /**
+   * @minItems 0
+   */
+  errors: string[];
+  /**
+   * @minItems 0
+   */
+  warnings: string[];
+  provenance: string;
+  error_code?: string | null;
+  raw_converged?: boolean | null;
+};
 export type RunStatus = "QUEUED" | "RUNNING" | "NEEDS_INPUT" | "COMPLETED" | "BUDGET_EXHAUSTED" | "ERROR" | "CANCELLED";
 export type RunPhase =
   "INTAKE" | "MODELING" | "BASELINE" | "PLANNING" | "SIMULATING" | "VERIFYING" | "REVIEWING" | "PACKAGING";
 
 export interface NetworkManifest {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   network_id: string;
   revision: number;
   sha256: Hash;
@@ -101,13 +170,6 @@ export interface NetworkRef {
   revision: number;
   sha256: Hash;
   overlay_hash: Hash;
-}
-export interface Fault {
-  kind: "leak" | "rupture" | "closure" | "isolation";
-  link_id: string;
-  start_s: number;
-  end_s: number;
-  mapping: string;
 }
 export interface TimeWindow {
   start_s: number;
@@ -160,8 +222,27 @@ export interface Budget {
   max_wall_time_s: number;
   max_revisions: number;
 }
+export interface HydraulicOptions {
+  engine: "wntr" | "epanet";
+  minimum_pressure_m: number;
+  required_pressure_m: number;
+  pressure_exponent: number;
+  hydraulic_timestep_s: number;
+  demand_multiplier: number;
+}
+export interface ControlPolicy {
+  overrides: ControlOverride[];
+}
+export interface ControlOverride {
+  link_id: string;
+  /**
+   * @minItems 1
+   */
+  control_names: [string, ...string[]];
+  reason: string;
+}
 export interface ActionPlan {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   candidate_id: string;
   task_ref: TaskRef;
   parent_candidate_id: string | null;
@@ -185,7 +266,7 @@ export interface Action {
   simulation_time_s: number;
 }
 export interface ActionCatalog {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   catalog_id: string;
   network_id: string;
   /**
@@ -206,6 +287,8 @@ export interface Facility {
   initial_status: "open" | "closed";
   action_cost: number;
   mapping: string;
+  native_control_names?: string[];
+  requires_explicit_override?: boolean;
 }
 export interface SceneNode {
   id: string;
@@ -223,36 +306,11 @@ export interface SceneLink {
   initial_status: "open" | "closed";
 }
 export interface SimulationResult {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   mode: Mode;
   artifact: SimulationArtifact;
   series: Series | null;
   diagnostics: Diagnostics;
-}
-export interface SimulationArtifact {
-  schema_version: "0.1.0" | "0.2.0";
-  simulation_id: string;
-  candidate_id: string;
-  task_ref: TaskRef;
-  perturbation_id: string | null;
-  mode: Mode;
-  engine_version: string;
-  input_hash: Hash;
-  status: "SUCCEEDED" | "FAILED" | "CANCELLED";
-  series_ref: string | null;
-  diagnostics_ref: string;
-  time_axis: TimeWindow;
-}
-export interface Series {
-  schema_version: "0.1.0" | "0.2.0";
-  simulation_id: string;
-  mode: Mode;
-  units: Units;
-  sampling: "interval_start_hold";
-  /**
-   * @minItems 1
-   */
-  frames: [SeriesFrame, ...SeriesFrame[]];
 }
 export interface SeriesFrame {
   time_s: number;
@@ -265,6 +323,8 @@ export interface SeriesFrame {
    * @minItems 1
    */
   links: [LinkSample, ...LinkSample[]];
+  leaks?: LeakSample[];
+  tanks?: TankSample[];
 }
 export interface NodeSample {
   node_id: string;
@@ -276,25 +336,27 @@ export interface NodeSample {
 export interface LinkSample {
   link_id: string;
   flow_m3s: number;
-  status: "open" | "closed";
+  status: "open" | "closed" | "broken";
+  downstream_flow_m3s?: number;
+  physical_state?: "intact" | "leaking" | "ruptured" | "closed" | "isolated";
 }
-export interface Diagnostics {
-  schema_version: "0.1.0" | "0.2.0";
-  simulation_id: string;
-  mode: Mode;
-  converged: boolean | null;
-  /**
-   * @minItems 0
-   */
-  errors: string[];
-  /**
-   * @minItems 0
-   */
-  warnings: string[];
-  provenance: string;
+export interface LeakSample {
+  node_id: string;
+  source_link_id: string;
+  pressure_m: number;
+  leak_flow_m3s: number;
+  area_m2: number;
+  discharge_coefficient: number;
+}
+export interface TankSample {
+  node_id: string;
+  head_m: number;
+  level_m: number;
+  volume_m3: number;
+  net_inflow_m3s: number;
 }
 export interface VerificationReport {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   verification_id: string;
   simulation_id: string;
   candidate_id: string;
@@ -358,7 +420,7 @@ export interface Admission {
   recommendation_eligible: "pass" | "fail" | "pending";
 }
 export interface RunRecord {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   run_id: string;
   task_ref: TaskRef;
   mode: Mode;
@@ -379,7 +441,7 @@ export interface RunRecord {
   missing_items: string[];
 }
 export interface RunEvent {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   event_id: string;
   sequence: number;
   run_id: string;
@@ -399,7 +461,7 @@ export interface RunEvent {
   payload_ref: string;
 }
 export interface EvidenceManifest {
-  schema_version: "0.1.0" | "0.2.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
   bundle_id: string;
   run_id: string;
   mode: Mode;

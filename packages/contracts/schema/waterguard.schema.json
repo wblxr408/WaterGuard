@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://waterguard.local/contracts/0.2.0/waterguard.schema.json",
+  "$id": "https://waterguard.local/contracts/0.3.0/waterguard.schema.json",
   "title": "WaterGuardContract",
   "description": "Frozen development contracts. Structural validation must be followed by semantic and provenance checks.",
   "anyOf": [
@@ -200,7 +200,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "network_id": {
@@ -296,6 +297,29 @@
         "mapping": {
           "type": "string",
           "minLength": 1
+        },
+        "location_fraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "leak_area_m2": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "discharge_coefficient": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "boundary_link_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1
         }
       },
       "required": [
@@ -305,7 +329,54 @@
         "end_s",
         "mapping"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "leak"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "location_fraction",
+              "leak_area_m2",
+              "discharge_coefficient"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rupture"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "location_fraction",
+              "discharge_coefficient"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "isolation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "boundary_link_ids"
+            ]
+          }
+        }
+      ]
     },
     "HardConstraints": {
       "type": "object",
@@ -462,7 +533,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "task_id": {
@@ -537,6 +609,12 @@
         },
         "constraint_hash": {
           "$ref": "#/definitions/Hash"
+        },
+        "hydraulic_options": {
+          "$ref": "#/definitions/HydraulicOptions"
+        },
+        "control_policy": {
+          "$ref": "#/definitions/ControlPolicy"
         }
       },
       "required": [
@@ -573,6 +651,21 @@
                 "$ref": "#/definitions/Fault"
               }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.3.0"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "hydraulic_options",
+              "control_policy"
+            ]
           }
         }
       ]
@@ -612,7 +705,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "candidate_id": {
@@ -712,6 +806,16 @@
         "mapping": {
           "type": "string",
           "minLength": 1
+        },
+        "native_control_names": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "requires_explicit_override": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -731,7 +835,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "catalog_id": {
@@ -843,7 +948,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "network_id": {
@@ -957,7 +1063,21 @@
           "type": "string",
           "enum": [
             "open",
-            "closed"
+            "closed",
+            "broken"
+          ]
+        },
+        "downstream_flow_m3s": {
+          "type": "number"
+        },
+        "physical_state": {
+          "type": "string",
+          "enum": [
+            "intact",
+            "leaking",
+            "ruptured",
+            "closed",
+            "isolated"
           ]
         }
       },
@@ -992,6 +1112,18 @@
             "$ref": "#/definitions/LinkSample"
           },
           "minItems": 1
+        },
+        "leaks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LeakSample"
+          }
+        },
+        "tanks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TankSample"
+          }
         }
       },
       "required": [
@@ -1009,7 +1141,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "simulation_id": {
@@ -1042,7 +1175,43 @@
         "sampling",
         "frames"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.3.0"
+              }
+            },
+            "required": [
+              "schema_version"
+            ]
+          },
+          "then": {
+            "properties": {
+              "frames": {
+                "items": {
+                  "required": [
+                    "leaks",
+                    "tanks"
+                  ],
+                  "properties": {
+                    "links": {
+                      "items": {
+                        "required": [
+                          "downstream_flow_m3s",
+                          "physical_state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "Diagnostics": {
       "type": "object",
@@ -1051,7 +1220,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "simulation_id": {
@@ -1090,6 +1260,23 @@
         "provenance": {
           "type": "string",
           "minLength": 1
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raw_converged": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "required": [
@@ -1101,7 +1288,27 @@
         "warnings",
         "provenance"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.3.0"
+              }
+            },
+            "required": [
+              "schema_version"
+            ]
+          },
+          "then": {
+            "required": [
+              "raw_converged",
+              "error_code"
+            ]
+          }
+        }
+      ]
     },
     "SimulationArtifact": {
       "type": "object",
@@ -1110,7 +1317,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "simulation_id": {
@@ -1170,6 +1378,18 @@
         },
         "time_axis": {
           "$ref": "#/definitions/TimeWindow"
+        },
+        "entity_map_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "physical_checks_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_manifest_ref": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
@@ -1186,7 +1406,28 @@
         "diagnostics_ref",
         "time_axis"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.3.0"
+              }
+            },
+            "required": [
+              "schema_version"
+            ]
+          },
+          "then": {
+            "required": [
+              "entity_map_ref",
+              "physical_checks_ref",
+              "input_manifest_ref"
+            ]
+          }
+        }
+      ]
     },
     "SimulationResult": {
       "type": "object",
@@ -1195,7 +1436,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "mode": {
@@ -1435,7 +1677,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "verification_id": {
@@ -1550,7 +1793,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "run_id": {
@@ -1673,7 +1917,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "event_id": {
@@ -1848,7 +2093,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "bundle_id": {
@@ -1939,7 +2185,8 @@
           "type": "string",
           "enum": [
             "0.1.0",
-            "0.2.0"
+            "0.2.0",
+            "0.3.0"
           ]
         },
         "simulation_id": {
@@ -1973,7 +2220,194 @@
         "frames"
       ],
       "additionalProperties": false,
-      "description": "Filtered GET series response; an empty range returns frames=[]. Full simulation series must be nonempty."
+      "description": "Filtered GET series response; an empty range returns frames=[]. Full simulation series must be nonempty.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.3.0"
+              }
+            },
+            "required": [
+              "schema_version"
+            ]
+          },
+          "then": {
+            "properties": {
+              "frames": {
+                "items": {
+                  "required": [
+                    "leaks",
+                    "tanks"
+                  ],
+                  "properties": {
+                    "links": {
+                      "items": {
+                        "required": [
+                          "downstream_flow_m3s",
+                          "physical_state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HydraulicOptions": {
+      "type": "object",
+      "properties": {
+        "engine": {
+          "enum": [
+            "wntr",
+            "epanet"
+          ],
+          "type": "string"
+        },
+        "minimum_pressure_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "required_pressure_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pressure_exponent": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "hydraulic_timestep_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "demand_multiplier": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "engine",
+        "minimum_pressure_m",
+        "required_pressure_m",
+        "pressure_exponent",
+        "hydraulic_timestep_s",
+        "demand_multiplier"
+      ],
+      "additionalProperties": false
+    },
+    "ControlOverride": {
+      "type": "object",
+      "properties": {
+        "link_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "control_names": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "link_id",
+        "control_names",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "ControlPolicy": {
+      "type": "object",
+      "properties": {
+        "overrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ControlOverride"
+          }
+        }
+      },
+      "required": [
+        "overrides"
+      ],
+      "additionalProperties": false
+    },
+    "LeakSample": {
+      "type": "object",
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_link_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pressure_m": {
+          "type": "number"
+        },
+        "leak_flow_m3s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "area_m2": {
+          "type": "number",
+          "minimum": 0
+        },
+        "discharge_coefficient": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "node_id",
+        "source_link_id",
+        "pressure_m",
+        "leak_flow_m3s",
+        "area_m2",
+        "discharge_coefficient"
+      ],
+      "additionalProperties": false
+    },
+    "TankSample": {
+      "type": "object",
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "head_m": {
+          "type": "number"
+        },
+        "level_m": {
+          "type": "number"
+        },
+        "volume_m3": {
+          "type": "number",
+          "minimum": 0
+        },
+        "net_inflow_m3s": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "node_id",
+        "head_m",
+        "level_m",
+        "volume_m3",
+        "net_inflow_m3s"
+      ],
+      "additionalProperties": false
     }
   }
 }

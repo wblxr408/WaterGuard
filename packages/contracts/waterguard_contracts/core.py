@@ -109,7 +109,7 @@ def check_task(task, catalog, scene):
     limits = task['action_limits']
     require(set(limits['allowed_link_ids']) <= set(facilities), 'Unknown allowed facility')
     require(w['evaluation_start_s'] <= limits['earliest_s'] <= limits['latest_s'] < w['end_s'], 'Invalid action window')
-    require(task['fault'] is None or task['fault']['kind'] == 'closure', 'Reference verifier supports closure only')
+    require(task['schema_version'] == '0.3.0' or task['fault'] is None or task['fault']['kind'] == 'closure', 'Reference verifier supports closure only before 0.3.0')
 
 
 def check_plan(task, plan, catalog):
@@ -124,10 +124,12 @@ def check_plan(task, plan, catalog):
         link, kind, time = action['link_id'], action['kind'], action['simulation_time_s']
         require(link in limits['allowed_link_ids'] and link in facilities, 'Unknown or unauthorized facility')
         require(kind in limits['allowed_kinds'] and kind in facilities[link]['allowed_actions'], 'Action not allowed')
-        require(kind in ('link_open', 'link_close'), 'Pump actions require a verified real adapter')
+        require(task['schema_version'] == '0.3.0' or kind in ('link_open', 'link_close'), 'Pump actions require a verified real adapter')
         require(limits['earliest_s'] <= time <= limits['latest_s'], 'Action outside time window')
         require((time - task['time_window']['start_s']) % task['time_window']['step_s'] == 0, 'Action not on sample boundary')
         require(task['fault'] is None or link != task['fault']['link_id'], 'Action conflicts with forced fault state')
+        if task['fault'] and task['fault']['kind'] == 'isolation':
+            require(link not in task['fault']['boundary_link_ids'], 'Action conflicts with isolation boundary')
         if link in previous:
             require(time > previous[link] and time - previous[link] >= limits['min_switch_interval_s'], 'Conflicting or too frequent controls')
         previous[link] = time

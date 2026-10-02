@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-2026-10-02 已完成三人共同前置的 [contracts](packages/contracts/README.md)，并进一步接入 [EPA Net1/Net3 公开管网与实际 EPANET 计算](data/README.md)。公共 Schema 0.2.0 兼容原来的 0.1.0 Fixture；真实水力结果标为 Benchmark。Agnes、AGH 和前端工作台仍待接入。
+已完成三人共同前置的 [contracts](packages/contracts/README.md) 和 [同学 1 的仿真与数据交付](docs/同学1交付与复现.md)：EPA Net1/Net3、真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、管段与泵操作、独立进程、物理检查、回放和证据包。公共 Schema 0.3.0 兼容旧 Fixture；计算标为 Benchmark。Agnes、AGH 和前端工作台仍待接入。
 
-直接运行真实数据请看 [公开数据接入与复现](data/README.md#本机重跑)；包含来源许可、实际结果、9 项引擎集成测试、读取 API 和证据包。
+运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 
@@ -35,7 +35,7 @@ AGH 是核心任务的执行环境。Agnes 在其中承担任务建模、方案�
 - 水力仿真：WNTR / EPANET；使用公开网络模型。
 - 运行底座：指定 AGH 和 Agnes；MCP/官方工具扩展、角色委派、会话与日志接口需先验证，不能假定 Agnes Code 文档等于赛事版能力。
 
-以上为设计提案，尚未实现或完成技术验证。
+仿真模块与公共契约已实现；其余产品架构仍按设计逐步接入。
 
 ## 边界治理
 
