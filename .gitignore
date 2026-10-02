@@ -1,0 +1,30 @@
+# Local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Development environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# Local scratch and generated simulation evidence
+work/
+artifacts/
+.cache/
+
+# Editor and OS files
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
