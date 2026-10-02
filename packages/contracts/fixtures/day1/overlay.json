@@ -1,0 +1,7 @@
+{
+  "provenance": "synthetic",
+  "critical_nodes": [
+    "J2"
+  ],
+  "description": "J2 is an assumed critical user, not a measured hospital. Local coordinates are illustrative; no CRS or buried depth is asserted."
+}

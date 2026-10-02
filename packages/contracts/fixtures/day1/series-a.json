@@ -1,0 +1,308 @@
+{
+  "schema_version": "0.1.0",
+  "simulation_id": "simulation-a",
+  "mode": "fixture",
+  "units": {
+    "length": "m",
+    "pressure_head": "m",
+    "flow": "m3/s",
+    "time": "s"
+  },
+  "sampling": "interval_start_hold",
+  "frames": [
+    {
+      "time_s": 0,
+      "duration_s": 1800,
+      "nodes": [
+        {
+          "node_id": "J1",
+          "pressure_m": 35,
+          "expected_demand_m3s": 0.002,
+          "delivered_demand_m3s": 0.002,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J2",
+          "pressure_m": 30,
+          "expected_demand_m3s": 0.003,
+          "delivered_demand_m3s": 0.003,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J3",
+          "pressure_m": 28,
+          "expected_demand_m3s": 0.001,
+          "delivered_demand_m3s": 0.001,
+          "leak_flow_m3s": 0
+        }
+      ],
+      "links": [
+        {
+          "link_id": "P_SUPPLY",
+          "flow_m3s": 0.006,
+          "status": "open"
+        },
+        {
+          "link_id": "P_MAIN",
+          "flow_m3s": 0.004,
+          "status": "open"
+        },
+        {
+          "link_id": "P_BYPASS",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BRANCH",
+          "flow_m3s": 0.001,
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "time_s": 1800,
+      "duration_s": 1800,
+      "nodes": [
+        {
+          "node_id": "J1",
+          "pressure_m": 35,
+          "expected_demand_m3s": 0.002,
+          "delivered_demand_m3s": 0.002,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J2",
+          "pressure_m": 30,
+          "expected_demand_m3s": 0.003,
+          "delivered_demand_m3s": 0.003,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J3",
+          "pressure_m": 28,
+          "expected_demand_m3s": 0.001,
+          "delivered_demand_m3s": 0.001,
+          "leak_flow_m3s": 0
+        }
+      ],
+      "links": [
+        {
+          "link_id": "P_SUPPLY",
+          "flow_m3s": 0.006,
+          "status": "open"
+        },
+        {
+          "link_id": "P_MAIN",
+          "flow_m3s": 0.004,
+          "status": "open"
+        },
+        {
+          "link_id": "P_BYPASS",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BRANCH",
+          "flow_m3s": 0.001,
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "time_s": 3600,
+      "duration_s": 1800,
+      "nodes": [
+        {
+          "node_id": "J1",
+          "pressure_m": 35,
+          "expected_demand_m3s": 0.002,
+          "delivered_demand_m3s": 0.002,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J2",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.003,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J3",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.001,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        }
+      ],
+      "links": [
+        {
+          "link_id": "P_SUPPLY",
+          "flow_m3s": 0.002,
+          "status": "open"
+        },
+        {
+          "link_id": "P_MAIN",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BYPASS",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BRANCH",
+          "flow_m3s": 0,
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "time_s": 5400,
+      "duration_s": 1800,
+      "nodes": [
+        {
+          "node_id": "J1",
+          "pressure_m": 35,
+          "expected_demand_m3s": 0.002,
+          "delivered_demand_m3s": 0.002,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J2",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.003,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J3",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.001,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        }
+      ],
+      "links": [
+        {
+          "link_id": "P_SUPPLY",
+          "flow_m3s": 0.002,
+          "status": "open"
+        },
+        {
+          "link_id": "P_MAIN",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BYPASS",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BRANCH",
+          "flow_m3s": 0,
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "time_s": 7200,
+      "duration_s": 1800,
+      "nodes": [
+        {
+          "node_id": "J1",
+          "pressure_m": 35,
+          "expected_demand_m3s": 0.002,
+          "delivered_demand_m3s": 0.002,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J2",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.003,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J3",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.001,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        }
+      ],
+      "links": [
+        {
+          "link_id": "P_SUPPLY",
+          "flow_m3s": 0.002,
+          "status": "open"
+        },
+        {
+          "link_id": "P_MAIN",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BYPASS",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BRANCH",
+          "flow_m3s": 0,
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "time_s": 9000,
+      "duration_s": 1800,
+      "nodes": [
+        {
+          "node_id": "J1",
+          "pressure_m": 35,
+          "expected_demand_m3s": 0.002,
+          "delivered_demand_m3s": 0.002,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J2",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.003,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        },
+        {
+          "node_id": "J3",
+          "pressure_m": 0,
+          "expected_demand_m3s": 0.001,
+          "delivered_demand_m3s": 0,
+          "leak_flow_m3s": 0
+        }
+      ],
+      "links": [
+        {
+          "link_id": "P_SUPPLY",
+          "flow_m3s": 0.002,
+          "status": "open"
+        },
+        {
+          "link_id": "P_MAIN",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BYPASS",
+          "flow_m3s": 0,
+          "status": "closed"
+        },
+        {
+          "link_id": "P_BRANCH",
+          "flow_m3s": 0,
+          "status": "open"
+        }
+      ]
+    }
+  ]
+}

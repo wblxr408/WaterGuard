@@ -1,0 +1,19 @@
+{
+  "name": "@waterguard/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "types": "./generated/index.d.ts",
+  "exports": {
+    ".": { "types": "./generated/index.d.ts" },
+    "./schema": "./schema/waterguard.schema.json"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-types.mjs",
+    "check": "node scripts/generate-types.mjs --check && tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "15.0.4",
+    "typescript": "5.9.3"
+  }
+}

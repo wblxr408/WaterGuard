@@ -1,0 +1,27 @@
+{
+  "schema_version": "0.1.0",
+  "run_id": "run-day1-fixture",
+  "task_ref": {
+    "task_id": "task-day1-closure",
+    "revision": 1,
+    "network_hash": "sha256:8db1aa5f8fd3468ea46b9d2d486a02fe5e386e945bbe3bcb8498fecc6f118a88",
+    "constraint_hash": "sha256:5150b2b46a21f51158b69938056a8fcfa7d229a9dca531a5bacdc4526fa59296"
+  },
+  "mode": "fixture",
+  "status": "RUNNING",
+  "phase": "BASELINE",
+  "agh_session_ref": null,
+  "model_config_ref": null,
+  "budget_usage": {
+    "simulations": 0,
+    "model_calls": null,
+    "wall_time_s": 0
+  },
+  "conclusion": "INCOMPLETE",
+  "selected_candidate_id": null,
+  "missing_items": [
+    "native_agh_trace",
+    "real_hydraulic_results",
+    "demand-plus-10pct"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1.0",
+  "network_id": "wg-fixture-loop-v1",
+  "revision": 1,
+  "sha256": "sha256:8db1aa5f8fd3468ea46b9d2d486a02fe5e386e945bbe3bcb8498fecc6f118a88",
+  "source_url": "repo:packages/contracts/fixtures/day1/network.inp",
+  "source_kind": "synthetic",
+  "license": "LicenseRef-WaterGuard-Internal-Fixture",
+  "units": {
+    "length": "m",
+    "pressure_head": "m",
+    "flow": "m3/s",
+    "time": "s"
+  },
+  "coordinate_system": "local_cartesian_m",
+  "overlays": [
+    {
+      "ref": "overlay.json",
+      "sha256": "sha256:f410beda41db2ebc7639b9d71a1db23c2c83b355492330bd96ce9036eada7228",
+      "provenance": "synthetic",
+      "description": "J2 is an assumed critical user, not a measured hospital. Local coordinates are illustrative; no CRS or buried depth is asserted."
+    }
+  ],
+  "original_file": "network.inp",
+  "description": "Project-authored debug topology. Native INP uses LPS and mm diameter; contract output uses SI. No public-network or hydraulic validation claim."
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": "0.1.0",
+  "task_id": "task-day1-closure",
+  "revision": 1,
+  "network_ref": {
+    "network_id": "wg-fixture-loop-v1",
+    "revision": 1,
+    "sha256": "sha256:8db1aa5f8fd3468ea46b9d2d486a02fe5e386e945bbe3bcb8498fecc6f118a88",
+    "overlay_hash": "sha256:f410beda41db2ebc7639b9d71a1db23c2c83b355492330bd96ce9036eada7228"
+  },
+  "fault": {
+    "kind": "closure",
+    "link_id": "P_MAIN",
+    "start_s": 3600,
+    "end_s": 10800,
+    "mapping": "Force P_MAIN closed during [3600,10800); no leak emitter, rupture or isolation-zone model."
+  },
+  "time_window": {
+    "start_s": 0,
+    "end_s": 10800,
+    "step_s": 1800,
+    "warmup_end_s": 3600,
+    "evaluation_start_s": 3600
+  },
+  "objectives": [
+    "minimize_shortage",
+    "minimize_action_cost"
+  ],
+  "hard_constraints": {
+    "min_pressure_m": 20,
+    "min_supply_ratio": 0.95,
+    "node_ids": [
+      "J1",
+      "J2",
+      "J3"
+    ],
+    "pressure_tolerance_m": 1e-06,
+    "ratio_tolerance": 1e-09,
+    "source": "Synthetic day-1 development assumptions; not regulatory or measured limits."
+  },
+  "soft_preferences": [],
+  "action_catalog_ref": "action-catalog.json",
+  "action_catalog_hash": "sha256:3b4ee7f06376c582c0474199f27bb49b68f51e946f54679af34766cab8130c42",
+  "action_limits": {
+    "max_actions": 2,
+    "allowed_link_ids": [
+      "P_BYPASS"
+    ],
+    "allowed_kinds": [
+      "link_open",
+      "link_close"
+    ],
+    "earliest_s": 3600,
+    "latest_s": 9000,
+    "min_switch_interval_s": 1800
+  },
+  "perturbation_domain": {
+    "required": [
+      "demand-plus-10pct"
+    ],
+    "demand_multipliers": [
+      1,
+      1.1
+    ]
+  },
+  "assumptions": [
+    "All samples are authored fixture values, not WNTR/EPANET output.",
+    "Pressure head m; flow m3/s; simulation time s.",
+    "J2 critical status is a synthetic overlay.",
+    "No hydraulic convergence or AGH execution is claimed."
+  ],
+  "budget": {
+    "max_simulations": 40,
+    "max_parallel": 2,
+    "max_wall_time_s": 600,
+    "max_revisions": 4
+  },
+  "constraint_hash": "sha256:5150b2b46a21f51158b69938056a8fcfa7d229a9dca531a5bacdc4526fa59296"
+}

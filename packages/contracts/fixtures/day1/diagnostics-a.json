@@ -1,0 +1,11 @@
+{
+  "schema_version": "0.1.0",
+  "simulation_id": "simulation-a",
+  "mode": "fixture",
+  "converged": null,
+  "errors": [],
+  "warnings": [
+    "Synthetic fixture: no hydraulic engine was run."
+  ],
+  "provenance": "Hand-authored deterministic development samples; converged=null means unmeasured."
+}

@@ -1,0 +1,194 @@
+{
+  "schema_version": "0.1.0",
+  "verification_id": "verify-candidate-a",
+  "simulation_id": "simulation-a",
+  "candidate_id": "candidate-a",
+  "task_ref": {
+    "task_id": "task-day1-closure",
+    "revision": 1,
+    "network_hash": "sha256:8db1aa5f8fd3468ea46b9d2d486a02fe5e386e945bbe3bcb8498fecc6f118a88",
+    "constraint_hash": "sha256:5150b2b46a21f51158b69938056a8fcfa7d229a9dca531a5bacdc4526fa59296"
+  },
+  "mode": "fixture",
+  "validity": "valid",
+  "invalid_reasons": [],
+  "violations": [
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J2",
+      "start_s": 3600,
+      "end_s": 5400,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J2",
+      "start_s": 3600,
+      "end_s": 5400,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    },
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J3",
+      "start_s": 3600,
+      "end_s": 5400,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J3",
+      "start_s": 3600,
+      "end_s": 5400,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    },
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J2",
+      "start_s": 5400,
+      "end_s": 7200,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J2",
+      "start_s": 5400,
+      "end_s": 7200,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    },
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J3",
+      "start_s": 5400,
+      "end_s": 7200,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J3",
+      "start_s": 5400,
+      "end_s": 7200,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    },
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J2",
+      "start_s": 7200,
+      "end_s": 9000,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J2",
+      "start_s": 7200,
+      "end_s": 9000,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    },
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J3",
+      "start_s": 7200,
+      "end_s": 9000,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J3",
+      "start_s": 7200,
+      "end_s": 9000,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    },
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J2",
+      "start_s": 9000,
+      "end_s": 10800,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J2",
+      "start_s": 9000,
+      "end_s": 10800,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    },
+    {
+      "code": "MIN_PRESSURE",
+      "node_id": "J3",
+      "start_s": 9000,
+      "end_s": 10800,
+      "observed": 0,
+      "threshold": 20,
+      "unit": "m"
+    },
+    {
+      "code": "MIN_SUPPLY_RATIO",
+      "node_id": "J3",
+      "start_s": 9000,
+      "end_s": 10800,
+      "observed": 0.0,
+      "threshold": 0.95,
+      "unit": "ratio"
+    }
+  ],
+  "metrics": {
+    "shortage_m3": 28.8,
+    "supply_ratio": 0.33333333333333337,
+    "min_pressure_m": 0,
+    "critical_node_time_pass_ratio": 0.0,
+    "action_cost": 0
+  },
+  "coverage": {
+    "start_s": 3600,
+    "end_s": 10800,
+    "assessed_node_ids": [
+      "J1",
+      "J2",
+      "J3"
+    ],
+    "required_stress_tests": [
+      "demand-plus-10pct"
+    ],
+    "completed_stress_tests": []
+  },
+  "admission": {
+    "action_valid": "pass",
+    "simulation_valid": "pass",
+    "nominal_constraints_pass": "fail",
+    "required_stress_tests_pass": "pending",
+    "recommendation_eligible": "fail"
+  },
+  "recommendation_blockers": [
+    "fixture_only",
+    "native_agh_trace_missing",
+    "required_stress_tests_pending"
+  ],
+  "verifier_version": "fixture-reference/0.1.0"
+}

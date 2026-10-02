@@ -1,0 +1,21 @@
+{
+  "schema_version": "0.1.0",
+  "candidate_id": "candidate-b",
+  "task_ref": {
+    "task_id": "task-day1-closure",
+    "revision": 1,
+    "network_hash": "sha256:8db1aa5f8fd3468ea46b9d2d486a02fe5e386e945bbe3bcb8498fecc6f118a88",
+    "constraint_hash": "sha256:5150b2b46a21f51158b69938056a8fcfa7d229a9dca531a5bacdc4526fa59296"
+  },
+  "parent_candidate_id": "candidate-a",
+  "actions": [
+    {
+      "kind": "link_open",
+      "link_id": "P_BYPASS",
+      "simulation_time_s": 3600
+    }
+  ],
+  "source": "fixture",
+  "reason": "Authored example: open bypass after A fails; not an Agnes decision.",
+  "plan_hash": "sha256:88effeeaea49be877e4774982c7ee81c541ed32ba16cd588acf329e3734d993c"
+}

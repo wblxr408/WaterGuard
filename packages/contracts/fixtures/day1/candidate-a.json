@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.1.0",
+  "candidate_id": "candidate-a",
+  "task_ref": {
+    "task_id": "task-day1-closure",
+    "revision": 1,
+    "network_hash": "sha256:8db1aa5f8fd3468ea46b9d2d486a02fe5e386e945bbe3bcb8498fecc6f118a88",
+    "constraint_hash": "sha256:5150b2b46a21f51158b69938056a8fcfa7d229a9dca531a5bacdc4526fa59296"
+  },
+  "parent_candidate_id": null,
+  "actions": [],
+  "source": "fixture",
+  "reason": "Authored fault baseline with no action.",
+  "plan_hash": "sha256:6abb28030c6ca900ce058ce0bca665f7bb88aa5995f26404ac4b793e2ccc46bc"
+}

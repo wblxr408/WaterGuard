@@ -4,7 +4,11 @@
 
 ## 当前状态
 
-项目处于架构与交互设计阶段，尚未接入 Agnes、AGH 或真实水力仿真，也尚未实现三维前端。2026-10-02 已按赛事核心执行要求修订为 0.2 设计：
+2026-10-02 已完成三人共同前置的 [contracts 0.1.0](packages/contracts/README.md)：冻结 Schema、生成的 TypeScript 类型、A 失败/B 改善的 Fixture、可复算指标、Mock Adapter、只读 HTTP/SSE 和自动化检查。尚未接入 Agnes、AGH 或真实水力仿真，也尚未实现前端工作台。当前可运行内容全部明确标为 Fixture。
+
+先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
+
+现有 0.2 实施设计：
 
 | 文档 | 内容 |
 |---|---|
@@ -12,7 +16,7 @@
 | [后端设计](docs/后端设计.md) | API、会话宿主、工具网关、水力仿真、契约、治理和证据存储 |
 | [Agent 设计](docs/Agent设计.md) | AGH 核心执行、Agnes 三角色、工具权限、反馈修正与评测 |
 
-三份文档是当前实施依据。公共字段与状态以后端设计为准，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
+三份文档是当前实施依据。已冻结的公共字段与状态以 [可执行 Schema](packages/contracts/schema/waterguard.schema.json) 和 [契约说明](packages/contracts/README.md) 为准；后端设计保留架构依据，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
 
 [0.1 历史交互蓝图](design/waterguard-blueprint.html) 保留用于查看初期布局，下载后可直接用浏览器打开。其架构已由上述文档取代；拓扑、读数与运行记录全部是示意数据，不是可参赛运行证据。
 

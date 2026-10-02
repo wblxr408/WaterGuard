@@ -1,0 +1,26 @@
+name: Shared contracts
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: python -m pip install -r packages/contracts/requirements.txt
+      - run: npm ci --ignore-scripts
+      - run: npm run contracts:types:check
+      - run: npm run contracts:check
+      - run: npm test
+      - run: npm run demo
+      - name: Fixture generation is deterministic
+        run: |
+          python packages/contracts/scripts/build-fixtures.py
+          git diff --exit-code -- packages/contracts/fixtures

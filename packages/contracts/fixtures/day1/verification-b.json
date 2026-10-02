@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1.0",
+  "verification_id": "verify-candidate-b",
+  "simulation_id": "simulation-b",
+  "candidate_id": "candidate-b",
+  "task_ref": {
+    "task_id": "task-day1-closure",
+    "revision": 1,
+    "network_hash": "sha256:8db1aa5f8fd3468ea46b9d2d486a02fe5e386e945bbe3bcb8498fecc6f118a88",
+    "constraint_hash": "sha256:5150b2b46a21f51158b69938056a8fcfa7d229a9dca531a5bacdc4526fa59296"
+  },
+  "mode": "fixture",
+  "validity": "valid",
+  "invalid_reasons": [],
+  "violations": [],
+  "metrics": {
+    "shortage_m3": 0.0,
+    "supply_ratio": 1.0,
+    "min_pressure_m": 24,
+    "critical_node_time_pass_ratio": 1.0,
+    "action_cost": 1
+  },
+  "coverage": {
+    "start_s": 3600,
+    "end_s": 10800,
+    "assessed_node_ids": [
+      "J1",
+      "J2",
+      "J3"
+    ],
+    "required_stress_tests": [
+      "demand-plus-10pct"
+    ],
+    "completed_stress_tests": []
+  },
+  "admission": {
+    "action_valid": "pass",
+    "simulation_valid": "pass",
+    "nominal_constraints_pass": "pass",
+    "required_stress_tests_pass": "pending",
+    "recommendation_eligible": "fail"
+  },
+  "recommendation_blockers": [
+    "fixture_only",
+    "native_agh_trace_missing",
+    "required_stress_tests_pending"
+  ],
+  "verifier_version": "fixture-reference/0.1.0"
+}

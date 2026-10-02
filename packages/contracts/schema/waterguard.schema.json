@@ -1,0 +1,1888 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://waterguard.local/contracts/0.1.0/waterguard.schema.json",
+  "title": "WaterGuardContract",
+  "description": "Frozen development contracts. Structural validation must be followed by semantic and provenance checks.",
+  "anyOf": [
+    {
+      "$ref": "#/definitions/NetworkManifest"
+    },
+    {
+      "$ref": "#/definitions/TaskSpec"
+    },
+    {
+      "$ref": "#/definitions/ActionPlan"
+    },
+    {
+      "$ref": "#/definitions/ActionCatalog"
+    },
+    {
+      "$ref": "#/definitions/NetworkScene"
+    },
+    {
+      "$ref": "#/definitions/SimulationResult"
+    },
+    {
+      "$ref": "#/definitions/VerificationReport"
+    },
+    {
+      "$ref": "#/definitions/RunRecord"
+    },
+    {
+      "$ref": "#/definitions/RunEvent"
+    },
+    {
+      "$ref": "#/definitions/EvidenceManifest"
+    }
+  ],
+  "definitions": {
+    "Hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "Mode": {
+      "type": "string",
+      "enum": [
+        "live",
+        "replay",
+        "fixture",
+        "benchmark"
+      ]
+    },
+    "TaskRef": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "network_hash": {
+          "$ref": "#/definitions/Hash"
+        },
+        "constraint_hash": {
+          "$ref": "#/definitions/Hash"
+        }
+      },
+      "required": [
+        "task_id",
+        "revision",
+        "network_hash",
+        "constraint_hash"
+      ],
+      "additionalProperties": false
+    },
+    "NetworkRef": {
+      "type": "object",
+      "properties": {
+        "network_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/definitions/Hash"
+        },
+        "overlay_hash": {
+          "$ref": "#/definitions/Hash"
+        }
+      },
+      "required": [
+        "network_id",
+        "revision",
+        "sha256",
+        "overlay_hash"
+      ],
+      "additionalProperties": false
+    },
+    "TimeWindow": {
+      "type": "object",
+      "properties": {
+        "start_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "step_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmup_end_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evaluation_start_s": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "step_s",
+        "warmup_end_s",
+        "evaluation_start_s"
+      ],
+      "additionalProperties": false
+    },
+    "Units": {
+      "type": "object",
+      "properties": {
+        "length": {
+          "const": "m",
+          "type": "string"
+        },
+        "pressure_head": {
+          "const": "m",
+          "type": "string"
+        },
+        "flow": {
+          "const": "m3/s",
+          "type": "string"
+        },
+        "time": {
+          "const": "s",
+          "type": "string"
+        }
+      },
+      "required": [
+        "length",
+        "pressure_head",
+        "flow",
+        "time"
+      ],
+      "additionalProperties": false
+    },
+    "Overlay": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/definitions/Hash"
+        },
+        "provenance": {
+          "type": "string",
+          "enum": [
+            "assumed",
+            "synthetic",
+            "measured"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "ref",
+        "sha256",
+        "provenance",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "NetworkManifest": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/definitions/Hash"
+        },
+        "source_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_kind": {
+          "type": "string",
+          "enum": [
+            "synthetic",
+            "public",
+            "measured"
+          ]
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1
+        },
+        "units": {
+          "$ref": "#/definitions/Units"
+        },
+        "coordinate_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "overlays": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Overlay"
+          },
+          "minItems": 0
+        },
+        "original_file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "network_id",
+        "revision",
+        "sha256",
+        "source_url",
+        "source_kind",
+        "license",
+        "units",
+        "coordinate_system",
+        "overlays",
+        "original_file",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "Fault": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "leak",
+            "rupture",
+            "closure",
+            "isolation"
+          ]
+        },
+        "link_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mapping": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "link_id",
+        "start_s",
+        "end_s",
+        "mapping"
+      ],
+      "additionalProperties": false
+    },
+    "HardConstraints": {
+      "type": "object",
+      "properties": {
+        "min_pressure_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "min_supply_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "pressure_tolerance_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ratio_tolerance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "min_pressure_m",
+        "min_supply_ratio",
+        "node_ids",
+        "pressure_tolerance_m",
+        "ratio_tolerance",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "ActionLimits": {
+      "type": "object",
+      "properties": {
+        "max_actions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "allowed_link_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "allowed_kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "link_open",
+              "link_close",
+              "pump_on",
+              "pump_off"
+            ]
+          },
+          "minItems": 1
+        },
+        "earliest_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latest_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_switch_interval_s": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "max_actions",
+        "allowed_link_ids",
+        "allowed_kinds",
+        "earliest_s",
+        "latest_s",
+        "min_switch_interval_s"
+      ],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "max_simulations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_parallel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_wall_time_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_revisions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "max_simulations",
+        "max_parallel",
+        "max_wall_time_s",
+        "max_revisions"
+      ],
+      "additionalProperties": false
+    },
+    "PerturbationDomain": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "demand_multipliers": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "required",
+        "demand_multipliers"
+      ],
+      "additionalProperties": false
+    },
+    "TaskSpec": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "network_ref": {
+          "$ref": "#/definitions/NetworkRef"
+        },
+        "fault": {
+          "$ref": "#/definitions/Fault"
+        },
+        "time_window": {
+          "$ref": "#/definitions/TimeWindow"
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "minimize_shortage",
+              "minimize_action_cost"
+            ]
+          },
+          "minItems": 1
+        },
+        "hard_constraints": {
+          "$ref": "#/definitions/HardConstraints"
+        },
+        "soft_preferences": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "action_catalog_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action_catalog_hash": {
+          "$ref": "#/definitions/Hash"
+        },
+        "action_limits": {
+          "$ref": "#/definitions/ActionLimits"
+        },
+        "perturbation_domain": {
+          "$ref": "#/definitions/PerturbationDomain"
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "budget": {
+          "$ref": "#/definitions/Budget"
+        },
+        "constraint_hash": {
+          "$ref": "#/definitions/Hash"
+        }
+      },
+      "required": [
+        "schema_version",
+        "task_id",
+        "revision",
+        "network_ref",
+        "fault",
+        "time_window",
+        "objectives",
+        "hard_constraints",
+        "soft_preferences",
+        "action_catalog_ref",
+        "action_catalog_hash",
+        "action_limits",
+        "perturbation_domain",
+        "assumptions",
+        "budget",
+        "constraint_hash"
+      ],
+      "additionalProperties": false
+    },
+    "Action": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "link_open",
+            "link_close",
+            "pump_on",
+            "pump_off"
+          ]
+        },
+        "link_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "simulation_time_s": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind",
+        "link_id",
+        "simulation_time_s"
+      ],
+      "additionalProperties": false
+    },
+    "ActionPlan": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "$ref": "#/definitions/TaskRef"
+        },
+        "parent_candidate_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Action"
+          },
+          "minItems": 0
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "fixture",
+            "agh",
+            "rule",
+            "enumeration",
+            "graph"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan_hash": {
+          "$ref": "#/definitions/Hash"
+        }
+      },
+      "required": [
+        "schema_version",
+        "candidate_id",
+        "task_ref",
+        "parent_candidate_id",
+        "actions",
+        "source",
+        "reason",
+        "plan_hash"
+      ],
+      "additionalProperties": false
+    },
+    "Facility": {
+      "type": "object",
+      "properties": {
+        "link_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "pipe",
+            "pump",
+            "valve"
+          ]
+        },
+        "allowed_actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "link_open",
+              "link_close",
+              "pump_on",
+              "pump_off"
+            ]
+          },
+          "minItems": 1
+        },
+        "initial_status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "action_cost": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mapping": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "link_id",
+        "kind",
+        "allowed_actions",
+        "initial_status",
+        "action_cost",
+        "mapping"
+      ],
+      "additionalProperties": false
+    },
+    "ActionCatalog": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "catalog_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "network_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "facilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Facility"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "catalog_id",
+        "network_id",
+        "facilities"
+      ],
+      "additionalProperties": false
+    },
+    "SceneNode": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "junction",
+            "reservoir",
+            "tank"
+          ]
+        },
+        "x_m": {
+          "type": "number"
+        },
+        "y_m": {
+          "type": "number"
+        },
+        "elevation_m": {
+          "type": "number"
+        },
+        "critical": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "x_m",
+        "y_m",
+        "elevation_m",
+        "critical"
+      ],
+      "additionalProperties": false
+    },
+    "SceneLink": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from_node": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to_node": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "pipe",
+            "pump",
+            "valve"
+          ]
+        },
+        "initial_status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "from_node",
+        "to_node",
+        "kind",
+        "initial_status"
+      ],
+      "additionalProperties": false
+    },
+    "NetworkScene": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "network_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "coordinate_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provenance": {
+          "const": "synthetic",
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SceneNode"
+          },
+          "minItems": 1
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SceneLink"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "network_id",
+        "mode",
+        "coordinate_system",
+        "provenance",
+        "nodes",
+        "links"
+      ],
+      "additionalProperties": false
+    },
+    "NodeSample": {
+      "type": "object",
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pressure_m": {
+          "type": "number"
+        },
+        "expected_demand_m3s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "delivered_demand_m3s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "leak_flow_m3s": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "node_id",
+        "pressure_m",
+        "expected_demand_m3s",
+        "delivered_demand_m3s",
+        "leak_flow_m3s"
+      ],
+      "additionalProperties": false
+    },
+    "LinkSample": {
+      "type": "object",
+      "properties": {
+        "link_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flow_m3s": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed"
+          ]
+        }
+      },
+      "required": [
+        "link_id",
+        "flow_m3s",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "SeriesFrame": {
+      "type": "object",
+      "properties": {
+        "time_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duration_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NodeSample"
+          },
+          "minItems": 1
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LinkSample"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "time_s",
+        "duration_s",
+        "nodes",
+        "links"
+      ],
+      "additionalProperties": false
+    },
+    "Series": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "simulation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "units": {
+          "$ref": "#/definitions/Units"
+        },
+        "sampling": {
+          "const": "interval_start_hold",
+          "type": "string"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SeriesFrame"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "simulation_id",
+        "mode",
+        "units",
+        "sampling",
+        "frames"
+      ],
+      "additionalProperties": false
+    },
+    "Diagnostics": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "simulation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "converged": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "provenance": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "simulation_id",
+        "mode",
+        "converged",
+        "errors",
+        "warnings",
+        "provenance"
+      ],
+      "additionalProperties": false
+    },
+    "SimulationArtifact": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "simulation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "$ref": "#/definitions/TaskRef"
+        },
+        "perturbation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "engine_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_hash": {
+          "$ref": "#/definitions/Hash"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "SUCCEEDED",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "series_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "time_axis": {
+          "$ref": "#/definitions/TimeWindow"
+        }
+      },
+      "required": [
+        "schema_version",
+        "simulation_id",
+        "candidate_id",
+        "task_ref",
+        "perturbation_id",
+        "mode",
+        "engine_version",
+        "input_hash",
+        "status",
+        "series_ref",
+        "diagnostics_ref",
+        "time_axis"
+      ],
+      "additionalProperties": false
+    },
+    "SimulationResult": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "artifact": {
+          "$ref": "#/definitions/SimulationArtifact"
+        },
+        "series": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Series"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics": {
+          "$ref": "#/definitions/Diagnostics"
+        }
+      },
+      "required": [
+        "schema_version",
+        "mode",
+        "artifact",
+        "series",
+        "diagnostics"
+      ],
+      "additionalProperties": false
+    },
+    "Violation": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "MIN_PRESSURE",
+            "MIN_SUPPLY_RATIO"
+          ]
+        },
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed": {
+          "type": "number"
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "m",
+            "ratio"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "node_id",
+        "start_s",
+        "end_s",
+        "observed",
+        "threshold",
+        "unit"
+      ],
+      "additionalProperties": false
+    },
+    "Metrics": {
+      "type": "object",
+      "properties": {
+        "shortage_m3": {
+          "type": "number",
+          "minimum": 0
+        },
+        "supply_ratio": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_pressure_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "critical_node_time_pass_ratio": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "action_cost": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "shortage_m3",
+        "supply_ratio",
+        "min_pressure_m",
+        "critical_node_time_pass_ratio",
+        "action_cost"
+      ],
+      "additionalProperties": false
+    },
+    "Admission": {
+      "type": "object",
+      "properties": {
+        "action_valid": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "pending"
+          ]
+        },
+        "simulation_valid": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "pending"
+          ]
+        },
+        "nominal_constraints_pass": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "pending"
+          ]
+        },
+        "required_stress_tests_pass": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "pending"
+          ]
+        },
+        "recommendation_eligible": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "pending"
+          ]
+        }
+      },
+      "required": [
+        "action_valid",
+        "simulation_valid",
+        "nominal_constraints_pass",
+        "required_stress_tests_pass",
+        "recommendation_eligible"
+      ],
+      "additionalProperties": false
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "start_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "assessed_node_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "required_stress_tests": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "completed_stress_tests": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "assessed_node_ids",
+        "required_stress_tests",
+        "completed_stress_tests"
+      ],
+      "additionalProperties": false
+    },
+    "VerificationReport": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "verification_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "simulation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "$ref": "#/definitions/TaskRef"
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "validity": {
+          "type": "string",
+          "enum": [
+            "valid",
+            "invalid"
+          ]
+        },
+        "invalid_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Violation"
+          },
+          "minItems": 0
+        },
+        "metrics": {
+          "$ref": "#/definitions/Metrics"
+        },
+        "coverage": {
+          "$ref": "#/definitions/Coverage"
+        },
+        "admission": {
+          "$ref": "#/definitions/Admission"
+        },
+        "recommendation_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "verifier_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "verification_id",
+        "simulation_id",
+        "candidate_id",
+        "task_ref",
+        "mode",
+        "validity",
+        "invalid_reasons",
+        "violations",
+        "metrics",
+        "coverage",
+        "admission",
+        "recommendation_blockers",
+        "verifier_version"
+      ],
+      "additionalProperties": false
+    },
+    "RunStatus": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "NEEDS_INPUT",
+        "COMPLETED",
+        "BUDGET_EXHAUSTED",
+        "ERROR",
+        "CANCELLED"
+      ]
+    },
+    "RunPhase": {
+      "type": "string",
+      "enum": [
+        "INTAKE",
+        "MODELING",
+        "BASELINE",
+        "PLANNING",
+        "SIMULATING",
+        "VERIFYING",
+        "REVIEWING",
+        "PACKAGING"
+      ]
+    },
+    "RunRecord": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_ref": {
+          "$ref": "#/definitions/TaskRef"
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "status": {
+          "$ref": "#/definitions/RunStatus"
+        },
+        "phase": {
+          "$ref": "#/definitions/RunPhase"
+        },
+        "agh_session_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model_config_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "budget_usage": {
+          "type": "object",
+          "properties": {
+            "simulations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "model_calls": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "wall_time_s": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "simulations",
+            "model_calls",
+            "wall_time_s"
+          ],
+          "additionalProperties": false
+        },
+        "conclusion": {
+          "type": "string",
+          "enum": [
+            "FEASIBLE_FOUND",
+            "NO_FEASIBLE_FOUND",
+            "INCOMPLETE",
+            "INVALID"
+          ]
+        },
+        "selected_candidate_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "missing_items": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "task_ref",
+        "mode",
+        "status",
+        "phase",
+        "agh_session_ref",
+        "model_config_ref",
+        "budget_usage",
+        "conclusion",
+        "selected_candidate_id",
+        "missing_items"
+      ],
+      "additionalProperties": false
+    },
+    "RunEvent": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "constraint_hash": {
+          "$ref": "#/definitions/Hash"
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "agh_session_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "native_tool_call_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "native_reference_missing_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "agh",
+            "gateway",
+            "worker",
+            "verifier",
+            "user"
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "run.started",
+            "candidate.submitted",
+            "simulation.completed",
+            "verification.completed",
+            "run.completed"
+          ]
+        },
+        "candidate_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "simulation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "simulation_time_s": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "payload_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "event_id",
+        "sequence",
+        "run_id",
+        "task_revision",
+        "constraint_hash",
+        "mode",
+        "agh_session_ref",
+        "native_tool_call_ref",
+        "native_reference_missing_reason",
+        "correlation_id",
+        "origin",
+        "type",
+        "candidate_id",
+        "simulation_id",
+        "occurred_at",
+        "simulation_time_s",
+        "payload_ref"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceArtifact": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/definitions/Hash"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "ref",
+        "sha256",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceManifest": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "bundle_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "native_trace_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "association_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EvidenceArtifact"
+          },
+          "minItems": 1
+        },
+        "hashes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Hash"
+          }
+        },
+        "redactions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "missing_items": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "live_export_allowed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema_version",
+        "bundle_id",
+        "run_id",
+        "mode",
+        "native_trace_ref",
+        "association_ref",
+        "artifacts",
+        "hashes",
+        "redactions",
+        "missing_items",
+        "live_export_allowed"
+      ],
+      "additionalProperties": false
+    },
+    "SeriesPage": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "0.1.0",
+          "type": "string"
+        },
+        "simulation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "$ref": "#/definitions/Mode"
+        },
+        "units": {
+          "$ref": "#/definitions/Units"
+        },
+        "sampling": {
+          "const": "interval_start_hold",
+          "type": "string"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SeriesFrame"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "schema_version",
+        "simulation_id",
+        "mode",
+        "units",
+        "sampling",
+        "frames"
+      ],
+      "additionalProperties": false,
+      "description": "Filtered GET series response; an empty range returns frames=[]. Full simulation series must be nonempty."
+    }
+  }
+}

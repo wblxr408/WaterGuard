@@ -1,0 +1,71 @@
+{
+  "schema_version": "0.1.0",
+  "network_id": "wg-fixture-loop-v1",
+  "mode": "fixture",
+  "coordinate_system": "local_cartesian_m",
+  "provenance": "synthetic",
+  "nodes": [
+    {
+      "id": "R1",
+      "kind": "reservoir",
+      "x_m": 0,
+      "y_m": 0,
+      "elevation_m": 50,
+      "critical": false
+    },
+    {
+      "id": "J1",
+      "kind": "junction",
+      "x_m": 100,
+      "y_m": 0,
+      "elevation_m": 0,
+      "critical": false
+    },
+    {
+      "id": "J2",
+      "kind": "junction",
+      "x_m": 200,
+      "y_m": 0,
+      "elevation_m": 0,
+      "critical": true
+    },
+    {
+      "id": "J3",
+      "kind": "junction",
+      "x_m": 200,
+      "y_m": 100,
+      "elevation_m": 0,
+      "critical": false
+    }
+  ],
+  "links": [
+    {
+      "id": "P_SUPPLY",
+      "from_node": "R1",
+      "to_node": "J1",
+      "kind": "pipe",
+      "initial_status": "open"
+    },
+    {
+      "id": "P_MAIN",
+      "from_node": "J1",
+      "to_node": "J2",
+      "kind": "pipe",
+      "initial_status": "open"
+    },
+    {
+      "id": "P_BYPASS",
+      "from_node": "J1",
+      "to_node": "J3",
+      "kind": "pipe",
+      "initial_status": "closed"
+    },
+    {
+      "id": "P_BRANCH",
+      "from_node": "J2",
+      "to_node": "J3",
+      "kind": "pipe",
+      "initial_status": "open"
+    }
+  ]
+}
