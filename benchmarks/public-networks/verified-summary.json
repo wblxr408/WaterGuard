@@ -1,0 +1,134 @@
+{
+  "schema_version": "0.2.0",
+  "run_id": "benchmark-b8768f94781740d9b1c53c3b35efae66",
+  "mode": "benchmark",
+  "engine_version": "WNTR/1.5.0;EPANET/2.2",
+  "created_at": "2026-10-02T15:36:05.693278+00:00",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "cases": [
+    {
+      "network_id": "epa-net1",
+      "case": "normal",
+      "fault_link_id": null,
+      "simulation_id": "sim-8e0f0b166ceb4706b317dff7ade2171b",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.69161987304688,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "node_count": 11,
+      "link_count": 13,
+      "evaluated_junctions": 9,
+      "frame_count": 12,
+      "result_ref": "sim-8e0f0b166ceb4706b317dff7ade2171b/result.json",
+      "verification_ref": "sim-8e0f0b166ceb4706b317dff7ade2171b/verification.json",
+      "evidence_ref": "sim-8e0f0b166ceb4706b317dff7ade2171b/evidence-manifest.json",
+      "result_hash": "sha256:16f52ca21c51d8c4f21cc34643752b00f7771e86fd98fda6d0d60b48fe176d19",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net1",
+      "case": "closure",
+      "fault_link_id": "12",
+      "simulation_id": "sim-d6ab1eef2a37471bb95fd844e06e73f4",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 78.007568359375,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "pass",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "node_count": 11,
+      "link_count": 13,
+      "evaluated_junctions": 9,
+      "frame_count": 12,
+      "result_ref": "sim-d6ab1eef2a37471bb95fd844e06e73f4/result.json",
+      "verification_ref": "sim-d6ab1eef2a37471bb95fd844e06e73f4/verification.json",
+      "evidence_ref": "sim-d6ab1eef2a37471bb95fd844e06e73f4/evidence-manifest.json",
+      "result_hash": "sha256:1a6603569f9137ff9d43f0cb6bd75af411c19ed7d860347bf4ac97f0ba999646",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "normal",
+      "fault_link_id": null,
+      "simulation_id": "sim-68e91f1239c949918db6356e4a6b19ea",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 0.0,
+        "supply_ratio": 1.0,
+        "min_pressure_m": 4.182193756103516,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "node_count": 97,
+      "link_count": 119,
+      "evaluated_junctions": 92,
+      "frame_count": 12,
+      "result_ref": "sim-68e91f1239c949918db6356e4a6b19ea/result.json",
+      "verification_ref": "sim-68e91f1239c949918db6356e4a6b19ea/verification.json",
+      "evidence_ref": "sim-68e91f1239c949918db6356e4a6b19ea/evidence-manifest.json",
+      "result_hash": "sha256:688a7c038f1350e2bf79aed90aedcbb3076a913bdda5fb327d5dc79af1e85c2b",
+      "errors": []
+    },
+    {
+      "network_id": "epa-net3",
+      "case": "closure",
+      "fault_link_id": "123",
+      "simulation_id": "sim-aef0d72cdc7b46a28aeaa3318e7a0117",
+      "engine_status": "SUCCEEDED",
+      "validity": "valid",
+      "metrics": {
+        "shortage_m3": 8.385014356,
+        "supply_ratio": 0.9984662556228926,
+        "min_pressure_m": 1.7079588174819946,
+        "critical_node_time_pass_ratio": null,
+        "action_cost": 0
+      },
+      "admission": {
+        "action_valid": "pass",
+        "simulation_valid": "pass",
+        "nominal_constraints_pass": "fail",
+        "required_stress_tests_pass": "pending",
+        "recommendation_eligible": "fail"
+      },
+      "node_count": 97,
+      "link_count": 119,
+      "evaluated_junctions": 92,
+      "frame_count": 12,
+      "result_ref": "sim-aef0d72cdc7b46a28aeaa3318e7a0117/result.json",
+      "verification_ref": "sim-aef0d72cdc7b46a28aeaa3318e7a0117/verification.json",
+      "evidence_ref": "sim-aef0d72cdc7b46a28aeaa3318e7a0117/evidence-manifest.json",
+      "result_hash": "sha256:d81ce3dbdac923fb46cc64cdba91d80d14e6ae49b6eae3b492f7a914374fd5e8",
+      "errors": []
+    }
+  ]
+}

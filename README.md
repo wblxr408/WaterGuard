@@ -4,7 +4,9 @@
 
 ## 当前状态
 
-2026-10-02 已完成三人共同前置的 [contracts 0.1.0](packages/contracts/README.md)：冻结 Schema、生成的 TypeScript 类型、A 失败/B 改善的 Fixture、可复算指标、Mock Adapter、只读 HTTP/SSE 和自动化检查。尚未接入 Agnes、AGH 或真实水力仿真，也尚未实现前端工作台。当前可运行内容全部明确标为 Fixture。
+2026-10-02 已完成三人共同前置的 [contracts](packages/contracts/README.md)，并进一步接入 [EPA Net1/Net3 公开管网与实际 EPANET 计算](data/README.md)。公共 Schema 0.2.0 兼容原来的 0.1.0 Fixture；真实水力结果标为 Benchmark。Agnes、AGH 和前端工作台仍待接入。
+
+直接运行真实数据请看 [公开数据接入与复现](data/README.md#本机重跑)；包含来源许可、实际结果、9 项引擎集成测试、读取 API 和证据包。
 
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://waterguard.local/contracts/0.1.0/waterguard.schema.json",
+  "$id": "https://waterguard.local/contracts/0.2.0/waterguard.schema.json",
   "title": "WaterGuardContract",
   "description": "Frozen development contracts. Structural validation must be followed by semantic and provenance checks.",
   "anyOf": [
@@ -197,8 +197,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "network_id": {
           "type": "string",
@@ -456,8 +459,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "task_id": {
           "type": "string",
@@ -471,7 +477,14 @@
           "$ref": "#/definitions/NetworkRef"
         },
         "fault": {
-          "$ref": "#/definitions/Fault"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Fault"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "time_window": {
           "$ref": "#/definitions/TimeWindow"
@@ -544,7 +557,25 @@
         "budget",
         "constraint_hash"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.1.0"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fault": {
+                "$ref": "#/definitions/Fault"
+              }
+            }
+          }
+        }
+      ]
     },
     "Action": {
       "type": "object",
@@ -578,8 +609,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "candidate_id": {
           "type": "string",
@@ -694,8 +728,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "catalog_id": {
           "type": "string",
@@ -803,8 +840,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "network_id": {
           "type": "string",
@@ -818,8 +858,11 @@
           "minLength": 1
         },
         "provenance": {
-          "const": "synthetic",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "synthetic",
+            "derived"
+          ]
         },
         "nodes": {
           "type": "array",
@@ -834,6 +877,9 @@
             "$ref": "#/definitions/SceneLink"
           },
           "minItems": 1
+        },
+        "display_coordinate_note": {
+          "type": "string"
         }
       },
       "required": [
@@ -845,7 +891,25 @@
         "nodes",
         "links"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.1.0"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "provenance": {
+                "const": "synthetic"
+              }
+            }
+          }
+        }
+      ]
     },
     "NodeSample": {
       "type": "object",
@@ -942,8 +1006,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "simulation_id": {
           "type": "string",
@@ -981,8 +1048,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "simulation_id": {
           "type": "string",
@@ -1037,8 +1107,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "simulation_id": {
           "type": "string",
@@ -1119,8 +1192,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "mode": {
           "$ref": "#/definitions/Mode"
@@ -1356,8 +1432,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "verification_id": {
           "type": "string",
@@ -1468,8 +1547,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "run_id": {
           "type": "string",
@@ -1588,8 +1670,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "event_id": {
           "type": "string",
@@ -1760,8 +1845,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "bundle_id": {
           "type": "string",
@@ -1848,8 +1936,11 @@
       "type": "object",
       "properties": {
         "schema_version": {
-          "const": "0.1.0",
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "0.1.0",
+            "0.2.0"
+          ]
         },
         "simulation_id": {
           "type": "string",

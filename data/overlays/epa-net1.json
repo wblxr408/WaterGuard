@@ -1,0 +1,24 @@
+{
+  "network_id": "epa-net1",
+  "provenance": "assumed",
+  "pdd": {
+    "minimum_pressure_m": 0,
+    "required_pressure_m": 20,
+    "pressure_exponent": 0.5
+  },
+  "time_window": {
+    "start_s": 0,
+    "end_s": 10800,
+    "step_s": 900,
+    "warmup_end_s": 3600,
+    "evaluation_start_s": 3600
+  },
+  "critical_nodes": [],
+  "display_coordinates": "Original unknown drawing units mapped 1:1 to arbitrary layout metres; not physical distance.",
+  "assumptions": [
+    "PDD settings and short observation window are WaterGuard benchmark assumptions, not measured calibration.",
+    "Threshold 20 m and supply ratio 0.95 are development criteria, not source-network requirements.",
+    "The first hour evolves original tank levels and demand patterns; it does not establish equilibrium.",
+    "No real-world critical-facility labels are inferred."
+  ]
+}

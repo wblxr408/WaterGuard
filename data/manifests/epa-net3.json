@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.2.0",
+  "network_id": "epa-net3",
+  "revision": 1,
+  "sha256": "sha256:ea3e825c4fef0b5cba47fb06301bc85253f18b6364dc96c44d9fb492c40faa52",
+  "source_url": "https://raw.githubusercontent.com/USEPA/WNTR/388958845c3209ace9a5bd1b105097977eec2d67/examples/networks/Net3.inp",
+  "source_kind": "public",
+  "license": "BSD-3-Clause (WNTR distribution); retained LICENSE.md includes EPANET MIT notice",
+  "units": {
+    "length": "m",
+    "pressure_head": "m",
+    "flow": "m3/s",
+    "time": "s"
+  },
+  "coordinate_system": "upstream_schematic_units_unknown",
+  "overlays": [
+    {
+      "ref": "data/overlays/epa-net3.json",
+      "sha256": "sha256:4e7c06f41d7cd3c589ac09d54ffafda53889fdf44b12cfcf01fe23c6107fc9aa",
+      "provenance": "assumed",
+      "description": "Explicit PDD/time-window and schematic-rendering assumptions; no measured hospital layer."
+    }
+  ],
+  "original_file": "data/networks/wntr-1.5.0/Net3.inp",
+  "description": "EPANET Example Network 3 distributed by USEPA/WNTR at tag 1.5.0, commit 388958845c3209ace9a5bd1b105097977eec2d67. Native INP GPM/feet/inches; WNTR converts hydraulic values to SI. This is a public example model, not live measurements."
+}

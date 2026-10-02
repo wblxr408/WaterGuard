@@ -15,13 +15,60 @@ export type WaterGuardContract =
   | RunEvent
   | EvidenceManifest;
 export type Hash = string;
+export type TaskSpec = {
+  [k: string]: unknown;
+} & {
+  schema_version: "0.1.0" | "0.2.0";
+  task_id: string;
+  revision: number;
+  network_ref: NetworkRef;
+  fault: Fault | null;
+  time_window: TimeWindow;
+  /**
+   * @minItems 1
+   */
+  objectives: ["minimize_shortage" | "minimize_action_cost", ...("minimize_shortage" | "minimize_action_cost")[]];
+  hard_constraints: HardConstraints;
+  /**
+   * @minItems 0
+   */
+  soft_preferences: string[];
+  action_catalog_ref: string;
+  action_catalog_hash: Hash;
+  action_limits: ActionLimits;
+  perturbation_domain: PerturbationDomain;
+  /**
+   * @minItems 1
+   */
+  assumptions: [string, ...string[]];
+  budget: Budget;
+  constraint_hash: Hash;
+};
+export type NetworkScene = {
+  [k: string]: unknown;
+} & {
+  schema_version: "0.1.0" | "0.2.0";
+  network_id: string;
+  mode: Mode;
+  coordinate_system: string;
+  provenance: "synthetic" | "derived";
+  /**
+   * @minItems 1
+   */
+  nodes: [SceneNode, ...SceneNode[]];
+  /**
+   * @minItems 1
+   */
+  links: [SceneLink, ...SceneLink[]];
+  display_coordinate_note?: string;
+};
 export type Mode = "live" | "replay" | "fixture" | "benchmark";
 export type RunStatus = "QUEUED" | "RUNNING" | "NEEDS_INPUT" | "COMPLETED" | "BUDGET_EXHAUSTED" | "ERROR" | "CANCELLED";
 export type RunPhase =
   "INTAKE" | "MODELING" | "BASELINE" | "PLANNING" | "SIMULATING" | "VERIFYING" | "REVIEWING" | "PACKAGING";
 
 export interface NetworkManifest {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   network_id: string;
   revision: number;
   sha256: Hash;
@@ -48,33 +95,6 @@ export interface Overlay {
   sha256: Hash;
   provenance: "assumed" | "synthetic" | "measured";
   description: string;
-}
-export interface TaskSpec {
-  schema_version: "0.1.0";
-  task_id: string;
-  revision: number;
-  network_ref: NetworkRef;
-  fault: Fault;
-  time_window: TimeWindow;
-  /**
-   * @minItems 1
-   */
-  objectives: ["minimize_shortage" | "minimize_action_cost", ...("minimize_shortage" | "minimize_action_cost")[]];
-  hard_constraints: HardConstraints;
-  /**
-   * @minItems 0
-   */
-  soft_preferences: string[];
-  action_catalog_ref: string;
-  action_catalog_hash: Hash;
-  action_limits: ActionLimits;
-  perturbation_domain: PerturbationDomain;
-  /**
-   * @minItems 1
-   */
-  assumptions: [string, ...string[]];
-  budget: Budget;
-  constraint_hash: Hash;
 }
 export interface NetworkRef {
   network_id: string;
@@ -141,7 +161,7 @@ export interface Budget {
   max_revisions: number;
 }
 export interface ActionPlan {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   candidate_id: string;
   task_ref: TaskRef;
   parent_candidate_id: string | null;
@@ -165,7 +185,7 @@ export interface Action {
   simulation_time_s: number;
 }
 export interface ActionCatalog {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   catalog_id: string;
   network_id: string;
   /**
@@ -187,21 +207,6 @@ export interface Facility {
   action_cost: number;
   mapping: string;
 }
-export interface NetworkScene {
-  schema_version: "0.1.0";
-  network_id: string;
-  mode: Mode;
-  coordinate_system: string;
-  provenance: "synthetic";
-  /**
-   * @minItems 1
-   */
-  nodes: [SceneNode, ...SceneNode[]];
-  /**
-   * @minItems 1
-   */
-  links: [SceneLink, ...SceneLink[]];
-}
 export interface SceneNode {
   id: string;
   kind: "junction" | "reservoir" | "tank";
@@ -218,14 +223,14 @@ export interface SceneLink {
   initial_status: "open" | "closed";
 }
 export interface SimulationResult {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   mode: Mode;
   artifact: SimulationArtifact;
   series: Series | null;
   diagnostics: Diagnostics;
 }
 export interface SimulationArtifact {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   simulation_id: string;
   candidate_id: string;
   task_ref: TaskRef;
@@ -239,7 +244,7 @@ export interface SimulationArtifact {
   time_axis: TimeWindow;
 }
 export interface Series {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   simulation_id: string;
   mode: Mode;
   units: Units;
@@ -274,7 +279,7 @@ export interface LinkSample {
   status: "open" | "closed";
 }
 export interface Diagnostics {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   simulation_id: string;
   mode: Mode;
   converged: boolean | null;
@@ -289,7 +294,7 @@ export interface Diagnostics {
   provenance: string;
 }
 export interface VerificationReport {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   verification_id: string;
   simulation_id: string;
   candidate_id: string;
@@ -353,7 +358,7 @@ export interface Admission {
   recommendation_eligible: "pass" | "fail" | "pending";
 }
 export interface RunRecord {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   run_id: string;
   task_ref: TaskRef;
   mode: Mode;
@@ -374,7 +379,7 @@ export interface RunRecord {
   missing_items: string[];
 }
 export interface RunEvent {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   event_id: string;
   sequence: number;
   run_id: string;
@@ -394,7 +399,7 @@ export interface RunEvent {
   payload_ref: string;
 }
 export interface EvidenceManifest {
-  schema_version: "0.1.0";
+  schema_version: "0.1.0" | "0.2.0";
   bundle_id: string;
   run_id: string;
   mode: Mode;

@@ -1,0 +1,26 @@
+name: Public network hydraulics
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  hydraulics:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r services/hydraulics/requirements.txt
+      - run: python -m services.hydraulics.datasets
+      - run: python -m unittest discover -s services/hydraulics/tests -v
+      - run: python -m services.hydraulics.demo --export artifacts/public-hydraulics.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hydraulic-evidence-${{ matrix.os }}
+          path: artifacts/
+          retention-days: 7

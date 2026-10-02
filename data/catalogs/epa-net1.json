@@ -1,0 +1,139 @@
+{
+  "schema_version": "0.2.0",
+  "catalog_id": "epa-net1-pipes-v1",
+  "network_id": "epa-net1",
+  "facilities": [
+    {
+      "link_id": "10",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "11",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "12",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "21",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "22",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "31",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "110",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "111",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "112",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "113",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "121",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    },
+    {
+      "link_id": "122",
+      "kind": "pipe",
+      "allowed_actions": [
+        "link_open",
+        "link_close"
+      ],
+      "initial_status": "open",
+      "action_cost": 1,
+      "mapping": "EPANET timed pipe-status control; no inferred valve or pump."
+    }
+  ]
+}

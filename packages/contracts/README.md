@@ -1,8 +1,10 @@
 # 三人共用契约 · 0.1.0
 
+更新：公共 Schema/类型包已升为 **0.2.0**，继续校验本页冻结的 0.1.0 Fixture。新增正常工况 `fault=null` 和公开模型派生 scene；真实 EPA Net1/Net3 与 EPANET 接入见 [公开数据说明](../../data/README.md)。本页以下内容仅描述 day1 Fixture。
+
 第一天的共同前置已实现：一个网络、一个明确的故障、一套冻结条件、A 失败/B 改善的样例，以及可执行的契约检查、指标复算、Mock Adapter 和只读 HTTP/SSE。
 
-**所有随附数据均为 Fixture。没有运行 AGH、Agnes、WNTR 或 EPANET。** INP 是项目编写的小型调试拓扑；时序是人工设定的开发样例，不能用来证明该 INP 的实际水力行为。接入真实引擎后，应保存新产物和实际模式，保留这套 Fixture 用于回归测试。
+**本目录的 day1 数据均为 Fixture，不包含 AGH、Agnes、WNTR 或 EPANET 的执行结果。** INP 是项目编写的小型调试拓扑；时序是人工设定的开发样例，不能用来证明该 INP 的实际水力行为。真实引擎产物使用独立目录和 Benchmark 模式，这套 Fixture 继续用于回归测试。
 
 ## 从干净仓库跑起来
 

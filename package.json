@@ -8,6 +8,10 @@
     "contracts:check": "python packages/contracts/scripts/check.py",
     "test": "python -m unittest discover -s packages/contracts/tests -v",
     "demo": "python packages/contracts/scripts/demo.py",
-    "mock": "python packages/contracts/scripts/mock_server.py"
+    "mock": "python packages/contracts/scripts/mock_server.py",
+    "hydraulics:check": "python -m services.hydraulics.datasets",
+    "hydraulics:demo": "python -m services.hydraulics.demo",
+    "hydraulics:serve": "python -m services.hydraulics.server",
+    "hydraulics:test": "python -m unittest discover -s services/hydraulics/tests -v"
   }
 }

@@ -1,11 +1,13 @@
 {
   "name": "@waterguard/contracts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "types": "./generated/index.d.ts",
   "exports": {
-    ".": { "types": "./generated/index.d.ts" },
+    ".": {
+      "types": "./generated/index.d.ts"
+    },
     "./schema": "./schema/waterguard.schema.json"
   },
   "scripts": {

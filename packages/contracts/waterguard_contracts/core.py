@@ -89,8 +89,10 @@ def check_task(task, catalog, scene):
     require(task_hash(task) == task['constraint_hash'], 'Task hash mismatch')
     require(task['network_ref']['network_id'] == catalog['network_id'] == scene['network_id'], 'Network ID mismatch')
     w = task['time_window']
-    require(w['start_s'] <= w['warmup_end_s'] <= task['fault']['start_s'] <= w['evaluation_start_s'] < w['end_s'], 'Invalid warmup/fault/evaluation order')
-    require(w['start_s'] <= task['fault']['start_s'] < task['fault']['end_s'] <= w['end_s'], 'Invalid fault window')
+    require(w['start_s'] <= w['warmup_end_s'] <= w['evaluation_start_s'] < w['end_s'], 'Invalid warmup/evaluation order')
+    if task['fault'] is not None:
+        require(w['warmup_end_s'] <= task['fault']['start_s'] <= w['evaluation_start_s'], 'Invalid fault/evaluation order')
+        require(w['start_s'] <= task['fault']['start_s'] < task['fault']['end_s'] <= w['end_s'], 'Invalid fault window')
     require((w['end_s'] - w['start_s']) % w['step_s'] == 0, 'Incomplete time steps')
     require((w['evaluation_start_s'] - w['start_s']) % w['step_s'] == 0, 'Evaluation not on sample boundary')
     nodes = [n['id'] for n in scene['nodes']]
@@ -99,15 +101,15 @@ def check_task(task, catalog, scene):
     require(all(l['from_node'] in nodes and l['to_node'] in nodes for l in scene['links']), 'Unknown link endpoint')
     users = {n['id'] for n in scene['nodes'] if n['kind'] == 'junction'}
     require(set(task['hard_constraints']['node_ids']) == users, 'Day-1 evaluation must include all user nodes')
-    require(task['fault']['link_id'] in links, 'Unknown fault link')
+    if task['fault'] is not None:
+        require(task['fault']['link_id'] in links, 'Unknown fault link')
     facilities = [f['link_id'] for f in catalog['facilities']]
     require(len(set(facilities)) == len(facilities), 'Duplicate catalog IDs')
     require(set(facilities) <= set(links), 'Unknown catalog link')
     limits = task['action_limits']
     require(set(limits['allowed_link_ids']) <= set(facilities), 'Unknown allowed facility')
     require(w['evaluation_start_s'] <= limits['earliest_s'] <= limits['latest_s'] < w['end_s'], 'Invalid action window')
-    # This reference verifier only implements one explicit day-1 fault mapping.
-    require(task['fault']['kind'] == 'closure', 'Fixture verifier supports closure only')
+    require(task['fault'] is None or task['fault']['kind'] == 'closure', 'Reference verifier supports closure only')
 
 
 def check_plan(task, plan, catalog):
@@ -125,7 +127,7 @@ def check_plan(task, plan, catalog):
         require(kind in ('link_open', 'link_close'), 'Pump actions require a verified real adapter')
         require(limits['earliest_s'] <= time <= limits['latest_s'], 'Action outside time window')
         require((time - task['time_window']['start_s']) % task['time_window']['step_s'] == 0, 'Action not on sample boundary')
-        require(link != task['fault']['link_id'], 'Action conflicts with forced fault state')
+        require(task['fault'] is None or link != task['fault']['link_id'], 'Action conflicts with forced fault state')
         if link in previous:
             require(time > previous[link] and time - previous[link] >= limits['min_switch_interval_s'], 'Conflicting or too frequent controls')
         previous[link] = time
@@ -133,23 +135,34 @@ def check_plan(task, plan, catalog):
 
 def verify_fixture(task, plan, result, catalog, scene):
     """Recompute sample metrics. Does not establish physical truth or live eligibility."""
+    return _verify_result(task, plan, result, catalog, scene, 'fixture', VERIFIER)
+
+
+def verify_benchmark(task, plan, result, catalog, scene):
+    """Recompute real engine results; no AGH or recommendation attestation."""
+    return _verify_result(task, plan, result, catalog, scene, 'benchmark', 'hydraulic-reference/0.2.0')
+
+
+def _verify_result(task, plan, result, catalog, scene, mode, verifier_version):
     check_task(task, catalog, scene)
     check_plan(task, plan, catalog)
     validate('SimulationResult', result)
     artifact, series, diag = result['artifact'], result['series'], result['diagnostics']
-    require(result['mode'] == artifact['mode'] == diag['mode'] == 'fixture', 'Fixture verifier rejects non-fixture input')
+    require(result['mode'] == artifact['mode'] == diag['mode'] == mode, f'{mode} verifier rejects non-{mode} input')
     require(artifact['candidate_id'] == plan['candidate_id'] and artifact['task_ref'] == task_ref(task), 'Simulation binding mismatch')
     require(artifact['time_axis'] == task['time_window'], 'Time axis mismatch')
-    require(artifact['perturbation_id'] is None, 'Nominal fixture cannot attest stress tests')
+    require(artifact['perturbation_id'] is None, 'Nominal reference verifier cannot attest stress tests')
     require(artifact['input_hash'] == input_hash(task, plan, artifact['engine_version']), 'Simulation input hash mismatch')
     require(diag['simulation_id'] == artifact['simulation_id'], 'Diagnostic binding mismatch')
     reasons = []
     if artifact['status'] != 'SUCCEEDED' or diag['errors'] or diag['converged'] is False:
         reasons.append('simulation_failed')
+    if mode == 'benchmark' and diag['converged'] is not True:
+        reasons.append('convergence_unconfirmed')
     if series is None:
         reasons.append('series_missing')
     else:
-        require(series['mode'] == 'fixture' and series['simulation_id'] == artifact['simulation_id'], 'Series binding mismatch')
+        require(series['mode'] == mode and series['simulation_id'] == artifact['simulation_id'], 'Series binding mismatch')
     users = task['hard_constraints']['node_ids']
     links = {l['id'] for l in scene['links']}
     w = task['time_window']
@@ -196,8 +209,8 @@ def verify_fixture(task, plan, result, catalog, scene):
                     critical_pass += dt if pressure_ok and ratio_ok else 0
     facilities = {f['link_id']: f for f in catalog['facilities']}
     report = dict(
-        schema_version=VERSION, verification_id='verify-' + plan['candidate_id'], simulation_id=artifact['simulation_id'],
-        candidate_id=plan['candidate_id'], task_ref=task_ref(task), mode='fixture',
+        schema_version=task['schema_version'], verification_id='verify-' + plan['candidate_id'], simulation_id=artifact['simulation_id'],
+        candidate_id=plan['candidate_id'], task_ref=task_ref(task), mode=mode,
         validity='invalid' if reasons else 'valid', invalid_reasons=sorted(set(reasons)), violations=violations,
         metrics=dict(shortage_m3=round(shortage, 9), supply_ratio=None if expected == 0 else supplied / expected,
                      min_pressure_m=minimum, critical_node_time_pass_ratio=None if critical_total == 0 else critical_pass / critical_total,
@@ -207,7 +220,7 @@ def verify_fixture(task, plan, result, catalog, scene):
         admission=dict(action_valid='pass', simulation_valid='fail' if reasons else 'pass',
                        nominal_constraints_pass='pending' if reasons else ('fail' if violations else 'pass'),
                        required_stress_tests_pass='pending', recommendation_eligible='fail'),
-        recommendation_blockers=['fixture_only', 'native_agh_trace_missing', 'required_stress_tests_pending'], verifier_version=VERIFIER,
+        recommendation_blockers=[mode + '_only', 'native_agh_trace_missing', 'required_stress_tests_pending'], verifier_version=verifier_version,
     )
     validate('VerificationReport', report)
     return report
