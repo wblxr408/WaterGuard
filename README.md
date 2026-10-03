@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-已完成三人共同前置的 [contracts](packages/contracts/README.md) 和 [同学 1 的仿真与数据交付](docs/同学1交付与复现.md)：EPA Net1/Net3、真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、管段与泵操作、独立进程、物理检查、回放和证据包。公共 Schema 0.4.0 兼容旧 Fixture；计算标为 Benchmark。Agnes、AGH 和前端工作台仍待接入。
+已完成三人共同前置的 [contracts](packages/contracts/README.md)、[同学 1 的仿真与数据交付](docs/同学1交付与复现.md)，以及后端运行治理基础：EPA Net1/Net3 的真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、独立进程、物理检查、回放和基准证据；任务/运行的 SQLite 状态、JSONL 事件、SSE、有限动作域候选生成、独立验证、预算与证据清单。公共 Schema 已升级至 0.4.0 并兼容旧 Fixture；计算标为 Benchmark。AGH 守护进程与 11 项 WaterGuard MCP 工具已挂载，但真实 Agnes 模型会话、原生轨迹、取消/恢复和 live 反馈修正仍需配置赛事 Key 后实测；前端工作台仍待接入。
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
@@ -14,6 +14,14 @@
 
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 
+后端基础 API 可用现有 `waterguard-backend` Conda 环境启动：
+
+```powershell
+C:\ProgramData\anaconda3\envs\waterguard-backend\python.exe -m uvicorn services.api.main:app --reload
+```
+
+它默认将本地运行数据写入未提交的 `artifacts/`。`POST /api/tasks/{id}/runs` 的 `mode=live` 在 AGH 宿主完成前会明确返回 `AGH_UNAVAILABLE`，不会暗中替换为其他 Agent 循环。
+
 现有 0.2 实施设计：
 
 | 文档 | 内容 |
@@ -21,6 +29,7 @@
 | [前端设计](docs/前端设计.md) | 数据驱动三维管网、Blender 资产、二维分析、AGH 事件和证据界面 |
 | [后端设计](docs/后端设计.md) | API、会话宿主、工具网关、水力仿真、契约、治理和证据存储 |
 | [Agent 设计](docs/Agent设计.md) | AGH 核心执行、Agnes 三角色、工具权限、反馈修正与评测 |
+| [AGH 验收清单](docs/AGH验收清单.md) | 配置模型 Key 后的真实工具闭环、异常与证据核验步骤 |
 
 三份文档是当前实施依据。已冻结的公共字段与状态以 [可执行 Schema](packages/contracts/schema/waterguard.schema.json) 和 [契约说明](packages/contracts/README.md) 为准；后端设计保留架构依据，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
 

@@ -1,0 +1,4 @@
+-r ../../packages/contracts/requirements.txt
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+mcp[cli]==1.30.0

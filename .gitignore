@@ -21,6 +21,7 @@ coverage/
 # Local scratch and generated simulation evidence
 work/
 artifacts/
+.test-artifacts/
 .cache/
 
 # Editor and OS files
