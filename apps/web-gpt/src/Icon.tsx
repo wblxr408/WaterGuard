@@ -17,6 +17,7 @@ const paths: Record<string, string> = {
   pause: "M7 4v16 M17 4v16",
   refresh: "M20 7a9 9 0 1 0 1 8 M20 2v6h-6",
   expand: "M3 9V3h6 M15 3h6v6 M21 15v6h-6 M9 21H3v-6",
+  fit: "M4 8V4h4 M16 4h4v4 M20 16v4h-4 M8 20H4v-4 M9 9h6v6H9z",
   help: "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17v1 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   layers: "M2 8l10-5 10 5-10 5z M2 12l10 5 10-5 M2 16l10 5 10-5",
   search: "M16 16l5 5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0",

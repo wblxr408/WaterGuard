@@ -774,7 +774,7 @@ h2 {
   display: block;
   width: 100%;
   min-height: 0;
-  height: min(clamp(320px, calc(100vh - 500px), 600px), 64cqi);
+  height: min(clamp(340px, calc(100vh - 470px), 620px), 64cqi);
 }
 .map-caption {
   position: absolute;
@@ -2234,49 +2234,87 @@ tbody tr:hover {
   }
 }
 
-/* ---- 管网图：状态、流向与故障（颜色之外都有大小、线型或外圈） ---- */
-.map-zoom {
-  transition: transform 0.35s var(--ease-expo);
+/* ---- 管网图：管道样式、状态、交互（颜色之外都有大小、线型或外圈） ---- */
+.network-svg {
+  cursor: grab;
+  touch-action: pan-x pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
 }
-.link .pipe {
-  stroke: #8d9fc6;
+.network-svg.is-hovering {
+  cursor: pointer;
+}
+.network-svg.is-dragging {
+  cursor: grabbing;
+}
+.network-svg:focus-visible {
+  outline: 2px solid #70a6f9;
+  outline-offset: -2px;
+}
+/* 管道：深色外壁 + 浅色内芯，像一根根管子；交叉处先画全部外壁再画内芯 */
+.pipe-casing,
+.pipe-core {
   stroke-linecap: round;
-  transition: stroke 0.25s var(--ease-out);
+  transition: stroke 0.2s var(--ease-out);
 }
-.link.kind-pump .pipe {
-  stroke: #5b78d8;
+.pipe-casing {
+  stroke: #7d90bd;
 }
-.link.st-closed .pipe,
-.link.st-isolated .pipe {
-  stroke: #a5b0c8;
+.pipe-core {
+  stroke: #bccae8;
 }
-.link.st-leaking .pipe {
+.pipe-casing.kind-pump {
+  stroke: #4a67d4;
+}
+.pipe-core.kind-pump {
+  stroke: #9db0f0;
+}
+.pipe-core.st-closed,
+.pipe-core.st-isolated {
+  stroke: #98a3bd;
+}
+.pipe-casing.st-leaking {
   stroke: var(--warn-dot);
 }
-.link.st-ruptured .pipe,
-.link.is-fault .pipe {
+.pipe-core.st-leaking {
+  stroke: #f6cf8e;
+}
+.pipe-casing.st-ruptured,
+.pipe-casing.fault {
   stroke: var(--bad-dot);
 }
-.link.st-na .pipe {
+.pipe-core.st-ruptured,
+.pipe-core.fault {
+  stroke: #f5a49d;
+}
+.pipe-casing.st-na {
   stroke: #c3cbdb;
 }
-.map-entity.link:hover .pipe,
-.map-entity.link:focus-visible .pipe {
+.pipe-core.st-na {
+  stroke: #e4e8f1;
+}
+.pipe-casing.near {
+  stroke: #5f7ce0;
+}
+.pipe-core.near {
+  stroke: #aebff2;
+}
+.pipe-casing.hovered,
+.pipe-casing.selected {
   stroke: var(--accent);
 }
-.link-halo {
-  stroke: var(--accent);
-  stroke-linecap: round;
-  opacity: 0.16;
+.pipe-core.hovered,
+.pipe-core.selected {
+  stroke: #c9d5ff;
 }
-.link.is-fault .link-halo {
-  stroke: var(--bad-dot);
-  opacity: 0.2;
+.pipe-core.carrying {
+  stroke: #dfe7ff;
 }
 /* 流向光带（示意）：方向按计算流量的正负，速度按相对流量。 */
 .flow-dash {
-  stroke: #ffffff;
-  stroke-opacity: 0.95;
+  stroke: var(--accent);
+  stroke-opacity: 0.9;
   stroke-linecap: round;
   stroke-dasharray: 3 9;
   pointer-events: none;
@@ -2287,16 +2325,73 @@ tbody tr:hover {
     stroke-dashoffset: -12;
   }
 }
-.pump-mark rect {
-  fill: #eef2fe;
-  stroke: #5b78d8;
-  stroke-width: 1.4;
+.pump-badge circle {
+  fill: #ffffff;
+  stroke: #4a67d4;
+  stroke-width: 2;
 }
-.pump-mark path {
-  fill: #5b78d8;
+.pump-badge path {
+  fill: #4a67d4;
+}
+/* 运行中的水泵点亮 */
+.pump-badge.running circle {
+  fill: #4a67d4;
+}
+.pump-badge.running path {
+  fill: #ffffff;
+}
+.pump-badge.selected circle,
+.pump-badge.hovered circle {
+  stroke: var(--accent-strong);
+  stroke-width: 3;
+}
+.facility-badge rect {
+  fill: #ffffff;
+  stroke: #4a67d4;
+  stroke-width: 2;
+}
+.facility-badge path {
+  fill: none;
+  stroke: #4a67d4;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.facility-badge.reservoir rect {
+  fill: #e7eeff;
+}
+.facility-badge.selected rect {
+  stroke: var(--accent-strong);
+  stroke-width: 3;
+}
+.map-pill rect {
+  fill: #ffffffeb;
+  stroke: #d3dbef;
+}
+.map-pill text {
+  fill: #2f3d5c;
+  font-size: 12px;
+  font-weight: 600;
+}
+.map-pill-value {
+  fill: #2c66b8;
+  font-family: var(--num);
+  font-weight: 500;
+}
+.map-pill.selected rect {
+  fill: #ffffff;
+  stroke: var(--accent);
+}
+.hover-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-opacity: 0.7;
+  pointer-events: none;
 }
 .node-dot {
   stroke: #ffffff;
+  stroke-width: 2;
   transition:
     fill 0.25s var(--ease-out),
     r 0.25s var(--ease-out);
@@ -2334,21 +2429,14 @@ tbody tr:hover {
     opacity: 0;
   }
 }
-.facility rect {
-  fill: #e6eefc;
-  stroke: #6f8fd0;
-  stroke-width: 1.6;
-}
-.facility path {
-  stroke: #6f8fd0;
-}
 .map-label {
   fill: #3d4f75;
-  font-size: 12px;
+  font-size: 11px;
   paint-order: stroke;
   stroke: #f6f7ff;
   stroke-width: 3px;
   stroke-linejoin: round;
+  pointer-events: none;
 }
 .map-label.minor {
   fill: #66738f;
@@ -2424,6 +2512,219 @@ tbody tr:hover {
   width: 20px;
   height: 0;
   border-top: 2px dashed #a5b0c8;
+}
+/* 地图上方的当前时刻状态统计 */
+.map-status {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  top: 10px;
+  right: 76px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.map-status-time {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.map-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ffffffd9;
+  border: 1px solid #e1e6f3;
+  font-size: 12px;
+  color: #4a5675;
+  box-shadow: 0 1px 2px #1c2a5a0d;
+}
+.map-chip b {
+  font-family: var(--num);
+  font-weight: 600;
+  color: var(--ink);
+}
+/* 悬停卡片 */
+.map-tooltip {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 0;
+  min-width: 190px;
+  max-width: 280px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ffffffF5;
+  border: 1px solid #dfe5f3;
+  box-shadow:
+    0 2px 4px #1c2a5a14,
+    0 12px 28px #1c2a5a24;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  pointer-events: none;
+  animation: tip-in 0.16s var(--ease-out);
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+.map-tooltip strong {
+  display: block;
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.map-tooltip div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 2px 0;
+}
+.map-tooltip div span {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.map-tooltip div b {
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.map-tooltip .tone-ok {
+  color: var(--ok);
+}
+.map-tooltip .tone-low {
+  color: var(--warn);
+}
+.map-tooltip .tone-bad {
+  color: var(--bad);
+}
+.map-tooltip-note {
+  margin-top: 6px;
+  color: var(--bad);
+  font-weight: 600;
+}
+.map-tooltip-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--accent);
+}
+.map-hint {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #1f2a44d9;
+  color: #fff;
+  font-size: 13px;
+  pointer-events: none;
+  animation: tip-in 0.2s var(--ease-out);
+}
+.map-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 10px;
+  height: 32px;
+  border: 1px solid #d9dfee;
+  border-radius: 8px;
+  background: #ffffffd0;
+  color: var(--muted);
+  transition: border-color 0.18s var(--ease-out);
+}
+.map-search:focus-within {
+  border-color: var(--accent);
+  background: #fff;
+}
+.map-search input {
+  width: 150px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--ink);
+}
+.map-search input[aria-invalid="true"] {
+  color: var(--bad);
+}
+.map-search-miss {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  top: calc(100% + 4px);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 11.5px;
+  color: var(--bad);
+  white-space: nowrap;
+}
+.map-search-miss.info {
+  color: var(--accent-strong);
+}
+.map-legend-help {
+  color: var(--muted);
+}
+.network-canvas .map-legend {
+  z-index: 2;
+  padding: 5px 12px;
+  border-radius: 10px;
+  background: #ffffffd9;
+  box-shadow: 0 1px 2px #1c2a5a0d;
+  max-width: calc(100% - 96px);
+}
+.network-canvas .map-note {
+  z-index: 2;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: #ffffffcc;
+}
+.map-tools button:disabled {
+  opacity: 0.35;
+}
+@media (max-width: 640px) {
+  .map-search {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+  .map-search input {
+    width: 100%;
+  }
+  .map-status {
+    top: 8px;
+    left: 12px;
+    right: 52px;
+  }
+  .map-chip {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .map-legend-help {
+    display: none;
+  }
+}
+/* 全屏查看：管网占满屏幕 */
+.network-panel.is-full {
+  background:
+    radial-gradient(ellipse at 65% 25%, #e9e5fc, transparent 70%),
+    linear-gradient(135deg, #f7f9ff, #f0f3fc);
+  padding: 8px 12px 12px;
+}
+.network-panel.is-full .network-svg {
+  height: calc(100vh - 110px);
 }
 
 /* ---- 曲线 ---- */

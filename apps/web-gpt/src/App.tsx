@@ -113,12 +113,14 @@ function Inspector({
   inspect: (title: string, data: unknown) => void;
 }) {
   const frame = c.series?.frames[frameIndex];
-  const node = w.scene.nodes.find((n) => n.id === entity.id),
-    link = w.scene.links.find((l) => l.id === entity.id);
-  const sample = frame?.nodes.find((n) => n.node_id === entity.id),
-    ls = frame?.links.find((l) => l.link_id === entity.id),
-    tank = frame?.tanks?.find((t) => t.node_id === entity.id),
-    leaks = frame?.leaks?.filter((l) => l.source_link_id === entity.id) ?? [];
+  // Net3 里节点和管段可能同号（如 123），按实体类型分别查找，不能只按编号。
+  const isNode = entity.kind === "node";
+  const node = isNode ? w.scene.nodes.find((n) => n.id === entity.id) : undefined,
+    link = isNode ? undefined : w.scene.links.find((l) => l.id === entity.id);
+  const sample = isNode ? frame?.nodes.find((n) => n.node_id === entity.id) : undefined,
+    ls = isNode ? undefined : frame?.links.find((l) => l.link_id === entity.id),
+    tank = isNode ? frame?.tanks?.find((t) => t.node_id === entity.id) : undefined,
+    leaks = isNode ? [] : (frame?.leaks?.filter((l) => l.source_link_id === entity.id) ?? []);
   const ratio =
     sample && sample.expected_demand_m3s > 0
       ? sample.delivered_demand_m3s / sample.expected_demand_m3s
@@ -152,7 +154,7 @@ function Inspector({
         </span>
         <div>
           <h2>
-            {node?.kind === "junction" ? "节点" : kindText} <b>{entity.id}</b>
+            {isNode && node?.kind === "junction" ? "节点" : kindText} <b>{entity.id}</b>
           </h2>
           <span>{frame ? `当前时刻 ${time(frame.time_s)}` : "无时序数据"}</span>
         </div>
@@ -253,7 +255,7 @@ function Inspector({
       <button
         className="text-button inspector-source"
         onClick={() =>
-          inspect(`${entity.id} · 当前时序`, {
+          inspect(`${kindText} ${entity.id} · 当前时序`, {
             entity: entity.kind === "node" ? node : link,
             time_s: frame?.time_s,
             sample: entity.kind === "node" ? sample : ls,
