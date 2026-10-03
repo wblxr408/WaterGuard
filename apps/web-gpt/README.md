@@ -38,7 +38,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 
 | 页面 | 功能 |
 | --- | --- |
-| 应急工作台 | 故障任务、真实指标、可缩放平移的拓扑（悬停数值卡、编号搜索定位、全屏）、压力/供需比/流量图层、节点/管段详情、时间回放、区间保持曲线、五层准入、违规定位 |
+| 首页（默认） | 深色主题，两块。开场是团队自建的闸阀渲染图配一句标题；往下滑时画面钉住，闸阀拆成 10 个零件、转半圈、再装回去。智能体单独一屏：三个角色、八个运行阶段与「没过就修改」的回路、哪些已真实运行、哪些等待接入，附一个从接口读出的真实计算结果 |
+| 应急工作台 | 顶部「智能体运行」条（运行阶段、方案提出者、接入状态，均来自契约数据）； 故障任务、真实指标、可缩放平移的拓扑（悬停数值卡、编号搜索定位、全屏）、压力/供需比/流量图层、节点/管段详情、时间回放、区间保持曲线、五层准入、违规定位 |
 | 方案对照 | 同任务 A/B 比较；场景库正常/故障工况明确标记为不同任务；显示服务端推荐结论和原始验收 |
 | 建模与仿真 | 泵站设备、管道剖面两张 Blender 渲染图，可下载 GLB（未配置渲染图时退回可交互的 SVG 示意）；计算参数、守恒检查、来源与实体映射 |
 | 证据中心 | 文件索引与完整哈希、接口结果查看、搜索、证据索引和 JSON 读取副本导出 |
@@ -112,6 +113,13 @@ CLI 文件是函数表达式，末尾不加分号。浏览器回归覆盖真实 
 - `src/Network.tsx`：真实拓扑（缩放平移、就近点选、悬停数值卡、搜索定位、全屏）、实体选择、阶梯压力曲线。
 - `src/Pages.tsx`：对照、建模、证据、验收反馈与 Fixture SSE。
 - `src/ModelDemo.tsx` / `model-assets.ts`：交互示意与 Blender 资产入口。
+- `src/Cover.tsx` / `cover.css`：首页。`CoverHero.tsx` 是开场的闸阀拆装，序列帧在 `public/cover/hero-valve/`，由 `tools/blender/build_hero.py S` 生成；`CoverAgent.tsx` 是智能体板块。以下文件首页已不引用，等确认后删除：
+  - `cover-stage.ts`：旧版首页的管网全息沙盘；
+  - `CoverTeardown.tsx`：旧版闸阀拆解，序列帧在 `public/cover/valve/`；
+  - `public/cover/hero-a.webp`、`hero-b.webp`、`hero-c.webp`、`hero-c-lines.webp` 和 `src/cover-hero-anchors.ts`：挑开场方向时的三张备选。
+
+  闸阀零件本身仍由 `tools/blender/build_cover_valve.py` 建模，开场序列也用它。
+- `src/AgentRun.tsx` / `agent-run.css`：工作台的智能体运行条。
 - `src/styles.css`：统一视觉系统和响应式断点。
 
 生产部署未执行。`npm run preview` 仍需要本机三个后端；正式部署需配置 API 路由，不能把只有静态页面的部署称为完整服务。

@@ -1,0 +1,143 @@
+/* 工作台的智能体运行条：真实运行为蓝，人工样例为斜纹，没有运行记录时阶段全部置灰 */
+.agent-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head phases action"
+    "facts facts facts";
+  align-items: center;
+  gap: 14px 24px;
+  margin: 0 0 18px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 1px solid #dfe3f4;
+  background: linear-gradient(100deg, #eef1ff 0%, #f8f8fd 55%, #ffffff 100%);
+  box-shadow: var(--card-shadow);
+}
+.agent-strip-head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.agent-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+}
+.agent-strip.none .agent-mark {
+  background: #8f97ab;
+}
+.agent-strip.sample .agent-mark {
+  background: var(--warn-dot);
+}
+.agent-strip-head strong {
+  display: block;
+  font-size: 15px;
+}
+.agent-strip-head span {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.agent-phases {
+  grid-area: phases;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.agent-phases li {
+  position: relative;
+  flex: 1 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d6dbea;
+  background: #fff;
+  font-size: 12px;
+  color: #6d7790;
+  white-space: nowrap;
+}
+.agent-phases li + li {
+  margin-left: 18px;
+}
+.agent-phases li + li::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 18px;
+  height: 1px;
+  background: #cfd5e6;
+}
+.agent-strip.real .agent-phases li.reached {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.agent-strip.sample .agent-phases li.reached {
+  border-style: dashed;
+  border-color: var(--warn-dot);
+  background: var(--pending-bg, #fdf1dd);
+  color: var(--warn);
+}
+.agent-strip .text-button {
+  grid-area: action;
+}
+.agent-facts {
+  grid-area: facts;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px dashed #dfe3f0;
+}
+.agent-facts div {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+.agent-facts dt {
+  color: var(--muted);
+}
+.agent-facts dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+@media (max-width: 1200px) {
+  .agent-strip {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "head action"
+      "phases phases"
+      "facts facts";
+  }
+}
+@media (max-width: 640px) {
+  .agent-strip {
+    padding: 14px;
+    gap: 12px;
+  }
+  .agent-phases li {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+  .agent-phases li + li {
+    margin-left: 12px;
+  }
+  .agent-phases li + li::before {
+    width: 12px;
+  }
+  .agent-facts div {
+    flex-direction: column;
+    gap: 2px;
+  }
+}

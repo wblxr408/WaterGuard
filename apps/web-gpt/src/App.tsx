@@ -12,6 +12,8 @@ import {
   time,
 } from "./data";
 import type { Candidate, Source, Workspace } from "./data";
+import { AgentRunStrip } from "./AgentRun";
+import Cover from "./Cover";
 import Icon from "./Icon";
 import { studioImage, teaserImage } from "./model-assets";
 import { useTween } from "./motion";
@@ -26,9 +28,10 @@ import {
   Violations,
 } from "./Pages";
 
-type Page = "overview" | "compare" | "model" | "evidence";
+type Page = "cover" | "overview" | "compare" | "model" | "evidence";
 const navigation: { id: Page; label: string; icon: string; english: string }[] =
   [
+    { id: "cover", label: "首页", icon: "home", english: "Home" },
     {
       id: "overview",
       label: "应急工作台",
@@ -115,12 +118,20 @@ function Inspector({
   const frame = c.series?.frames[frameIndex];
   // Net3 里节点和管段可能同号（如 123），按实体类型分别查找，不能只按编号。
   const isNode = entity.kind === "node";
-  const node = isNode ? w.scene.nodes.find((n) => n.id === entity.id) : undefined,
+  const node = isNode
+      ? w.scene.nodes.find((n) => n.id === entity.id)
+      : undefined,
     link = isNode ? undefined : w.scene.links.find((l) => l.id === entity.id);
-  const sample = isNode ? frame?.nodes.find((n) => n.node_id === entity.id) : undefined,
+  const sample = isNode
+      ? frame?.nodes.find((n) => n.node_id === entity.id)
+      : undefined,
     ls = isNode ? undefined : frame?.links.find((l) => l.link_id === entity.id),
-    tank = isNode ? frame?.tanks?.find((t) => t.node_id === entity.id) : undefined,
-    leaks = isNode ? [] : (frame?.leaks?.filter((l) => l.source_link_id === entity.id) ?? []);
+    tank = isNode
+      ? frame?.tanks?.find((t) => t.node_id === entity.id)
+      : undefined,
+    leaks = isNode
+      ? []
+      : (frame?.leaks?.filter((l) => l.source_link_id === entity.id) ?? []);
   const ratio =
     sample && sample.expected_demand_m3s > 0
       ? sample.delivered_demand_m3s / sample.expected_demand_m3s
@@ -154,7 +165,8 @@ function Inspector({
         </span>
         <div>
           <h2>
-            {isNode && node?.kind === "junction" ? "节点" : kindText} <b>{entity.id}</b>
+            {isNode && node?.kind === "junction" ? "节点" : kindText}{" "}
+            <b>{entity.id}</b>
           </h2>
           <span>{frame ? `当前时刻 ${time(frame.time_s)}` : "无时序数据"}</span>
         </div>
@@ -343,7 +355,10 @@ function Metric({
       <div>
         <span>{label}</span>
       </div>
-      <strong className={`len-${length}`} aria-label={`${label} ${final} ${unit}`}>
+      <strong
+        className={`len-${length}`}
+        aria-label={`${label} ${final} ${unit}`}
+      >
         {text}
         <small>{unit}</small>
       </strong>
@@ -507,6 +522,10 @@ function Overview({
           <Icon name="chevron" size={15} />
         </button>
       </div>
+      <AgentRunStrip
+        w={w}
+        onOpen={() => inspect("运行记录（人工样例）", w.run)}
+      />
       <section className="operations-surface" aria-label="供水计算工作面">
         <div className="workspace-bar">
           <span className="workspace-label">
@@ -701,7 +720,7 @@ function Overview({
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>("overview");
+  const [page, setPage] = useState<Page>("cover");
   const [source, setSource] = useState<Source>("pair");
   const [selection, setSelection] = useState("");
   const [w, setW] = useState<Workspace | null>(null);
@@ -790,7 +809,9 @@ export default function App() {
     openPage("overview");
   };
   return (
-    <div className={`app ${focus ? "focus-mode" : ""}`}>
+    <div
+      className={`app ${focus ? "focus-mode" : ""} ${page === "cover" ? "on-cover" : ""}`}
+    >
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>
@@ -801,7 +822,7 @@ export default function App() {
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              openPage("overview");
+              openPage("cover");
             }}
           >
             <span className="brand-mark">
@@ -851,168 +872,174 @@ export default function App() {
           </div>
         </div>
       </header>
-      <div className="app-main">
-        <header className="topbar">
-          <div className="data-mode-note">
-            <Icon name="shield" size={14} />
-            {w?.mode === "fixture"
-              ? "Fixture · 人工设定的开发样例，不代表真实水力计算"
-              : w
-                ? "Benchmark · 固定脚本驱动的真实计算，非 AI 实时决策"
-                : "正在核验数据来源与运行模式"}
-            <span>
-              {w
-                ? "只读结果浏览 · AGH 未接入，执行来源待核验"
-                : `接口端口 ${sources[source].port}`}
-            </span>
-          </div>
-          <div className="topbar-actions">
-            <label className="source-select">
-              <span className="tiny-dot" />
-              <select
-                aria-label="数据源"
-                value={source}
-                onChange={(e) => {
-                  setSelection("");
-                  setSource(e.target.value as Source);
-                }}
-              >
-                {Object.entries(sources).map(([key, s]) => (
-                  <option key={key} value={key}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <Icon name="down" size={13} />
-            </label>
-            <span className={`mode-badge ${w?.mode ?? "unknown"}`}>
-              {w ? w.mode.toUpperCase() : error ? "连接失败" : "读取中"}
-            </span>
-            <span className="topbar-divider" />
-            <button
-              className="icon-button"
-              title="切换专注展示"
-              aria-label="切换专注展示"
-              aria-pressed={focus}
-              onClick={() => setFocus(!focus)}
-            >
-              <Icon name="expand" size={18} />
-            </button>
-            <button
-              className="icon-button"
-              aria-label="刷新数据"
-              onClick={() => setRetry((n) => n + 1)}
-            >
-              <Icon name="refresh" size={18} />
-            </button>
-          </div>
-        </header>
-        <main id="main-content">
-          {w && c && source === "bench" && (
-            <div className="benchmark-picker">
-              <label htmlFor="benchmark-case">选择真实工况</label>
-              <select
-                id="benchmark-case"
-                value={selection || w.candidates.at(-1)?.simulationId}
-                onChange={(e) => setSelection(e.target.value)}
-              >
-                {w.index?.cases.map((x) => (
-                  <option key={x.simulation_id} value={x.simulation_id}>
-                    {x.network_id.toUpperCase()} / {x.engine.toUpperCase()} /{" "}
-                    {caseNames[x.case] ?? x.case}
-                  </option>
-                ))}
-              </select>
-              <span>正常工况与所选工况对照</span>
-            </div>
-          )}
-          {error ? (
-            <div className="error-state" role="alert">
+      {page === "cover" ? (
+        <main id="main-content" className="cover-main">
+          <Cover w={w} openPage={openPage} />
+        </main>
+      ) : (
+        <div className="app-main">
+          <header className="topbar">
+            <div className="data-mode-note">
+              <Icon name="shield" size={14} />
+              {w?.mode === "fixture"
+                ? "Fixture · 人工设定的开发样例，不代表真实水力计算"
+                : w
+                  ? "Benchmark · 固定脚本驱动的真实计算，非 AI 实时决策"
+                  : "正在核验数据来源与运行模式"}
               <span>
-                <Icon name="link" size={34} />
+                {w
+                  ? "只读结果浏览 · AGH 未接入，执行来源待核验"
+                  : `接口端口 ${sources[source].port}`}
               </span>
-              <h1>暂时无法读取计算结果</h1>
-              <p>{error}</p>
-              <code>
-                {sources[source].port} · {sources[source].label}
-              </code>
+            </div>
+            <div className="topbar-actions">
+              <label className="source-select">
+                <span className="tiny-dot" />
+                <select
+                  aria-label="数据源"
+                  value={source}
+                  onChange={(e) => {
+                    setSelection("");
+                    setSource(e.target.value as Source);
+                  }}
+                >
+                  {Object.entries(sources).map(([key, s]) => (
+                    <option key={key} value={key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <Icon name="down" size={13} />
+              </label>
+              <span className={`mode-badge ${w?.mode ?? "unknown"}`}>
+                {w ? w.mode.toUpperCase() : error ? "连接失败" : "读取中"}
+              </span>
+              <span className="topbar-divider" />
               <button
-                className="button primary"
+                className="icon-button"
+                title="切换专注展示"
+                aria-label="切换专注展示"
+                aria-pressed={focus}
+                onClick={() => setFocus(!focus)}
+              >
+                <Icon name="expand" size={18} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="刷新数据"
                 onClick={() => setRetry((n) => n + 1)}
               >
-                <Icon name="refresh" size={17} />
-                重新连接
+                <Icon name="refresh" size={18} />
               </button>
-              <p className="muted">
-                启动对应后端后重试；界面不会用虚构数据替代。
-              </p>
             </div>
-          ) : !w || !c ? (
-            <div className="loading-state" role="status">
-              <span className="loader" />
-              <h2>正在载入水力计算</h2>
-              <p>读取任务、拓扑、候选方案与验收证据…</p>
-            </div>
-          ) : (
-            <>
-              {page !== "overview" && (
-                <div className="page-candidate-select">
-                  <label>
-                    当前结果
-                    <select
-                      aria-label="当前结果"
-                      value={c.id}
-                      onChange={(e) => chooseCandidate(e.target.value)}
-                    >
-                      {w.candidates.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {x.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <span className="mono">{c.simulationId}</span>
-                </div>
-              )}
-              {page === "overview" && (
-                <Overview
-                  w={w}
-                  c={c}
-                  entity={entity}
-                  frameIndex={frameIndex}
-                  onEntity={setEntity}
-                  onFrame={setFrameIndex}
-                  onViolation={locateViolation}
-                  onCandidate={chooseCandidate}
-                  inspect={inspect}
-                  openPage={openPage}
-                />
-              )}
-              {page === "compare" && (
-                <Compare
-                  w={w}
-                  selected={c}
-                  onCandidate={chooseCandidate}
-                  onViolation={locateViolation}
-                  inspect={inspect}
-                />
-              )}
-              {page === "model" && <Modeling w={w} c={c} inspect={inspect} />}
-              {page === "evidence" && (
-                <Evidence w={w} c={c} inspect={inspect} />
-              )}
-              <footer className="app-footer">
-                <span>WaterGuard / 水脉卫士</span>
+          </header>
+          <main id="main-content">
+            {w && c && source === "bench" && (
+              <div className="benchmark-picker">
+                <label htmlFor="benchmark-case">选择真实工况</label>
+                <select
+                  id="benchmark-case"
+                  value={selection || w.candidates.at(-1)?.simulationId}
+                  onChange={(e) => setSelection(e.target.value)}
+                >
+                  {w.index?.cases.map((x) => (
+                    <option key={x.simulation_id} value={x.simulation_id}>
+                      {x.network_id.toUpperCase()} / {x.engine.toUpperCase()} /{" "}
+                      {caseNames[x.case] ?? x.case}
+                    </option>
+                  ))}
+                </select>
+                <span>正常工况与所选工况对照</span>
+              </div>
+            )}
+            {error ? (
+              <div className="error-state" role="alert">
                 <span>
-                  {w.scene.network_id.toUpperCase()} · 契约{" "}
-                  {c.task.schema_version} · {w.mode.toUpperCase()}
+                  <Icon name="link" size={34} />
                 </span>
-                <span>所有推荐结论来自验收接口</span>
-              </footer>
-            </>
-          )}
-        </main>
-      </div>
+                <h1>暂时无法读取计算结果</h1>
+                <p>{error}</p>
+                <code>
+                  {sources[source].port} · {sources[source].label}
+                </code>
+                <button
+                  className="button primary"
+                  onClick={() => setRetry((n) => n + 1)}
+                >
+                  <Icon name="refresh" size={17} />
+                  重新连接
+                </button>
+                <p className="muted">
+                  启动对应后端后重试；界面不会用虚构数据替代。
+                </p>
+              </div>
+            ) : !w || !c ? (
+              <div className="loading-state" role="status">
+                <span className="loader" />
+                <h2>正在载入水力计算</h2>
+                <p>读取任务、拓扑、候选方案与验收证据…</p>
+              </div>
+            ) : (
+              <>
+                {page !== "overview" && (
+                  <div className="page-candidate-select">
+                    <label>
+                      当前结果
+                      <select
+                        aria-label="当前结果"
+                        value={c.id}
+                        onChange={(e) => chooseCandidate(e.target.value)}
+                      >
+                        {w.candidates.map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {x.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <span className="mono">{c.simulationId}</span>
+                  </div>
+                )}
+                {page === "overview" && (
+                  <Overview
+                    w={w}
+                    c={c}
+                    entity={entity}
+                    frameIndex={frameIndex}
+                    onEntity={setEntity}
+                    onFrame={setFrameIndex}
+                    onViolation={locateViolation}
+                    onCandidate={chooseCandidate}
+                    inspect={inspect}
+                    openPage={openPage}
+                  />
+                )}
+                {page === "compare" && (
+                  <Compare
+                    w={w}
+                    selected={c}
+                    onCandidate={chooseCandidate}
+                    onViolation={locateViolation}
+                    inspect={inspect}
+                  />
+                )}
+                {page === "model" && <Modeling w={w} c={c} inspect={inspect} />}
+                {page === "evidence" && (
+                  <Evidence w={w} c={c} inspect={inspect} />
+                )}
+                <footer className="app-footer">
+                  <span>WaterGuard / 水脉卫士</span>
+                  <span>
+                    {w.scene.network_id.toUpperCase()} · 契约{" "}
+                    {c.task.schema_version} · {w.mode.toUpperCase()}
+                  </span>
+                  <span>所有推荐结论来自验收接口</span>
+                </footer>
+              </>
+            )}
+          </main>
+        </div>
+      )}
       {dialog && <JsonDialog item={dialog} close={() => setDialog(null)} />}
     </div>
   );
