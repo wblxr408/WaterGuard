@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Violation } from "@waterguard/contracts";
 import {
   actionText,
   caseNames,
   download,
+  engineStatus,
   loadWorkspace,
   num,
   sources,
@@ -12,7 +13,9 @@ import {
 } from "./data";
 import type { Candidate, Source, Workspace } from "./data";
 import Icon from "./Icon";
-import { Network, NodeChart } from "./Network";
+import { studioImage } from "./model-assets";
+import { useTween } from "./motion";
+import { Network, NodeChart, linkState, linkStateText } from "./Network";
 import type { Entity } from "./Network";
 import {
   Admission,
@@ -69,7 +72,7 @@ function JsonDialog({
     >
       <header>
         <div>
-          <span className="eyebrow">SOURCE INSPECTOR</span>
+          <span className="eyebrow">接口原始数据</span>
           <h2 id="dialog-title">{item.title}</h2>
         </div>
         <button
@@ -113,7 +116,9 @@ function Inspector({
   const node = w.scene.nodes.find((n) => n.id === entity.id),
     link = w.scene.links.find((l) => l.id === entity.id);
   const sample = frame?.nodes.find((n) => n.node_id === entity.id),
-    ls = frame?.links.find((l) => l.link_id === entity.id);
+    ls = frame?.links.find((l) => l.link_id === entity.id),
+    tank = frame?.tanks?.find((t) => t.node_id === entity.id),
+    leaks = frame?.leaks?.filter((l) => l.source_link_id === entity.id) ?? [];
   const ratio =
     sample && sample.expected_demand_m3s > 0
       ? sample.delivered_demand_m3s / sample.expected_demand_m3s
@@ -121,35 +126,68 @@ function Inspector({
   const valid =
     c.verification.validity === "valid" &&
     c.verification.admission.simulation_valid === "pass";
+  const state = link && valid ? linkState(ls, link.initial_status) : null;
+  const kindText =
+    entity.kind === "node"
+      ? node?.kind === "junction"
+        ? "用水节点"
+        : node?.kind === "tank"
+          ? "水箱"
+          : "水源"
+      : link?.kind === "pump"
+        ? "水泵"
+        : link?.kind === "valve"
+          ? "阀门"
+          : "管段";
+  const eligible = c.verification.admission.recommendation_eligible;
   return (
     <aside className="inspector">
       <div className="inspector-top">
-        <span className="eyebrow">ENTITY INSPECTOR</span>
-        <span className="badge neutral">
-          {entity.kind === "node"
-            ? node?.kind === "junction"
-              ? "用水节点"
-              : node?.kind === "tank"
-                ? "水箱"
-                : "水源"
-            : link?.kind === "pump"
-              ? "水泵"
-              : "管段"}
-        </span>
+        <span className="eyebrow">实体详情</span>
+        <span className="badge neutral">{kindText}</span>
       </div>
-      <div className="entity-title">
+      <div className="entity-title" key={entity.id}>
         <span className="entity-icon">
           <Icon name={entity.kind === "node" ? "target" : "link"} size={24} />
         </span>
         <div>
           <h2>
-            {entity.kind === "node" ? "节点" : "管段"} <b>{entity.id}</b>
+            {node?.kind === "junction" ? "节点" : kindText} <b>{entity.id}</b>
           </h2>
           <span>{frame ? `当前时刻 ${time(frame.time_s)}` : "无时序数据"}</span>
         </div>
       </div>
       <dl className="detail-list entity-details">
-        {entity.kind === "node" ? (
+        {entity.kind === "node" && node?.kind === "tank" ? (
+          <>
+            <div>
+              <dt>水位</dt>
+              <dd>
+                {valid && tank ? num(tank.level_m) : "—"} <small>m</small>
+              </dd>
+            </div>
+            <div>
+              <dt>蓄水量</dt>
+              <dd>
+                {valid && tank ? num(tank.volume_m3, 0) : "—"} <small>m³</small>
+              </dd>
+            </div>
+            <div>
+              <dt>净流入</dt>
+              <dd>
+                {valid && tank ? num(tank.net_inflow_m3s, 4) : "—"}{" "}
+                <small>m³/s</small>
+              </dd>
+            </div>
+          </>
+        ) : entity.kind === "node" && node?.kind === "reservoir" ? (
+          <div>
+            <dt>水源水头（场景数据）</dt>
+            <dd>
+              {num(node.elevation_m)} <small>m</small>
+            </dd>
+          </div>
+        ) : entity.kind === "node" ? (
           <>
             <div>
               <dt>节点压力</dt>
@@ -179,11 +217,9 @@ function Inspector({
               </dd>
             </div>
             <div>
-              <dt>管段状态</dt>
-              <dd>
-                {ls
-                  ? { open: "开启", closed: "关闭", broken: "断裂" }[ls.status]
-                  : "无数据"}
+              <dt>物理状态</dt>
+              <dd className={state && state !== "open" ? "negative" : ""}>
+                {state ? linkStateText[state] : "无数据"}
               </dd>
             </div>
             <div>
@@ -199,6 +235,18 @@ function Inspector({
                 <small>m³/s</small>
               </dd>
             </div>
+            {valid && leaks.length > 0 && (
+              <div>
+                <dt>漏水流量</dt>
+                <dd className="negative">
+                  {num(
+                    leaks.reduce((n, l) => n + l.leak_flow_m3s, 0),
+                    5,
+                  )}{" "}
+                  <small>m³/s</small>
+                </dd>
+              </div>
+            )}
           </>
         )}
       </dl>
@@ -246,15 +294,13 @@ function Inspector({
               : "方案来源：固定工程脚本"}
         </p>
       </div>
-      <div
-        className={`inspector-verdict ${c.verification.admission.recommendation_eligible}`}
-      >
+      <div className={`inspector-verdict ${eligible}`}>
         <Icon name="shield" size={19} />
         <div>
           <strong>
-            {c.verification.admission.recommendation_eligible === "pass"
+            {eligible === "pass"
               ? "可推荐"
-              : c.verification.admission.recommendation_eligible === "pending"
+              : eligible === "pending"
                 ? "推荐待验证"
                 : "当前不可推荐"}
           </strong>
@@ -262,6 +308,89 @@ function Inspector({
         </div>
       </div>
     </aside>
+  );
+}
+
+function Metric({
+  label,
+  raw,
+  digits = 2,
+  scale = 1,
+  unit,
+  detail,
+  tone = "",
+  detailTone = "",
+}: {
+  label: string;
+  raw: number | null;
+  digits?: number;
+  scale?: number;
+  unit: string;
+  detail: string;
+  tone?: string;
+  detailTone?: string;
+}) {
+  // 切换方案时数字滚动到新值；读屏软件读到的是终值。
+  const shown = useTween(raw);
+  const final = raw == null ? "—" : num(raw * scale, digits);
+  const text = shown == null ? "—" : num(shown * scale, digits);
+  // 字号按位数收缩（1,645.30 这类长数字在窄栏里不被截断）；滚动过程中按较长的一方取字号。
+  const length = Math.min(9, Math.max(final.length, text.length));
+  return (
+    <div className={`metric ${tone}`}>
+      <div>
+        <span>{label}</span>
+      </div>
+      <strong className={`len-${length}`} aria-label={`${label} ${final} ${unit}`}>
+        {text}
+        <small>{unit}</small>
+      </strong>
+      <p className={detailTone}>
+        {detailTone === "positive" && <span aria-hidden="true">↓</span>}
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+/** 时间轴底纹：预运行、故障时段与处置动作的位置，全部取自冻结任务和方案。 */
+function TimelineBands({ c }: { c: Candidate }) {
+  const frames = c.series?.frames;
+  if (!frames || frames.length < 2) return null;
+  const t0 = frames[0].time_s,
+    t1 = frames[frames.length - 1].time_s;
+  const pct = (t: number) =>
+    `${Math.max(0, Math.min(1, (t - t0) / (t1 - t0 || 1))) * 100}%`;
+  const span = (a: number, b: number) =>
+    `${Math.max(0, (Math.min(b, t1) - Math.max(a, t0)) / (t1 - t0 || 1)) * 100}%`;
+  const warmup = c.task.time_window.warmup_end_s,
+    fault = c.task.fault;
+  return (
+    <div className="timeline-bands" aria-hidden="true">
+      {warmup > t0 && (
+        <span
+          className="band warmup"
+          style={{ left: pct(t0), width: span(t0, warmup) }}
+          title="预运行，不计入评估"
+        />
+      )}
+      {fault && (
+        <span
+          className="band fault"
+          style={{
+            left: pct(fault.start_s),
+            width: span(fault.start_s, fault.end_s),
+          }}
+        />
+      )}
+      {c.plan.actions.map((a, i) => (
+        <span
+          key={i}
+          className="band-tick action"
+          style={{ left: pct(a.simulation_time_s) }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -303,16 +432,21 @@ function Overview({
     return () => clearInterval(timer);
   }, [playing, frameIndex, frames.length, onFrame]);
   const metrics = c.verification.metrics,
-    reference = w.candidates[0].verification.metrics;
+    reference = w.candidates[0].verification.metrics,
+    referenceName = w.candidates[0].name.split(" · ")[0];
   const sameTask = w.candidates.every(
     (x) => x.task.constraint_hash === w.candidates[0].task.constraint_hash,
   );
+  // 改善百分比由前端按两个方案的接口数值计算，并在文字里写明对比对象。
   const improve =
     sameTask && c !== w.candidates[0] && reference.shortage_m3 > 0
       ? ((reference.shortage_m3 - metrics.shortage_m3) /
           reference.shortage_m3) *
         100
       : null;
+  const status = engineStatus(c);
+  const minPressure = metrics.min_pressure_m;
+  const threshold = c.task.hard_constraints.min_pressure_m;
   const chartNode =
     entity.kind === "node"
       ? entity.id
@@ -389,61 +523,47 @@ function Overview({
               </button>
             ))}
           </div>
-          <span className="muted">
-            {c.result ? "引擎计算完成" : "人工样例数据"}
-            <Icon name="check" size={14} />
+          <span className={`engine-status ${status.tone}`}>
+            {status.text}
+            {status.tone === "ok" && <Icon name="check" size={14} />}
           </span>
         </div>
         <div className="workspace-grid">
           <aside className="result-rail">
             <div className="metric-strip">
-              {[
-                {
-                  label: "缺供体积",
-                  value: num(metrics.shortage_m3),
-                  unit: "m³",
-                  icon: "water",
-                  detail:
-                    improve != null
-                      ? `较首个候选减少 ${num(improve, 1)}%`
-                      : "评估窗口内累计缺供",
-                  positive: improve != null && improve > 0,
-                },
-                {
-                  label: "总体供需比",
-                  value:
-                    metrics.supply_ratio == null
-                      ? "—"
-                      : num(metrics.supply_ratio * 100),
-                  unit: "%",
-                  icon: "pulse",
-                  detail: "按用户供需体积计算",
-                  positive: false,
-                },
-                {
-                  label: "最低节点压力",
-                  value: num(metrics.min_pressure_m),
-                  unit: "m",
-                  icon: "target",
-                  detail: `工程要求 ≥ ${num(c.task.hard_constraints.min_pressure_m, 0)} m`,
-                  positive: false,
-                },
-              ].map((m) => (
-                <div className="metric" key={m.label}>
-                  <div>
-                    <span>{m.label}</span>
-                    <Icon name={m.icon} size={18} />
-                  </div>
-                  <strong>
-                    {m.value}
-                    <small>{m.unit}</small>
-                  </strong>
-                  <p className={m.positive ? "positive" : ""}>
-                    {m.positive && <span>↘</span>}
-                    {m.detail}
-                  </p>
-                </div>
-              ))}
+              <Metric
+                label="缺供体积"
+                raw={metrics.shortage_m3}
+                unit="m³"
+                detail={
+                  improve != null
+                    ? `较${referenceName} 减少 ${num(improve, 1)}%`
+                    : "评估窗口内累计缺供"
+                }
+                detailTone={improve != null && improve > 0 ? "positive" : ""}
+              />
+              <Metric
+                label="总体供需比"
+                raw={metrics.supply_ratio}
+                scale={100}
+                unit="%"
+                detail="按用户供需体积计算"
+              />
+              <Metric
+                label="最低节点压力"
+                raw={minPressure}
+                unit="m"
+                tone={
+                  minPressure == null
+                    ? ""
+                    : minPressure < 0
+                      ? "bad"
+                      : minPressure < threshold
+                        ? "warn"
+                        : "ok"
+                }
+                detail={`工程要求 ≥ ${num(threshold, 0)} m`}
+              />
             </div>
           </aside>
           <Network
@@ -478,6 +598,7 @@ function Overview({
             <span>仿真时刻</span>
           </div>
           <div className="timeline-track">
+            <TimelineBands c={c} />
             <input
               aria-label="仿真时间轴"
               type="range"
@@ -507,6 +628,20 @@ function Overview({
           </div>
           <span className="timeline-note">
             {c.task.time_window.step_s / 60} 分钟 / 帧
+            <span className="timeline-key">
+              {c.task.fault && (
+                <>
+                  <i className="k-fault" />
+                  故障
+                </>
+              )}
+              {c.plan.actions.length > 0 && (
+                <>
+                  <i className="k-action" />
+                  动作
+                </>
+              )}
+            </span>
           </span>
         </div>
       </section>
@@ -522,7 +657,7 @@ function Overview({
             <Icon name="help" size={14} />
           </button>
         </div>
-        <Admission candidate={c} />
+        <Admission key={c.id} candidate={c} />
         <span
           className={`badge ${c.verification.admission.recommendation_eligible}`}
         >
@@ -541,23 +676,20 @@ function Overview({
         />
         <button className="model-teaser" onClick={() => openPage("model")}>
           <div>
-            <span className="eyebrow">MODEL STUDIO</span>
+            <span className="eyebrow">建模展台</span>
             <h2>
               设备与管道
               <br />
               模型展台
             </h2>
-            <p>两项交互示意 · Blender 成果预留</p>
+            <p>{studioImage.teaser}</p>
             <span className="text-button">
               打开建模展示
               <Icon name="arrow" size={16} />
             </span>
           </div>
-          <img
-            src="/images/waterguard-studio-pearl-v3.png"
-            alt="统一银色与钴蓝材质的水泵和管道概念展台"
-          />
-          <span className="teaser-caption">AI 概念图</span>
+          <img src={studioImage.src} alt={studioImage.alt} />
+          <span className="teaser-caption">{studioImage.caption}</span>
         </button>
       </div>
       <Violations candidate={c} onSelect={onViolation} />
@@ -581,6 +713,25 @@ export default function App() {
   );
   const [focus, setFocus] = useState(false);
   const inspect = (title: string, data: unknown) => setDialog({ title, data });
+  const navRef = useRef<HTMLElement>(null);
+  // 导航指示条滑到当前页按钮下方；窗口或字体变化时重新定位。
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const place = () => {
+      const active = nav.querySelector<HTMLElement>(
+        'button[aria-current="page"]',
+      );
+      if (!active) return;
+      nav.style.setProperty("--ind-x", `${active.offsetLeft}px`);
+      nav.style.setProperty("--ind-w", `${active.offsetWidth}px`);
+    };
+    place();
+    document.fonts?.ready.then(place);
+    const ro = new ResizeObserver(place);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [page]);
   useEffect(() => {
     const controller = new AbortController();
     setW(null);
@@ -659,7 +810,7 @@ export default function App() {
               <small>水脉卫士</small>
             </div>
           </a>
-          <nav aria-label="主要导航">
+          <nav aria-label="主要导航" ref={navRef}>
             {navigation.map((n) => (
               <button
                 key={n.id}
@@ -671,9 +822,9 @@ export default function App() {
                 <span>{n.label}</span>
               </button>
             ))}
+            <span className="nav-indicator" aria-hidden="true" />
           </nav>
           <div className="global-header-end">
-            <span className="brand-caption">WATER SYSTEMS LAB</span>
             <button
               className="icon-button guide-button"
               aria-label="演示与数据说明"
@@ -682,7 +833,7 @@ export default function App() {
                   建议演示路径: [
                     "工作台：定位故障、切换 A/B、检查时间轴",
                     "方案对照：改善与工程准入分别呈现",
-                    "建模与仿真：两个简洁演示，实际 Blender 成果待接入",
+                    "建模与仿真：Blender 自建设备模型渲染与管道剖面交互示意",
                     "证据中心：原始验收、物理检查与文件哈希",
                   ],
                   Benchmark: "固定脚本驱动的真实水力计算，不是 AI 决策。",
@@ -708,7 +859,9 @@ export default function App() {
                 ? "Benchmark · 固定脚本驱动的真实计算，非 AI 实时决策"
                 : "正在核验数据来源与运行模式"}
             <span>
-              {w ? "只读结果浏览" : `接口端口 ${sources[source].port}`}
+              {w
+                ? "只读结果浏览 · AGH 未接入，执行来源待核验"
+                : `接口端口 ${sources[source].port}`}
             </span>
           </div>
           <div className="topbar-actions">

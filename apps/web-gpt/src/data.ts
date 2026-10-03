@@ -27,9 +27,13 @@ export const caseNames: Record<string, string> = {
   isolation: "区域隔离",
   "pump-cycle": "水泵启停",
   "link-cycle": "管段启闭",
-  "real-candidate-a": "方案 A · 不处置",
-  "real-candidate-b": "方案 B · 启动水泵",
 };
+/** 方案名按接口返回的动作生成，不写死「启动水泵」之类的含义。 */
+export function describePlan(plan: ActionPlan): string {
+  const [first, ...rest] = plan.actions;
+  if (!first) return "不处置";
+  return `${actionText[first.kind]} ${first.link_id}${rest.length ? ` 等 ${plan.actions.length} 项` : ""}`;
+}
 export interface BenchCase {
   network_id: string;
   case: string;
@@ -138,7 +142,7 @@ export async function loadWorkspace(
     candidates = await Promise.all(
       rows.map(async ({ plan, verification }, i) => ({
         id: plan.candidate_id,
-        name: `方案 ${String.fromCharCode(65 + i)} · ${plan.actions.length ? "打开旁通" : "不处置"}`,
+        name: `方案 ${String.fromCharCode(65 + i)} · ${describePlan(plan)}`,
         simulationId: verification.simulation_id,
         task,
         plan,
@@ -194,9 +198,13 @@ export async function loadWorkspace(
           verification.task_ref.constraint_hash !== task.constraint_hash
         )
           throw new Error("任务、方案与仿真绑定不一致，已停止展示。");
+        // A/B 对照的工况名是 real-candidate-x：按序号和实际动作命名；场景库按工况类型命名。
+        const letter = /^real-candidate-([a-z])$/i.exec(c.case)?.[1];
         return {
           id: plan.candidate_id,
-          name: caseNames[c.case] ?? c.case,
+          name: letter
+            ? `方案 ${letter.toUpperCase()} · ${describePlan(plan)}`
+            : (caseNames[c.case] ?? c.case),
           simulationId: c.simulation_id,
           task,
           plan,
@@ -217,6 +225,46 @@ export async function loadWorkspace(
   return { source, mode, base, scene, manifest, candidates, index, run };
 }
 
+/**
+ * 计算状态说明：只有引擎报告成功且收敛才写「已收敛」；converged 为 null 表示未测收敛，
+ * 不能展示成收敛（契约 README）。Fixture 没有 SimulationResult，是人工样例。
+ */
+export function engineStatus(c: Candidate): {
+  text: string;
+  tone: "ok" | "warn" | "neutral";
+} {
+  if (!c.result) return { text: "人工样例数据 · 非引擎计算", tone: "warn" };
+  if (c.result.artifact.status !== "SUCCEEDED")
+    return { text: `引擎状态 ${c.result.artifact.status}`, tone: "warn" };
+  const converged = c.result.diagnostics.converged;
+  return converged === true
+    ? { text: "引擎计算完成 · 已收敛", tone: "ok" }
+    : converged === false
+      ? { text: "引擎报告未收敛", tone: "warn" }
+      : { text: "引擎计算完成 · 未测收敛", tone: "neutral" };
+}
+export const runStatusText: Record<string, string> = {
+  QUEUED: "排队中",
+  RUNNING: "运行中",
+  NEEDS_INPUT: "等待补充信息",
+  COMPLETED: "执行结束",
+  BUDGET_EXHAUSTED: "预算用尽",
+  ERROR: "出错",
+  CANCELLED: "已取消",
+};
+export const conclusionText: Record<string, string> = {
+  FEASIBLE_FOUND: "找到可行方案",
+  NO_FEASIBLE_FOUND: "预算内未找到可行方案",
+  INCOMPLETE: "未完成工程推荐",
+  INVALID: "无效",
+};
+export const eventText: Record<string, string> = {
+  "run.started": "运行开始",
+  "candidate.submitted": "提交候选方案",
+  "simulation.completed": "仿真完成",
+  "verification.completed": "验收完成",
+  "run.completed": "运行结束",
+};
 export const num = (n: number | null | undefined, digits = 2) =>
   n == null || !Number.isFinite(n)
     ? "—"

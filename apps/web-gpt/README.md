@@ -16,7 +16,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 
 访问 **http://127.0.0.1:5173/**。启动脚本会解压仓库交付的真实计算证据，并启动三个只读后端和 Vite；已运行且模式匹配的后端会复用。Ctrl+C 结束前端并清理本脚本创建的后端，保留原有服务。日志保存在 `.cache/backend-*.log`。
 
-如果已经启动后端，可直接在本目录执行 `npm run dev`。5173 被其他前端占用时，先结束对应开发服务器；不自动抢占或换端口。
+如果已经启动后端，可直接在本目录执行 `npm run dev`。5173 被其他前端占用时，先结束对应开发服务器；不自动抢占或换端口。需要和 GPT 原版并排对比时，可显式换端口：`npm run dev -- --port 5175`。
 
 本次交付时四个服务已在本机运行。
 
@@ -68,13 +68,15 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 }
 ```
 
-填入实际渲染图后，组件展示 Blender 渲染成果；填入源文件后开放下载。当前两项是 SVG 软件投影的程序几何示意，**不是 Blender 作品**。没有 GLB 实时解析器；需要实时三维时，替换 `ModelDemo.tsx` 的 SVG 区域。可关联设备命名与水力实体 ID，不能用艺术几何替代水力参数。
+填入实际渲染图后，组件展示 Blender 渲染成果；填入源文件后开放下载。没有 GLB 实时解析器；需要实时三维时，替换 `ModelDemo.tsx` 的 SVG 区域。可关联设备命名与水力实体 ID，不能用艺术几何替代水力参数。
+
+**已接入（claude-polish）**：泵站设备显示团队自建 Blender 模型的 Cycles 渲染图（`public/models/blender-pump-pearl.webp`），可下载 `equipment.glb`；建模页首图和工作台入口卡片改用四件设备合影（`blender-equipment-pearl.webp`）。管道剖面仍是 SVG 程序几何示意。模型由 `tools/blender/build_equipment.py` 生成，透明底渲染图由 `tools/blender/render_pearl.py` 输出，源文件 `assets-src/equipment.blend`。复核与改动说明见 [REVIEW.md](REVIEW.md)。
 
 ## 生图素材
 
 使用内置 image_gen 完成构图探索及设备展台的材质、取景、光照迭代。最终提示词及用途在 `design/image-prompts-v3.json`。
 
-- `public/images/waterguard-studio-pearl-v3.png`：当前工作台入口及建模页使用的统一浅色设备展台，AI 概念素材，非实际 Blender 成果。
+- `public/images/waterguard-studio-pearl-v3.png`：v3 曾用作工作台入口及建模页的设备展台，AI 概念素材，非实际 Blender 成果；claude-polish 起改用 Blender 渲染图，此文件保留不再引用。
 - `design/workbench-reference-v3.png`：构图参考，不在应用中渲染，其中数值不进入业务界面。
 - 旧版本和探索素材保留作设计过程记录，当前界面不引用。
 

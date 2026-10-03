@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import type { Violation, RunEvent } from "@waterguard/contracts";
 import type { Candidate, Workspace } from "./data";
-import { actionText, download, gates, num, statusText, time } from "./data";
+import {
+  actionText,
+  conclusionText,
+  download,
+  eventText,
+  gates,
+  num,
+  runStatusText,
+  statusText,
+  time,
+} from "./data";
 import Icon from "./Icon";
 import ModelDemo from "./ModelDemo";
-import { modelAssets } from "./model-assets";
+import { modelAssets, studioImage } from "./model-assets";
 
 export type Inspect = (title: string, data: unknown) => void;
 export function Admission({
@@ -18,8 +29,13 @@ export function Admission({
     <div className={`admission ${compact ? "compact" : ""}`}>
       {gates.map(([key, label], i) => {
         const value = c.verification.admission[key];
+        // 五层按顺序依次亮起（--i 控制延迟），表达逐层验收。
         return (
-          <div className={`gate ${value}`} key={key}>
+          <div
+            className={`gate ${value}`}
+            key={key}
+            style={{ "--i": i } as CSSProperties}
+          >
             <span className="gate-symbol">
               {value === "pass" ? (
                 <Icon name="check" size={13} />
@@ -189,7 +205,6 @@ export function Compare({
   return (
     <div className="page-enter">
       <div className="section-intro">
-        <span className="eyebrow">COMPARE & VERIFY</span>
         <h1>候选方案对照</h1>
         <p>
           {sameTask
@@ -219,7 +234,10 @@ export function Compare({
               </span>
             </div>
             <h2>{c.name}</h2>
-            <p className="reason">{c.plan.reason}</p>
+            <p className="reason">
+              <span className="reason-label">方案说明（接口原文）</span>
+              {c.plan.reason}
+            </p>
             <div className="comparison-metrics">
               <div>
                 <span>缺供体积</span>
@@ -330,25 +348,18 @@ export function Modeling({
   return (
     <div className="page-enter">
       <div className="section-intro model-intro">
-        <img
-          className="studio-scene"
-          src="/images/waterguard-studio-pearl-v3.png"
-          alt="银色泵组与钴蓝管道的 AI 概念展台"
-        />
-        <span className="studio-scene-caption">
-          AI 概念设计 · 非实际 Blender 成果
-        </span>
+        <img className="studio-scene" src={studioImage.src} alt={studioImage.alt} />
+        <span className="studio-scene-caption">{studioImage.caption}</span>
         <div>
-          <span className="eyebrow">MODEL STUDIO</span>
           <h1>
             设备与管道
             <br />
             模型展台
           </h1>
           <p>
-            建模与仿真展示
+            水箱、水泵、闸阀、水源为团队自建的 Blender 模型
             <br />
-            泵站设备 / 管道剖面 · 两项交互示意
+            管道剖面为可交互的程序几何示意
           </p>
         </div>
         <span className="badge neutral">
@@ -364,8 +375,7 @@ export function Modeling({
       <div className="model-disclaimer">
         <Icon name="cube" size={17} />
         <p>
-          当前为可交互的程序几何示意；实际 Blender
-          成果待接入。几何展示不参与水力验收。
+          泵站设备为 Blender 自建模型的渲染图，可下载 GLB 源文件；管道剖面为程序几何示意。模型几何只用于展示，不参与水力验收。
         </p>
         <button
           className="text-button"
@@ -389,7 +399,6 @@ export function Modeling({
       </div>
       <section className="model-context">
         <div>
-          <span className="eyebrow">HYDRAULIC FOUNDATION</span>
           <h2>模型背后的物理依据</h2>
           <p>
             公开管网、明确假设、独立物理检查。每次计算保留原始输入与实体映射。
@@ -413,7 +422,7 @@ export function Modeling({
         </div>
         <div className="foundation-mark" aria-hidden="true">
           <Icon name="network" size={72} />
-          <span>MODEL → PHYSICS → EVIDENCE</span>
+          <span>模型 → 物理检查 → 证据</span>
         </div>
       </section>
       <div className="model-data-grid">
@@ -542,27 +551,42 @@ export function Modeling({
           </button>
         </div>
         <div className="fault-definitions">
-          <div>
-            <span>01 / CLOSURE</span>
-            <h3>管段关闭</h3>
-            <p>关闭既有管段，无泄漏出流。</p>
-          </div>
-          <div>
-            <span>02 / LEAK</span>
-            <h3>孔口泄漏</h3>
-            <p>拆分管段，按孔口定律计算出流。</p>
-            <code>Q = Cd · A · √(2gh)</code>
-          </div>
-          <div>
-            <span>03 / RUPTURE</span>
-            <h3>双端断裂</h3>
-            <p>两个断口分别向大气出流，断口间无流通。</p>
-          </div>
-          <div>
-            <span>04 / ISOLATION</span>
-            <h3>区域隔离</h3>
-            <p>关闭精确边界，保留区域需水计入缺供。</p>
-          </div>
+          {(
+            [
+              ["closure", "管段关闭", "关闭既有管段，无泄漏出流。", null],
+              [
+                "leak",
+                "孔口泄漏",
+                "拆分管段，按孔口定律计算出流。",
+                "Q = Cd · A · √(2gh)",
+              ],
+              [
+                "rupture",
+                "双端断裂",
+                "两个断口分别向大气出流，断口间无流通。",
+                null,
+              ],
+              [
+                "isolation",
+                "区域隔离",
+                "关闭精确边界，保留区域需水计入缺供。",
+                null,
+              ],
+            ] as const
+          ).map(([kind, title, text, formula]) => (
+            <div
+              key={kind}
+              className={c.task.fault?.kind === kind ? "current" : ""}
+            >
+              <span>
+                {kind}
+                {c.task.fault?.kind === kind ? " · 当前任务" : ""}
+              </span>
+              <h3>{title}</h3>
+              <p>{text}</p>
+              {formula && <code>{formula}</code>}
+            </div>
+          ))}
         </div>
         <p className="subtle-note">
           延时水力模型，不计算水锤或真实破口演化。故障参数为声明的试验假设。
@@ -611,7 +635,6 @@ export function Evidence({
   return (
     <div className="page-enter">
       <div className="section-intro">
-        <span className="eyebrow">EVIDENCE EXPLORER</span>
         <h1>计算证据中心</h1>
         <p>冻结输入、原始时序与独立验收，绑定同一运行记录。</p>
       </div>
@@ -770,6 +793,13 @@ export function Evidence({
   );
 }
 
+const originText: Record<string, string> = {
+  agh: "AGH",
+  gateway: "工具网关",
+  worker: "计算进程",
+  verifier: "验收程序",
+  user: "用户",
+};
 export function FixtureEvents({
   w,
   inspect,
@@ -834,18 +864,37 @@ export function FixtureEvents({
           {error ? "读取异常" : ended ? "回放完成" : "读取中"}
         </span>
       </div>
+      {w.run && (
+        // 契约要求：COMPLETED 只表示流程结束，必须同时显示结论（样例为 INCOMPLETE，未完成工程推荐）。
+        <p className="run-summary">
+          <span>
+            运行记录 <b>{runStatusText[w.run.status] ?? w.run.status}</b>
+          </span>
+          <span>
+            结论 <b>{conclusionText[w.run.conclusion] ?? w.run.conclusion}</b>
+          </span>
+          <span>
+            {w.run.selected_candidate_id
+              ? `选定 ${w.run.selected_candidate_id}`
+              : "未选定推荐方案"}
+          </span>
+        </p>
+      )}
       <div className="event-list">
-        {events.map((e) => (
+        {events.map((e, i) => (
           <button
             key={e.sequence}
+            style={{ "--i": i } as CSSProperties}
             onClick={() => inspect(`事件 ${e.sequence}`, e)}
           >
             <span className="event-sequence">{e.sequence}</span>
             <div>
-              <strong>{e.type}</strong>
-              <small>{e.candidate_id ?? e.run_id}</small>
+              <strong>{eventText[e.type] ?? e.type}</strong>
+              <small>
+                {e.type} · {e.candidate_id ?? e.run_id}
+              </small>
             </div>
-            <span>{e.origin}</span>
+            <span>{originText[e.origin] ?? e.origin}</span>
             <Icon name="chevron" size={15} />
           </button>
         ))}

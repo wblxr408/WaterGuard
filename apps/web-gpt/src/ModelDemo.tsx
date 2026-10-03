@@ -159,10 +159,8 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
   return (
     <article className="model-demo">
       <div className="model-demo-head">
-        <span className="eyebrow">
-          {asset.id === "pump" ? "EQUIPMENT" : "PIPE SECTION"}
-        </span>
-        <span className="badge neutral">
+        <span className="eyebrow">{asset.id === "pump" ? "设备" : "管道"}</span>
+        <span className={`badge ${asset.previewUrl ? "pass" : "neutral"}`}>
           {asset.previewUrl ? "Blender 渲染成果" : "几何示意"}
         </span>
       </div>
@@ -258,7 +256,7 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
         {asset.sourceUrl ? (
           <a href={asset.sourceUrl} download>
             <Icon name="download" size={14} />
-            源文件
+            下载 GLB 模型
           </a>
         ) : (
           <span className="mono">.blend / .glb</span>
