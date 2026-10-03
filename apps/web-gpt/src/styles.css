@@ -3165,11 +3165,12 @@ tbody tr:hover {
   .network-canvas {
     min-height: 358px;
   }
+  /* 平板：标题单独一行，搜索和图层切换并排放第二行（不换行时标题会被挤成两个字一行） */
   .network-panel .panel-heading {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
   .network-panel .panel-heading > div:first-child {
-    display: block;
+    flex: 1 1 100%;
   }
   .network-panel .segmented {
     width: auto;
@@ -3467,15 +3468,29 @@ tbody tr:hover {
     font-size: 11px;
     line-height: 1.6;
   }
+  /* 手机：标题、图层切换、搜索各占一行（挤在一行时标题会被压成两个字一行） */
   .network-panel .panel-heading {
     padding: 16px 14px 8px;
     gap: 7px;
+    flex-wrap: wrap;
+  }
+  .network-panel .panel-heading > div:first-child {
+    flex: 1 1 100%;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
   }
   .network-panel .panel-heading h2 {
     font-size: 13px;
   }
   .network-panel .panel-heading > div > span {
     font-size: 11px;
+  }
+  .network-panel .segmented {
+    width: 100%;
+  }
+  .network-panel .segmented button {
+    flex: 1;
   }
   .segmented {
     padding: 2px;
