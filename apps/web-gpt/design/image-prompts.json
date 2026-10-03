@@ -1,0 +1,20 @@
+{
+  "method": "Built-in image_gen tool",
+  "assets": [
+    {
+      "file": "public/images/waterguard-model.png",
+      "use": "城市水务概念图，非模型几何",
+      "prompt": "Use case: stylized-concept. Asset type: wide cover artwork for WaterGuard hydraulic modeling laboratory. Primary request: premium architectural scale model of an urban water supply system, believable miniature white and warm-grey modern city blocks, small tree-lined streets, water treatment reservoir and pumping station, transparent cutaway ground slab exposing carefully connected teal water mains underground, one tiny coral-red faulty pipe segment. Style: extremely polished architectural maquette photographed in a studio, tactile matte clay buildings, glass-like turquoise water, delicate engineering details, crisp clean isometric overhead 35 degree camera. Composition: a single cohesive city model fills a wide landscape 16:9 image with generous pale mist green studio background, city concentrated center and right, soft shadows, no collage or panels. Palette: warm white, very pale sage, restrained deep teal, tiny amber and coral accents. Lighting: soft daylight, high-end product editorial photography. Constraints: no lettering, numbers, logos, charts, UI, labels, borders or watermark; conceptual artwork, not a map of a real city. Render high detail."
+    },
+    {
+      "file": "public/images/pump-concept.png",
+      "use": "建模入口辅助概念图",
+      "prompt": "Use case: product-mockup. Asset type: restrained WaterGuard model studio preview artwork. Subject: one simple matte sea-green industrial water pump with a short curved inlet and straight outlet pipe, two subtle flange connectors, on a pale sage architectural display plinth. Style: beautiful clean studio product render, minimalist engineering object, credible simple equipment, matte clay material, soft diffused daylight, warm off-white and muted grey-green background. Composition: landscape 16:9, equipment on the right two-thirds with calm negative space on the left, close three-quarter view. No city, no water spray, no glowing holograms, no text, no numbers, no labels, no UI, no watermark. Premium and very quiet, not flashy. Concept visual only, not actual Blender deliverable."
+    },
+    {
+      "file": "design/ui-reference.png",
+      "use": "UI 视觉探索，仅作为参考，未在应用中渲染，样例文字与数字不作为生产数据",
+      "prompt": "Use case: ui-mockup. Asset type: visual design exploration reference only, not a production functional screenshot. Design a refined desktop Chinese WaterGuard water utility operations app UI at landscape 16:10. Forest-green narrow left navigation with WaterGuard wordmark and Chinese labels. Warm off-white main workspace, restrained sea-green accents, muted amber warning. Top heading 供水应急工作台, source badge BENCHMARK. Four large, spacious metric numbers in one strip, then a primary pale-sage technical water network schematic canvas with fine teal graph nodes and links; one coral faulty pipe. Slim right entity inspector. Bottom elegant time scrubber, five admission steps, line chart. Typography sophisticated crisp sans serif, editorial spacing, soft minimal borders, extremely restrained rounded corners, no neon/glass/futuristic glow, no busy card mosaic, no photography in the data canvas. Clean and plausible operator software, details refined. All numeric metrics are only sample typography for visual reference and are not production data. One coherent UI screen, no perspective frame, no hardware, no watermark."
+    }
+  ]
+}

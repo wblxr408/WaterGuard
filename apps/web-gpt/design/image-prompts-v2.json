@@ -1,0 +1,16 @@
+{
+  "method": "Built-in image_gen tool",
+  "version": "v2 — 用户要求移除绿色侧栏并提升质感",
+  "assets": [
+    {
+      "file": "design/ui-reference-v2.png",
+      "use": "顶部导航 UI 探索；不在应用中渲染，所有样例数字仅用于参考",
+      "prompt": "Use case: ui-mockup. Asset type: visual exploration for redesigned WaterGuard desktop water network operations workspace, reference only. Create a very refined functional operator UI, NO SIDEBAR. Wide landscape 16:10. One slim white top horizontal navigation: WaterGuard wordmark left, four Chinese navigation tabs 应急工作台 / 方案对照 / 建模与仿真 / 证据中心, active thin cobalt underline. Light mist-white page, generous horizontal margins, ink-navy typography, restrained pure cobalt blue accents, slate gray secondary text, tiny muted orange warning only. Large clean heading 供水应急工作台 at top left. Right source select and subtle BENCHMARK tag. Below: very crisp thin incident context row, four large navy metric figures in an open row divided by fine vertical rules, no card mosaic. Dominant wide technical graph workspace: pale cool-gray canvas with fine blue water network lines and nodes, orange isolated fault marker. White narrow inspector on right separated by thin rule. Bottom: blue time scrubber and minimalist five-step admission statuses. Small chart and modeling thumbnail lower. Premium scientific engineering software, calm academic editorial precision, typography large and legible, fine restrained outlines, no dark backgrounds, no green blocks, no glossy gradients, no decoration clutter, no hardware frame, no watermark. All sample numbers are design placeholders only."
+    },
+    {
+      "file": "public/images/pump-concept-v2.png",
+      "use": "工作台建模入口，设备概念图并非实际 Blender 成果",
+      "prompt": "Edit this WaterGuard conceptual equipment render. Preserve the exact pump geometry, flange openings, equipment count, camera angle, and clean studio composition. Change the sage-green pump finish to a refined matte off-white and pale brushed aluminum body with only a small cobalt-blue motor housing accent. Change plinth and background to very light cool-gray, diffuse clean daylight, stronger crisp physical detailing, no green cast, no dramatic reflections or glow. Retain soft shadows. No text, numbers, UI, labels, logos or watermark. Quiet premium scientific engineering object, not an actual Blender asset."
+    }
+  ]
+}
