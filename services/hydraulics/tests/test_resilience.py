@@ -39,6 +39,27 @@ class ResilienceTests(unittest.TestCase):
                 self.adapter.simulate(*case(),timeout_s=value)
         self.assertEqual(list(self.root.iterdir()),[])
 
+    def test_temporary_windows_replace_denial_retries_and_persistent_denial_preserves_old(self):
+        from services.hydraulics import storage
+        target=self.root/'result.json';write(target,{'status':'old'})
+        denied=PermissionError('injected Windows denial');denied.winerror=5
+        replace=storage.os.replace
+        with patch('services.hydraulics.storage.os.replace',side_effect=[denied,None]) as attempted,patch('services.hydraulics.storage.time.sleep'):
+            # Second call performs the real atomic replacement.
+            attempted.side_effect=None
+            def flaky(source,destination):
+                if attempted.call_count==1:raise denied
+                return replace(source,destination)
+            attempted.side_effect=flaky
+            write(target,{'status':'new'})
+            self.assertEqual(attempted.call_count,2)
+        self.assertEqual(load(target),{'status':'new'})
+        with patch('services.hydraulics.storage.os.replace',side_effect=denied) as attempted,patch('services.hydraulics.storage.time.sleep'):
+            with self.assertRaises(PermissionError):write(target,{'status':'blocked'})
+            self.assertEqual(attempted.call_count,6)
+        self.assertEqual(load(target),{'status':'new'})
+        self.assertEqual([p.name for p in self.root.iterdir()],['result.json'])
+
     def test_numeric_dependencies_and_native_binaries_bind_runtime(self):
         task,_=case()
         before=engine_identity(task)

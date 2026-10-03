@@ -4,11 +4,13 @@
 
 ## 当前状态
 
-已完成三人共同前置的 [contracts](packages/contracts/README.md) 和 [同学 1 的仿真与数据交付](docs/同学1交付与复现.md)：EPA Net1/Net3、真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、管段与泵操作、独立进程、物理检查、回放和证据包。公共 Schema 0.3.0 兼容旧 Fixture；计算标为 Benchmark。Agnes、AGH 和前端工作台仍待接入。
+已完成三人共同前置的 [contracts](packages/contracts/README.md) 和 [同学 1 的仿真与数据交付](docs/同学1交付与复现.md)：EPA Net1/Net3、真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、管段与泵操作、独立进程、物理检查、回放和证据包。公共 Schema 0.4.0 兼容旧 Fixture；计算标为 Benchmark。Agnes、AGH 和前端工作台仍待接入。
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
-[工程可靠性审查](docs/仿真工程可靠性审查.md) 记录本轮进程、协议、原子写入、资源边界与回放环境加固，以及进入工业部署前仍需完成的验证。
+[物理模型与算法评估](docs/物理模型与算法评估.md) 逐项核对现实物理因素，包含局部需求/PDD、背景漏损、能量与储水检查、内部事件采样和 26 组步长/参数敏感性实算；明确水锤、气穴、破口变形和现场校准的缺口。
+
+[工程可靠性审查](docs/仿真工程可靠性审查.md) 记录进程、协议、原子写入、资源边界与回放环境加固，以及进入工业部署前仍需完成的验证。
 
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 

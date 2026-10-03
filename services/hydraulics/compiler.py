@@ -51,7 +51,7 @@ def compile_task(task, plan):
     wn, source, scene, catalog = assets(task['network_ref']['network_id'])
     check_task(task, catalog, scene)
     check_plan(task, plan, catalog)
-    require(task['schema_version'] == plan['schema_version'] == VERSION, 'Physical adapter requires task and plan 0.3.0')
+    require(task['schema_version'] == plan['schema_version'] and task['schema_version'] in ('0.3.0','0.4.0'), 'Physical adapter requires matching task and plan 0.3/0.4')
     require(task['network_ref'] == dict(network_id=source['network_id'], revision=source['revision'], sha256=source['sha256'], overlay_hash=source['overlays'][0]['sha256']), 'Network/overlay binding mismatch')
     catalog_ref = f'data/catalogs/{source["network_id"]}-v3.json'
     require(task['action_catalog_ref'] == catalog_ref and load(ROOT/catalog_ref) == catalog, 'Operation catalog mismatch')
@@ -101,6 +101,41 @@ def compile_task(task, plan):
     wn.options.hydraulic.pressure_exponent = options['pressure_exponent']
     # A multiplier is a complete scenario parameter, not an extra hidden mutation.
     wn.options.hydraulic.demand_multiplier *= options['demand_multiplier']
+    physics=task.get('physical_parameters')
+    if physics is not None:
+        require(task['schema_version']=='0.4.0','Physical parameters require contracts 0.4.0')
+        if options['engine']=='epanet':
+            from wntr.epanet.util import FlowUnits,HydParam,from_si
+            units=FlowUnits[wn.options.hydraulic.inpfile_units]
+            wn.options.hydraulic.accuracy=1e-5
+            # WNTR 1.5 writes these two EPANET option values in native INP units.
+            wn.options.hydraulic.headerror=float(from_si(units,.001,HydParam.HydraulicHead))
+            wn.options.hydraulic.flowchange=float(from_si(units,1e-7,HydParam.Flow))
+            wn.options.hydraulic.trials=200
+        else:
+            require(options['pressure_exponent']==.5,'Validated WNTR 1.5 PDD smoothing requires exponent 0.5')
+        for _,p in wn.pipes():
+            p.roughness*=physics['roughness_multiplier']
+        for _,r in wn.reservoirs():
+            r.base_head+=physics['reservoir_head_offset_m']
+        for _,tank in wn.tanks():
+            level=tank.init_level+physics['tank_level_offset_m']
+            require(tank.min_level<=level<=tank.max_level,'Perturbed initial tank level outside physical bounds')
+            tank.init_level=level
+        require(set(physics['node_demand_multipliers'])<=set(wn.junction_name_list),'Unknown demand node')
+        for name,multiplier in physics['node_demand_multipliers'].items():
+            for demand in wn.get_node(name).demand_timeseries_list:
+                demand.base_value*=multiplier
+        require(not physics['node_pdd'] or options['engine']=='wntr','Per-node PDD requires WNTR; EPANET uses global parameters')
+        require(set(physics['node_pdd'])<=set(wn.junction_name_list),'Unknown PDD node')
+        for name,settings in physics['node_pdd'].items():
+            require(settings['minimum_pressure_m']<settings['required_pressure_m'],'Invalid local PDD pressure range')
+            require(settings['pressure_exponent']==.5,'Validated local PDD smoothing requires exponent 0.5')
+            node=wn.get_node(name)
+            node.minimum_pressure=settings['minimum_pressure_m']
+            node.required_pressure=settings['required_pressure_m']
+            node.pressure_exponent=settings['pressure_exponent']
+        require(not physics['background_leaks'] or options['engine']=='wntr','Background leaks require WNTR')
     from wntr.network.controls import Control, ControlAction, SimTimeCondition
     from wntr.network import LinkStatus
 
@@ -114,7 +149,7 @@ def compile_task(task, plan):
         at(name+'_end', link, fault['end_s'], initial)
 
     mapping = dict(fault_window=None if fault is None else [fault['start_s'],fault['end_s']],original_junction_ids=list(wn.junction_name_list), original_link_ids=list(wn.link_name_list),
-        segments={name:[name] for name in wn.link_name_list}, leaks=[], bridge=None, isolated_node_ids=[],
+        segments={name:[name] for name in wn.link_name_list}, leaks=[],leak_windows={}, bridge=None, isolated_node_ids=[],
         removed_native_controls=sorted(removed), source_controls=native,
         flow_convention='flow_m3s is inflow at original start; downstream_flow_m3s is outflow at original end. They differ when a pipe leaks.',
         closure_semantics='Close an existing pipe; no leak discharge.',
@@ -160,6 +195,17 @@ def compile_task(task, plan):
             for node_id in leak_nodes:
                 wn.get_node(node_id).add_leak(wn,area=area,discharge_coeff=fault['discharge_coefficient'],start_time=fault['start_s'],end_time=fault['end_s'])
                 mapping['leaks'].append(dict(node_id=node_id,source_link_id=pipe.name,area_m2=area,discharge_coefficient=fault['discharge_coefficient']))
+                mapping['leak_windows'][node_id]=[fault['start_s'],fault['end_s']]
+    if physics:
+        for spec in physics['background_leaks']:
+            name=spec['node_id']
+            require(name in mapping['original_junction_ids'],'Background leak requires an original junction')
+            require(name not in mapping['leak_windows'],'Duplicate leakage node')
+            node=wn.get_node(name)
+            node.add_leak(wn,area=spec['area_m2'],discharge_coeff=spec['discharge_coefficient'],start_time=0,end_time=w['end_s'])
+            mapping['leaks'].append(dict(node_id=name,source_link_id='node:'+name,area_m2=spec['area_m2'],discharge_coefficient=spec['discharge_coefficient']))
+            mapping['leak_windows'][name]=[0,w['end_s']]
+    mapping['physical_parameters']=physics
     for i,action in enumerate(sorted(plan['actions'],key=lambda a:(a['simulation_time_s'],a['link_id']))):
         link=wn.get_link(action['link_id'])
         require((action['kind'].startswith('pump_')) == (link.link_type=='Pump'), 'Action/physical facility kind mismatch')

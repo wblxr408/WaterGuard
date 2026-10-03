@@ -79,5 +79,14 @@ def feedback_pair():
     return task,a,b
 
 
+def physical_case(network_id='epa-net3',kind='rupture',engine='wntr'):
+    task,plan=case(network_id,kind,engine)
+    task['schema_version']=plan['schema_version']='0.4.0'
+    task['physical_parameters']=dict(roughness_multiplier=1,reservoir_head_offset_m=0,tank_level_offset_m=0,
+        node_demand_multipliers={},node_pdd={},background_leaks=[],solver_tolerance=1e-8)
+    rebind(task,plan)
+    return task,plan
+
+
 if __name__=='__main__':
     refresh_catalogs()

@@ -6,16 +6,17 @@
 
 | 检查 | 结果 |
 |---|---|
-| `python -m unittest discover -s services/hydraulics/tests -v` | 加固后 37 项全部通过，96.328 秒；含原有 9 项、物理验收 19 项、故障注入 9 项 |
+| `python -m unittest discover -s services/hydraulics/tests -v` | 0.4 后 45 项全部通过，105.829 秒；含原有 9 项、物理验收 19 项、模型质量 7 项、故障注入 10 项 |
 | `python -m unittest discover -s packages/contracts/tests -v` | 19 项全部通过 |
 | `python packages/contracts/scripts/check.py` | Schema、绑定、哈希、事件、来源与独立指标复算通过 |
 | `npm run contracts:types:check` | 生成类型与 Schema 一致，TypeScript 检查通过 |
 | `python -m services.hydraulics.acceptance` | 22/22 实际计算成功，物理检查通过，参考结果有效 |
 | `python -m services.hydraulics.pair` | A/B 均成功，预热一致，B 缺供改善，未冒充约束通过 |
-| JSON CLI example + simulate | Net3 泄漏真实计算成功，JSON 输出可解析 |
-| ZIP 清单审计 | 加固后 2 个 ZIP 总哈希、800 个产物哈希、24 次代码/运行环境绑定全部通过 |
+| 0.4 物理研究 | 26/26 实算成功，时间细化目标通过，物理方程检查通过 |
+| 0.4 读取 API | analysis/physics/mapping/series 实际读取通过，模式与版本一致 |
+| ZIP 清单审计 | 3 个 ZIP 总哈希、1,663 个产物哈希、50 次代码/运行环境绑定全部通过 |
 
-初版 `05ef5d5` 的 [共享契约 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631615) 和 [Windows/Linux 水力 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631848) 已通过。加固版提交后 CI 将重新执行全部 37 项水力测试、22 工况及 A/B，并上传独立证据；本文件不预先声称新提交的 CI 通过。
+初版 `05ef5d5` 的 [共享契约 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631615) 和 [Windows/Linux 水力 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631848) 已通过。0.4 提交后的 CI 将执行 45 项水力测试、22 工况、A/B 和 26 组物理研究，并上传独立证据；本文件不预先声称该提交的 CI 通过。
 
 ## 检查覆盖
 
@@ -36,3 +37,9 @@
 ## 结果边界
 
 这是 EPA 公开示例模型上的真实数值计算，不是现场传感器或现场校准结论。破口面积、流量系数、操作权限、手动控制策略与阈值是声明的工程假设。没有水锤、变速泵或阀门节流模型。图形坐标单位未知，不计算地理距离。参考业务指标仅帮助联调，正式独立验证器、AGH 决策/日志、扰动准入及产品交付仍由对应成员实现。
+
+## 本次物理模型优化
+
+实际实现和适用边界见 [物理评估](../../docs/物理模型与算法评估.md)。新增模型质量测试使用原始结果核对能量/PDD/事件储水，篡改水头/水箱值时检测失败，局部需求与服务压力真实影响供水，背景漏损不算用户供水，内部低压能定位到公共采样之间。公开模型一致性不等于现场校准。
+
+开发阶段曾因直接把 SI 流量容差写成原生 GPM 导致 EPANET 迭代警告，转换后重新实算成功；未把警告结果作为有效结果。一次 Windows 本地 POST 连接异常在单独复现及后续两次完整回归中通过，未归因于物理模型。一次原子替换出现 WinError 5，已实现有限重试；临时成功与持续拒绝保留旧文件的故障注入测试通过。失败开发目录留在忽略的 artifacts 下，发布 ZIP 仅对应本次重新计算且通过检查的运行。

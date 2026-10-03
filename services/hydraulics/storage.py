@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 
 
 def write_bytes(path, content):
@@ -15,7 +16,15 @@ def write_bytes(path, content):
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary,path)
+        for attempt in range(6):
+            try:
+                os.replace(temporary,path)
+                break
+            except PermissionError as exc:
+                # Windows readers/indexers can briefly deny replacement. Keep atomic
+                # publication and bounded retries; persistent permission failures escape.
+                if getattr(exc,'winerror',None) not in (5,32,33) or attempt==5:raise
+                time.sleep(.01*2**attempt)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://waterguard.local/contracts/0.3.0/waterguard.schema.json",
+  "$id": "https://waterguard.local/contracts/0.4.0/waterguard.schema.json",
   "title": "WaterGuardContract",
   "description": "Frozen development contracts. Structural validation must be followed by semantic and provenance checks.",
   "anyOf": [
@@ -201,7 +201,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "network_id": {
@@ -534,7 +535,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "task_id": {
@@ -615,6 +617,9 @@
         },
         "control_policy": {
           "$ref": "#/definitions/ControlPolicy"
+        },
+        "physical_parameters": {
+          "$ref": "#/definitions/PhysicalParameters"
         }
       },
       "required": [
@@ -657,7 +662,10 @@
           "if": {
             "properties": {
               "schema_version": {
-                "const": "0.3.0"
+                "enum": [
+                  "0.3.0",
+                  "0.4.0"
+                ]
               }
             }
           },
@@ -665,6 +673,23 @@
             "required": [
               "hydraulic_options",
               "control_policy"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "const": "0.4.0"
+              }
+            },
+            "required": [
+              "schema_version"
+            ]
+          },
+          "then": {
+            "required": [
+              "physical_parameters"
             ]
           }
         }
@@ -706,7 +731,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "candidate_id": {
@@ -836,7 +862,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "catalog_id": {
@@ -949,7 +976,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "network_id": {
@@ -1142,7 +1170,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "simulation_id": {
@@ -1181,7 +1210,10 @@
           "if": {
             "properties": {
               "schema_version": {
-                "const": "0.3.0"
+                "enum": [
+                  "0.3.0",
+                  "0.4.0"
+                ]
               }
             },
             "required": [
@@ -1221,7 +1253,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "simulation_id": {
@@ -1294,7 +1327,10 @@
           "if": {
             "properties": {
               "schema_version": {
-                "const": "0.3.0"
+                "enum": [
+                  "0.3.0",
+                  "0.4.0"
+                ]
               }
             },
             "required": [
@@ -1318,7 +1354,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "simulation_id": {
@@ -1412,7 +1449,10 @@
           "if": {
             "properties": {
               "schema_version": {
-                "const": "0.3.0"
+                "enum": [
+                  "0.3.0",
+                  "0.4.0"
+                ]
               }
             },
             "required": [
@@ -1437,7 +1477,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "mode": {
@@ -1678,7 +1719,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "verification_id": {
@@ -1794,7 +1836,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "run_id": {
@@ -1918,7 +1961,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "event_id": {
@@ -2094,7 +2138,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "bundle_id": {
@@ -2186,7 +2231,8 @@
           "enum": [
             "0.1.0",
             "0.2.0",
-            "0.3.0"
+            "0.3.0",
+            "0.4.0"
           ]
         },
         "simulation_id": {
@@ -2226,7 +2272,10 @@
           "if": {
             "properties": {
               "schema_version": {
-                "const": "0.3.0"
+                "enum": [
+                  "0.3.0",
+                  "0.4.0"
+                ]
               }
             },
             "required": [
@@ -2406,6 +2455,113 @@
         "level_m",
         "volume_m3",
         "net_inflow_m3s"
+      ],
+      "additionalProperties": false
+    },
+    "NodePDD": {
+      "type": "object",
+      "properties": {
+        "minimum_pressure_m": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "required_pressure_m": {
+          "type": "number",
+          "minimum": 0.07,
+          "maximum": 150
+        },
+        "pressure_exponent": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "minimum_pressure_m",
+        "required_pressure_m",
+        "pressure_exponent"
+      ],
+      "additionalProperties": false
+    },
+    "BackgroundLeak": {
+      "type": "object",
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "area_m2": {
+          "type": "number",
+          "minimum": 1e-08,
+          "maximum": 0.05
+        },
+        "discharge_coefficient": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "node_id",
+        "area_m2",
+        "discharge_coefficient"
+      ],
+      "additionalProperties": false
+    },
+    "PhysicalParameters": {
+      "type": "object",
+      "properties": {
+        "roughness_multiplier": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 1.5
+        },
+        "reservoir_head_offset_m": {
+          "type": "number",
+          "minimum": -20,
+          "maximum": 20
+        },
+        "tank_level_offset_m": {
+          "type": "number",
+          "minimum": -10,
+          "maximum": 10
+        },
+        "node_demand_multipliers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 5
+          }
+        },
+        "node_pdd": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/NodePDD"
+          }
+        },
+        "background_leaks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BackgroundLeak"
+          },
+          "maxItems": 100
+        },
+        "solver_tolerance": {
+          "type": "number",
+          "minimum": 1e-10,
+          "maximum": 0.0001
+        }
+      },
+      "required": [
+        "roughness_multiplier",
+        "reservoir_head_offset_m",
+        "tank_level_offset_m",
+        "node_demand_multipliers",
+        "node_pdd",
+        "background_leaks",
+        "solver_tolerance"
       ],
       "additionalProperties": false
     }

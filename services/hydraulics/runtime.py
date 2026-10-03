@@ -22,13 +22,13 @@ from waterguard_contracts.core import digest, file_hash, input_hash, load, plan_
 
 
 def engine_identity(task):
-    paths = [Path(__file__).parent/name for name in ('adapter.py','datasets.py','compiler.py','physical.py','runtime.py','worker.py','storage.py','integrity.py')]
+    paths = [Path(__file__).parent/name for name in ('adapter.py','datasets.py','compiler.py','physical.py','runtime.py','worker.py','storage.py','integrity.py','numerics.py')]
     paths += [ROOT/'packages/contracts/waterguard_contracts/core.py',ROOT/'packages/contracts/schema/waterguard.schema.json']
     code = b''.join(p.read_bytes() for p in paths)
     # Normalize repository source newlines before hashing across hosts.
     implementation = hashlib.sha256(code.replace(b'\r\n',b'\n')).hexdigest()
     engine = 'WNTRSimulator' if task['hydraulic_options']['engine']=='wntr' else 'EPANET/2.2'
-    return f'WNTR/{importlib.metadata.version("wntr")};{engine};adapter/0.3.1;code/{implementation};runtime/{digest(runtime_environment())[7:]}'
+    return f'WNTR/{importlib.metadata.version("wntr")};{engine};adapter/0.4.0;code/{implementation};runtime/{digest(runtime_environment())[7:]}'
 
 
 @dataclass(frozen=True)
@@ -126,15 +126,16 @@ def finish(folder, *, series=None, errors=None, warnings=None, raw_converged=Non
     request = load(folder/'request.json')
     task, plan, sid, engine = request['task'],request['plan'],folder.name,request['engine_version']
     errors = errors or []
-    diag = dict(schema_version='0.3.0',simulation_id=sid,mode='benchmark',converged=raw_converged,
+    version=task['schema_version']
+    diag = dict(schema_version=version,simulation_id=sid,mode='benchmark',converged=raw_converged,
                 raw_converged=raw_converged,errors=errors,warnings=warnings or [],error_code=error_code,
                 provenance='Actual isolated engine process; inspect raw CSV and physical-checks.json. No AGH decision is asserted.')
     success = not errors and series is not None
-    artifact = dict(schema_version='0.3.0',simulation_id=sid,candidate_id=plan['candidate_id'],task_ref=task_ref(task),perturbation_id=None,
+    artifact = dict(schema_version=version,simulation_id=sid,candidate_id=plan['candidate_id'],task_ref=task_ref(task),perturbation_id=None,
         mode='benchmark',engine_version=engine,input_hash=input_hash(task,plan,engine),status=status or ('SUCCEEDED' if success else 'FAILED'),
         series_ref='series.json' if success else None,diagnostics_ref='diagnostics.json',time_axis=task['time_window'],
         entity_map_ref='entity-map.json',physical_checks_ref='physical-checks.json',input_manifest_ref='input-manifest.json')
-    result = dict(schema_version='0.3.0',mode='benchmark',artifact=artifact,series=series if success else None,diagnostics=diag)
+    result = dict(schema_version=version,mode='benchmark',artifact=artifact,series=series if success else None,diagnostics=diag)
     validate('SimulationResult',result)
     if success:
         write(folder/'series.json',series)
@@ -163,7 +164,7 @@ class PhysicalAdapter:
         task,plan = json.loads(json.dumps([task,plan],allow_nan=False))
         validate('TaskSpec',task)
         validate('ActionPlan',plan)
-        require(task['schema_version']==plan['schema_version']=='0.3.0','PhysicalAdapter requires 0.3.0')
+        require(task['schema_version']==plan['schema_version'] and task['schema_version'] in ('0.3.0','0.4.0'),'PhysicalAdapter requires matching 0.3/0.4')
         require(task_hash(task)==task['constraint_hash'] and plan_hash(plan)==plan['plan_hash'],'Input hash mismatch')
         require(plan['task_ref']==task_ref(task),'Plan/task binding mismatch')
         source = manifest(task['network_ref']['network_id'])

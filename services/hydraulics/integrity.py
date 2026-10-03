@@ -37,6 +37,10 @@ def validate_output(folder):
                 require(sorted(x[key] for x in frame[field])==sorted(ids),'Worker entity coverage mismatch')
         for name in ('compiled-network.json','expected-demand.csv','raw-node-pressure.csv','raw-node-demand.csv','raw-link-flowrate.csv'):
             require((folder/name).is_file() and (folder/name).stat().st_size>0,'Missing worker evidence: '+name)
+        if task['schema_version']=='0.4.0':
+            analysis=load(folder/'hydraulic-analysis.json')
+            require(analysis['mode']=='benchmark' and analysis['internal_samples']>=len(series['frames']), 'Missing dense hydraulic analysis')
+            require(analysis['physical_parameters']==task['physical_parameters'],'Physical analysis parameter mismatch')
     else:
         require(series is None and artifact['series_ref'] is None and bool(diag['errors']),'Invalid worker failure result')
     return result
