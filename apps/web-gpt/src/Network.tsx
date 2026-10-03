@@ -1214,7 +1214,7 @@ export function Network({
               </span>
             </>
           )}
-          <span className="map-legend-help">滚轮缩放 · 拖动平移 · 双击放大</span>
+          <span className="map-legend-help">点击后滚轮缩放 · 拖动平移 · 双击放大</span>
         </div>
         <span className="map-note">坐标为示意布局，不代表实际地理位置或距离</span>
       </div>

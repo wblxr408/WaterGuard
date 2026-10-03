@@ -13,7 +13,7 @@ import {
 } from "./data";
 import type { Candidate, Source, Workspace } from "./data";
 import Icon from "./Icon";
-import { studioImage } from "./model-assets";
+import { studioImage, teaserImage } from "./model-assets";
 import { useTween } from "./motion";
 import { Network, NodeChart, linkState, linkStateText } from "./Network";
 import type { Entity } from "./Network";
@@ -690,8 +690,8 @@ function Overview({
               <Icon name="arrow" size={16} />
             </span>
           </div>
-          <img src={studioImage.src} alt={studioImage.alt} />
-          <span className="teaser-caption">{studioImage.caption}</span>
+          <img src={teaserImage.src} alt={teaserImage.alt} />
+          <span className="teaser-caption">{teaserImage.caption}</span>
         </button>
       </div>
       <Violations candidate={c} onSelect={onViolation} />

@@ -2,7 +2,7 @@
 
 独立实现于 `gpt-web` 分支、`apps/web-gpt`，React + TypeScript + Vite。未改动队友 `apps/web`、后端、公共契约或原始计算结果。
 
-当前视觉为 **v3**：顶部横向导航，明亮的珍珠白、淡紫与暖光渐变覆盖整个系统；三项关键指标与管网组成统一工作面。生成设备展台图与页面采用相同底色和光照，两项 Blender 预留演示保持可交互。
+当前视觉为 **v3**：顶部横向导航，明亮的珍珠白、淡紫与暖光渐变覆盖整个系统；三项关键指标与管网组成统一工作面。设备展台和两张模型卡使用团队自建 Blender 模型的透明底渲染图（claude-polish 接入）。
 
 ## 当前电脑运行
 
@@ -38,9 +38,9 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 
 | 页面 | 功能 |
 | --- | --- |
-| 应急工作台 | 故障任务、真实指标、可选拓扑、压力/供需比/流量图层、节点/管段详情、时间回放、区间保持曲线、五层准入、违规定位 |
+| 应急工作台 | 故障任务、真实指标、可缩放平移的拓扑（悬停数值卡、编号搜索定位、全屏）、压力/供需比/流量图层、节点/管段详情、时间回放、区间保持曲线、五层准入、违规定位 |
 | 方案对照 | 同任务 A/B 比较；场景库正常/故障工况明确标记为不同任务；显示服务端推荐结论和原始验收 |
-| 建模与仿真 | 泵站设备、管道剖面两个简洁交互示意；视角/缩放/分解；Blender 成果配置入口；计算参数、守恒检查、来源与实体映射 |
+| 建模与仿真 | 泵站设备、管道剖面两张 Blender 渲染图，可下载 GLB（未配置渲染图时退回可交互的 SVG 示意）；计算参数、守恒检查、来源与实体映射 |
 | 证据中心 | 文件索引与完整哈希、接口结果查看、搜索、证据索引和 JSON 读取副本导出 |
 
 三个数据源通过 Vite 同源代理：
@@ -70,7 +70,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 
 填入实际渲染图后，组件展示 Blender 渲染成果；填入源文件后开放下载。没有 GLB 实时解析器；需要实时三维时，替换 `ModelDemo.tsx` 的 SVG 区域。可关联设备命名与水力实体 ID，不能用艺术几何替代水力参数。
 
-**已接入（claude-polish）**：泵站设备显示团队自建 Blender 模型的 Cycles 渲染图（`public/models/blender-pump-pearl.webp`），可下载 `equipment.glb`；建模页首图和工作台入口卡片改用四件设备合影（`blender-equipment-pearl.webp`）。管道剖面仍是 SVG 程序几何示意。模型由 `tools/blender/build_equipment.py` 生成，透明底渲染图由 `tools/blender/render_pearl.py` 输出，源文件 `assets-src/equipment.blend`。复核与改动说明见 [REVIEW.md](REVIEW.md)。
+**已接入（claude-polish）**：两张模型卡都显示团队自建 Blender 模型的 Cycles 渲染图，可下载 `equipment.glb`。泵站设备用 `public/models/blender-pump-pearl.webp`；管道剖面用 `blender-pipe-burst.webp`，内容是球墨铸铁管剖切和爆管喷水，喷水为示意；建模页首图用四件设备合影 `blender-equipment-pearl.webp`；工作台入口卡片用爆管图。模型由 `tools/blender/build_equipment.py` 生成，透明底渲染图由 `tools/blender/render_pearl.py` 输出，源文件 `assets-src/equipment.blend`。复核与改动说明见 [REVIEW.md](REVIEW.md)。
 
 ## 生图素材
 
@@ -99,7 +99,7 @@ npx --yes --cache .cache/npm --registry https://registry.npmjs.org --package @pl
 npx --yes --cache .cache/npm --registry https://registry.npmjs.org --package @playwright/cli playwright-cli -s=waterguard-gpt run-code --filename scripts/browser-visual-check.js
 ```
 
-CLI 文件是函数表达式，末尾不加分号。浏览器回归覆盖真实 A/B、候选/时间/实体联动、违规定位、两个模型操作、Esc、证据筛选/下载、Fixture SSE、场景切换和窄屏；边界脚本逐一读取 22 工况并注入缺失模式、模式不符与 503，确认清空旧结果及恢复。
+CLI 文件是函数表达式，末尾不加分号。浏览器回归覆盖真实 A/B、候选/时间/实体联动、违规定位、两个模型操作、Esc、证据筛选/下载、Fixture SSE、场景切换和窄屏；边界脚本逐一读取 22 工况并注入缺失模式、模式不符与 503，确认清空旧结果及恢复。（claude-polish 起两张模型卡改为渲染图，`browser-check.js` 里针对 SVG 视角与分解的检查需要改写，见 REVIEW.md。）
 
 新增布局脚本覆盖四个宽度、四个页面，检查默认拓扑节点未裁切、三项指标、图片加载和页面溢出。
 
@@ -109,7 +109,7 @@ CLI 文件是函数表达式，末尾不加分号。浏览器回归覆盖真实 
 
 - `src/App.tsx`：导航、应用状态、工作台、原始数据弹窗。
 - `src/data.ts`：公共契约类型、严格 API 读取、三源适配。
-- `src/Network.tsx`：真实拓扑、实体选择、阶梯压力曲线。
+- `src/Network.tsx`：真实拓扑（缩放平移、就近点选、悬停数值卡、搜索定位、全屏）、实体选择、阶梯压力曲线。
 - `src/Pages.tsx`：对照、建模、证据、验收反馈与 Fixture SSE。
 - `src/ModelDemo.tsx` / `model-assets.ts`：交互示意与 Blender 资产入口。
 - `src/styles.css`：统一视觉系统和响应式断点。

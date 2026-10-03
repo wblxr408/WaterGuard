@@ -357,9 +357,9 @@ export function Modeling({
             模型展台
           </h1>
           <p>
-            水箱、水泵、闸阀、水源为团队自建的 Blender 模型
+            储水罐、水泵、闸阀、清水池与爆管管段
             <br />
-            管道剖面为可交互的程序几何示意
+            均为团队自建的 Blender 模型
           </p>
         </div>
         <span className="badge neutral">
@@ -375,7 +375,7 @@ export function Modeling({
       <div className="model-disclaimer">
         <Icon name="cube" size={17} />
         <p>
-          泵站设备为 Blender 自建模型的渲染图，可下载 GLB 源文件；管道剖面为程序几何示意。模型几何只用于展示，不参与水力验收。
+          以上为 Blender 自建模型的渲染图，可下载 GLB 模型；爆管喷水与剖切为示意表达。模型几何只用于展示，不参与水力验收。
         </p>
         <button
           className="text-button"

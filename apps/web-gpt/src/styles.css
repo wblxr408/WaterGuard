@@ -1302,6 +1302,8 @@ h2 {
   margin-top: 10px;
   max-width: 135px;
   line-height: 1.7;
+  white-space: pre-line;
+  word-break: keep-all;
 }
 .model-teaser .text-button {
   display: inline-flex;
@@ -1313,24 +1315,26 @@ h2 {
 .model-teaser img {
   position: absolute;
   z-index: 0;
-  height: auto;
-  width: 600px;
-  max-width: 82%;
-  right: -36px;
-  bottom: -2px;
+  height: 112%;
+  width: auto;
+  max-width: 78%;
+  right: -18px;
+  bottom: -6%;
   object-fit: contain;
-  mask-image: linear-gradient(to right, transparent, black 22%);
+  object-position: right bottom;
+  mask-image: linear-gradient(to right, transparent, black 20%);
   transition: transform 0.6s var(--ease-expo);
   transform-origin: 70% 70%;
 }
 .model-teaser:hover img {
   transform: scale(1.04);
 }
+/* 图注放右上角：右下角是管段和支墩，放那里会压在图上 */
 .teaser-caption {
   position: absolute;
   z-index: 2;
-  bottom: 15px;
-  right: 16px;
+  top: 20px;
+  right: 18px;
   font-size: 11px;
   color: #65738c;
 }
@@ -1723,7 +1727,7 @@ tbody tr:hover {
 .model-render {
   position: relative;
   overflow: hidden;
-  height: 240px;
+  height: clamp(240px, 24vw, 340px);
   background: radial-gradient(ellipse at 50% 55%, #e6e7fc55, transparent 65%);
 }
 .model-render > svg {
@@ -3095,7 +3099,7 @@ tbody tr:hover {
     font-size: 32px;
   }
   .model-teaser img {
-    right: -20%;
+    max-width: 72%;
   }
 }
 @media (max-width: 950px) {
@@ -3200,12 +3204,12 @@ tbody tr:hover {
     font-size: 21px;
   }
   .model-teaser p {
-    max-width: 100px;
+    max-width: 112px;
     line-height: 1.8;
   }
+  /* 卡片窄时配图缩到右下角，让开左侧文字 */
   .model-teaser img {
-    width: 130%;
-    right: -40%;
+    max-width: 70%;
   }
   .candidate-sheet {
     padding: 22px;
@@ -3683,8 +3687,7 @@ tbody tr:hover {
     padding: 22px;
   }
   .model-teaser img {
-    width: 110%;
-    right: -12%;
+    max-width: 72%;
   }
   .model-teaser h2 {
     font-size: 22px;
