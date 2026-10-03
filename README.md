@@ -8,6 +8,8 @@
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
+[工程可靠性审查](docs/仿真工程可靠性审查.md) 记录本轮进程、协议、原子写入、资源边界与回放环境加固，以及进入工业部署前仍需完成的验证。
+
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 
 现有 0.2 实施设计：

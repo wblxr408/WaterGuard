@@ -6,17 +6,16 @@
 
 | 检查 | 结果 |
 |---|---|
-| `python -m unittest discover -s services/hydraulics/tests -v` | 27 项全部通过，72.677 秒；含旧 9 项及新 18 项 |
-| 随后新增的 `PhysicalAcceptance.test_same_task_feedback_pair_improves_without_claiming_recommendation` | 单独运行通过，61.452 秒（含 22 工况前置重算）；水力测试现共 28 项 |
+| `python -m unittest discover -s services/hydraulics/tests -v` | 加固后 37 项全部通过，96.328 秒；含原有 9 项、物理验收 19 项、故障注入 9 项 |
 | `python -m unittest discover -s packages/contracts/tests -v` | 19 项全部通过 |
 | `python packages/contracts/scripts/check.py` | Schema、绑定、哈希、事件、来源与独立指标复算通过 |
 | `npm run contracts:types:check` | 生成类型与 Schema 一致，TypeScript 检查通过 |
 | `python -m services.hydraulics.acceptance` | 22/22 实际计算成功，物理检查通过，参考结果有效 |
 | `python -m services.hydraulics.pair` | A/B 均成功，预热一致，B 缺供改善，未冒充约束通过 |
 | JSON CLI example + simulate | Net3 泄漏真实计算成功，JSON 输出可解析 |
-| ZIP 清单审计 | 2 个 ZIP 总哈希、776 个产物哈希、24 次代码版本绑定全部通过 |
+| ZIP 清单审计 | 加固后 2 个 ZIP 总哈希、800 个产物哈希、24 次代码/运行环境绑定全部通过 |
 
-GitHub Actions 将在 Windows/Linux 重新执行全部 28 项水力测试、22 工况及 A/B，并上传独立证据；本文件只陈述已完成的本机验证，不预先声称 CI 通过。
+初版 `05ef5d5` 的 [共享契约 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631615) 和 [Windows/Linux 水力 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631848) 已通过。加固版提交后 CI 将重新执行全部 37 项水力测试、22 工况及 A/B，并上传独立证据；本文件不预先声称新提交的 CI 通过。
 
 ## 检查覆盖
 
@@ -25,6 +24,8 @@ GitHub Actions 将在 Windows/Linux 重新执行全部 28 项水力测试、22 �
 同输入重算与并发运行使用不同进程及产物目录。真实计算在声明容差内一致；两引擎共同支持工况允许最大压力差 0.5 m、流量差 0.001 m³/s，已全部通过。这个阈值仅适用于本次网络与工况，不推广为任意引擎等价保证。
 
 数据边界覆盖未知/冲突动作、源控制覆盖缺项、故障时间不对齐、PDD 参数无效、超截面积泄漏、不完整隔离边界、禁止将 WNTR 泄漏替换成 EPANET、需求倍数真实作用、输入版本/哈希、篡改证据、实质数值变化、worker 启动失败、引擎失败、超时和取消。失败无成功时序；进程退出后封存诊断。
+
+工程加固另验证原子替换失败仍保留旧文档、NaN/Inf timeout 拒绝、运行环境变化改变输入身份、原生进程退出码 23 的失败留证、截断 JSON 隔离、监督异常与 KeyboardInterrupt 回收真实子进程、产物与结果规模超限、读取拒绝被篡改产物及不一致清单。详见 [工程可靠性审查](../../docs/仿真工程可靠性审查.md)。
 
 ## 检查中修复的真实问题
 

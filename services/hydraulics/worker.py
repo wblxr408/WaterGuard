@@ -11,8 +11,8 @@ from scipy.optimize import OptimizeWarning
 from .adapter import write
 from .compiler import compile_task
 from .physical import assess
-from .runtime import finish
-from waterguard_contracts.core import load, require, validate
+from .runtime import finish, engine_identity, runtime_environment
+from waterguard_contracts.core import load, require, validate, file_hash
 
 
 def compute(folder):
@@ -23,7 +23,15 @@ def compute(folder):
     raw_converged=None
     code='INPUT_INVALID'
     try:
+        require(request['engine_version']==engine_identity(task),'Worker implementation/runtime drift')
+        require(task==load(folder/'task.json') and plan==load(folder/'plan.json'),'Request differs from frozen task/plan')
+        require(load(folder/'environment.json')==runtime_environment(),'Worker environment differs from frozen input')
+        for key,name in [('source_sha256','source.inp'),('overlay_sha256','runtime-overlay.json'),('task_sha256','task.json'),('plan_sha256','plan.json')]:
+            require(load(folder/'input-manifest.json')[key]==file_hash(folder/name),'Frozen input drift: '+name)
         wn,source,scene,catalog,mapping=compile_task(task,plan)
+        frames=task['time_window']['end_s']//task['time_window']['step_s']+1
+        estimated_values=frames*(len(wn.node_name_list)*12+len(wn.link_name_list)*8)
+        require(estimated_values<=request['execution_limits']['max_result_values'],'Result size exceeds execution limit')
         write(folder/'entity-map.json',mapping)
         write(folder/'scene.json',scene)
         write(folder/'action-catalog.json',catalog)
