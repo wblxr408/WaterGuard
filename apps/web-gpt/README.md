@@ -2,7 +2,7 @@
 
 独立实现于 `gpt-web` 分支、`apps/web-gpt`，React + TypeScript + Vite。未改动队友 `apps/web`、后端、公共契约或原始计算结果。
 
-当前视觉为 **v2**：顶部横向导航、雾白工作区、深蓝字阶与钴蓝强调。第一版深绿侧栏已按用户反馈移除。
+当前视觉为 **v3**：顶部横向导航，明亮的珍珠白、淡紫与暖光渐变覆盖整个系统；三项关键指标与管网组成统一工作面。生成设备展台图与页面采用相同底色和光照，两项 Blender 预留演示保持可交互。
 
 ## 当前电脑运行
 
@@ -72,12 +72,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 
 ## 生图素材
 
-使用内置 image_gen，共完成城市概念图、设备概念图、UI 视觉探索及新版设备/UI 探索。完整提示词和用途存于 `design/image-prompts*.json`。
+使用内置 image_gen 完成构图探索及设备展台的材质、取景、光照迭代。最终提示词及用途在 `design/image-prompts-v3.json`。
 
-- `public/images/waterguard-model.png`：建模页的城市水务辅助概念图，非实际模型几何。
-- `public/images/pump-concept-v2.png`：工作台建模入口的冷灰/蓝色设备概念图。
-- `design/ui-reference-v2.png`：新版 UI 探索参考，不在应用中渲染，图内样例数字不作为业务数据。
-- 第一版图与提示词保留作设计过程记录。
+- `public/images/waterguard-studio-pearl-v3.png`：当前工作台入口及建模页使用的统一浅色设备展台，AI 概念素材，非实际 Blender 成果。
+- `design/workbench-reference-v3.png`：构图参考，不在应用中渲染，其中数值不进入业务界面。
+- 旧版本和探索素材保留作设计过程记录，当前界面不引用。
 
 交互、拓扑、曲线和文字均由可编辑代码实现，未将整张 UI 图作为实际页面。
 
@@ -95,9 +94,12 @@ pwsh -File .\scripts\start-demo.ps1 -CheckOnly
 npx --yes --cache .cache/npm --registry https://registry.npmjs.org --package @playwright/cli playwright-cli -s=waterguard-gpt open http://127.0.0.1:5173 --headed
 npx --yes --cache .cache/npm --registry https://registry.npmjs.org --package @playwright/cli playwright-cli -s=waterguard-gpt run-code --filename scripts/browser-check.js
 npx --yes --cache .cache/npm --registry https://registry.npmjs.org --package @playwright/cli playwright-cli -s=waterguard-gpt run-code --filename scripts/browser-edge-check.js
+npx --yes --cache .cache/npm --registry https://registry.npmjs.org --package @playwright/cli playwright-cli -s=waterguard-gpt run-code --filename scripts/browser-visual-check.js
 ```
 
 CLI 文件是函数表达式，末尾不加分号。浏览器回归覆盖真实 A/B、候选/时间/实体联动、违规定位、两个模型操作、Esc、证据筛选/下载、Fixture SSE、场景切换和窄屏；边界脚本逐一读取 22 工况并注入缺失模式、模式不符与 503，确认清空旧结果及恢复。
+
+新增布局脚本覆盖四个宽度、四个页面，检查默认拓扑节点未裁切、三项指标、图片加载和页面溢出。
 
 截图在 `output/playwright/`，包括工作台、建模、对照、证据、手机和不可用状态。`TEST-REPORT.md` 记录本次真实验收结果与未验证范围。
 

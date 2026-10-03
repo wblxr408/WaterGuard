@@ -4,6 +4,20 @@ import Icon from "./Icon";
 
 type V = [number, number, number];
 type Face = { points: V[]; fill: string; stroke?: string };
+// A small directional light gives the demo cylinders readable volume without a 3D dependency.
+function shade(color: string, light: number) {
+  const channels = color.slice(1).match(/../g)!;
+  return (
+    "#" +
+    channels
+      .map((c) =>
+        Math.min(255, Math.round(parseInt(c, 16) * light))
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")
+  );
+}
 function box(
   x: number,
   y: number,
@@ -62,12 +76,15 @@ function cylinder(
   for (let i = 0; i < 24; i++)
     faces.push({
       points: [start[i], start[(i + 1) % 24], end[(i + 1) % 24], end[i]],
-      fill: color,
-      stroke: color,
+      fill: shade(color, 0.66 + 0.34 * Math.cos((i / 24) * Math.PI * 2 - 1.1)),
+      stroke: shade(
+        color,
+        0.66 + 0.34 * Math.cos((i / 24) * Math.PI * 2 - 1.1),
+      ),
     });
   faces.push(
-    { points: start, fill: "#637b94" },
-    { points: end, fill: "#d3dfe9" },
+    { points: start, fill: shade(color, 0.7) },
+    { points: end, fill: shade(color, 1.12) },
   );
   return faces;
 }
@@ -80,7 +97,7 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
       e = explode ? 18 : 0;
     if (asset.id === "pump") {
       f.push(
-        ...box(-90, 0, -55, 180, 7, 110, ["#cfd9e5", "#dfe6ee", "#f0f3f7"]),
+        ...box(-90, 0, -55, 180, 7, 110, ["#ccd4e5", "#dce1ef", "#e9ecf8"]),
       );
       f.push(...cylinder(-58, 7 + e, 15, 69, 23, true));
       f.push(...cylinder(-58, 76 + e * 1.5, 15, 4, 26, true, "#bdcbd9"));
@@ -100,7 +117,7 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
       }
     } else {
       f.push(
-        ...box(-110, -6, -48, 220, 6, 96, ["#d4dce6", "#e3e9f1", "#eef2f7"]),
+        ...box(-110, -6, -48, 220, 6, 96, ["#ccd4e5", "#dce1ef", "#e9ecf8"]),
       );
       for (const x of [-80 - e, 36 + e])
         f.push(
@@ -163,8 +180,8 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
               cy="268"
               rx="167"
               ry="26"
-              fill="#c8d4e4"
-              opacity=".35"
+              fill="#9eaad3"
+              opacity=".17"
             />
             {sorted.map((f, i) => (
               <polygon

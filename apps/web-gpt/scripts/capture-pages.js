@@ -3,9 +3,13 @@ async (page) => {
   await page.getByRole('button', { name: '应急工作台', exact: true }).click();
   await page.locator('.metric strong').first().filter({ hasText: '7.70' }).waitFor();
   await page.setViewportSize({ width: 1600, height: 1150 });
+  await page.getByRole('button', { name: '重置视图', exact: true }).click();
+  await page.getByRole('button', { name: '节点 15', exact: true }).click();
+  await page.getByRole('slider', { name: '仿真时间轴' }).fill('4');
   const capture = async (path, fullPage = false) => {
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.mouse.move(0, 0);
+    await page.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode().catch(() => {}))));
     await page.screenshot({ path: `output/playwright/${path}`, fullPage, animations: 'disabled' });
   };
   await capture('01-workbench.png');

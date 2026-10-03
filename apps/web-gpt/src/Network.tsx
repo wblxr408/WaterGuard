@@ -56,19 +56,19 @@ export function Network({
     frame.time_s < c.task.fault.end_s;
   function color(id: string) {
     const s = samples.get(id);
-    if (!s || !valid) return "#aebac8";
+    if (!s || !valid) return "#b4c0d3";
     if (layer === "supply")
       return s.expected_demand_m3s === 0
-        ? "#aebac8"
+        ? "#b4c0d3"
         : s.delivered_demand_m3s / s.expected_demand_m3s >=
             c.task.hard_constraints.min_supply_ratio
-          ? "#508bc5"
-          : "#dd9770";
+          ? "#6488d2"
+          : "#d6a16a";
     return s.pressure_m < 0
-      ? "#c46a59"
+      ? "#ca836c"
       : s.pressure_m < c.task.hard_constraints.min_pressure_m
-        ? "#dba362"
-        : "#508bc5";
+        ? "#d6a16a"
+        : "#6488d2";
   }
   return (
     <section className="network-panel">
@@ -142,7 +142,14 @@ export function Network({
               height="28"
               patternUnits="userSpaceOnUse"
             >
-              <circle cx="1" cy="1" r=".8" fill="#dbe3ed" />
+              <path
+                d="M28 0H0V28"
+                fill="none"
+                stroke="#a7b8d4"
+                strokeWidth=".55"
+                opacity=".26"
+              />
+              <circle cx="1" cy="1" r=".65" fill="#c4cfe2" opacity=".45" />
             </pattern>
           </defs>
           <rect width="860" height="450" fill={`url(#${patternId})`} />
@@ -156,12 +163,12 @@ export function Network({
               const fault = faultActive && link.id === c.task.fault?.link_id,
                 selected = entity.kind === "link" && entity.id === link.id;
               const stroke = fault
-                ? "#cc715c"
+                ? "#ca9170"
                 : !valid || !s
-                  ? "#bac6d3"
+                  ? "#bec9da"
                   : s.status !== "open"
-                    ? "#a6b4c4"
-                    : "#8cb2d5";
+                    ? "#a6b7cf"
+                    : "#9ab2d7";
               const flow = Math.abs(s?.flow_m3s ?? 0);
               const width =
                 layer === "flow" && s ? Math.min(2 + flow * 20, 7) : 2.2;
@@ -194,7 +201,7 @@ export function Network({
                       y1={a.y}
                       x2={b.x}
                       y2={b.y}
-                      stroke="#2868d3"
+                      stroke="#527fe2"
                       strokeWidth="10"
                       opacity=".17"
                     />
@@ -218,20 +225,20 @@ export function Network({
                         width="18"
                         height="18"
                         rx="5"
-                        fill="#edf4fe"
-                        stroke="#467cb9"
+                        fill="#edf3fe"
+                        stroke="#779bcf"
                       />
-                      <path d="M-3-5L5 0-3 5Z" fill="#467cb9" />
+                      <path d="M-3-5L5 0-3 5Z" fill="#779bcf" />
                     </g>
                   )}
                   {fault && (
                     <g
                       transform={`translate(${(a.x + b.x) / 2} ${(a.y + b.y) / 2})`}
                     >
-                      <circle r="14" fill="#fff3e9" stroke="#ce745f" />
+                      <circle r="14" fill="#fcf2e7" stroke="#ca9b74" />
                       <path
                         d="M-4-4L4 4M4-4L-4 4"
-                        stroke="#ce745f"
+                        stroke="#ca9b74"
                         strokeWidth="2"
                       />
                       <rect
@@ -240,14 +247,14 @@ export function Network({
                         width="92"
                         height="28"
                         rx="5"
-                        fill="#fff"
-                        stroke="#ebd5c9"
+                        fill="#fffaf2"
+                        stroke="#eadccc"
                       />
                       <text
                         x="66"
                         y="4"
                         textAnchor="middle"
-                        fill="#a55243"
+                        fill="#b38760"
                         fontSize="11"
                       >
                         故障管段 {link.id}
@@ -258,7 +265,7 @@ export function Network({
                     <text
                       x={(a.x + b.x) / 2 + 3}
                       y={(a.y + b.y) / 2 - 6}
-                      fill="#8493a6"
+                      fill="#97a7bd"
                       fontSize="8"
                     >
                       {link.id}
@@ -296,7 +303,7 @@ export function Network({
                       cx={p.x}
                       cy={p.y}
                       r="13"
-                      fill="#356bd4"
+                      fill="#7c9be7"
                       opacity=".14"
                     />
                   )}
@@ -306,7 +313,7 @@ export function Network({
                       cy={p.y}
                       r={selected ? 6 : node.critical ? 5 : 3.8}
                       fill={color(node.id)}
-                      stroke={selected ? "#fff" : "#f2f6fb"}
+                      stroke={selected ? "#fff" : "#f6f8fe"}
                       strokeWidth={selected ? 2.5 : 1.2}
                     />
                   ) : (
@@ -317,18 +324,18 @@ export function Network({
                         width="20"
                         height="20"
                         rx={node.kind === "tank" ? 3 : 10}
-                        fill="#e5eef8"
-                        stroke="#5d86ae"
+                        fill="#eaf0fb"
+                        stroke="#80a0cf"
                         strokeWidth="1.6"
                       />
                       <path
                         d={`M${p.x - 5} ${p.y}h10M${p.x - 4} ${p.y + 4}h8`}
-                        stroke="#5d86ae"
+                        stroke="#80a0cf"
                       />
                       <text
                         x={p.x + 16}
                         y={p.y + 4}
-                        fill="#607b99"
+                        fill="#788eae"
                         fontSize="11"
                       >
                         {node.id}
@@ -340,7 +347,7 @@ export function Network({
                       <text
                         x={p.x + 10}
                         y={p.y - 8}
-                        fill="#355577"
+                        fill="#496699"
                         fontSize="10"
                         fontWeight={selected ? 700 : 400}
                       >
@@ -468,7 +475,7 @@ export function NodeChart({
         <div className="chart-legend">
           {candidates.map((c, i) => (
             <span key={c.id}>
-              <i style={{ background: i ? "#356bd4" : "#b1bab5" }} />
+              <i style={{ background: i ? "#728cdc" : "#a3a7a4" }} />
               {c.name.split(" · ")[0]}
             </span>
           ))}
@@ -486,12 +493,12 @@ export function NodeChart({
             const v = lo + ((hi - lo) * i) / 3;
             return (
               <g key={i}>
-                <line x1="48" x2="698" y1={y(v)} y2={y(v)} stroke="#e4eaf3" />
+                <line x1="48" x2="698" y1={y(v)} y2={y(v)} stroke="#e1e6f2" />
                 <text
                   x="36"
                   y={y(v) + 4}
                   textAnchor="end"
-                  fill="#8797ac"
+                  fill="#939eb5"
                   fontSize="11"
                 >
                   {num(v, 0)}
@@ -504,14 +511,14 @@ export function NodeChart({
             x2="698"
             y1={y(threshold)}
             y2={y(threshold)}
-            stroke="#caa477"
+            stroke="#cfb893"
             strokeDasharray="5 4"
           />
           <text
             x="695"
             y={y(threshold) - 7}
             textAnchor="end"
-            fill="#b58a5e"
+            fill="#bda478"
             fontSize="10"
           >
             压力约束 {threshold} m
@@ -534,7 +541,7 @@ export function NodeChart({
                 key={c.id}
                 d={d}
                 fill="none"
-                stroke={i ? "#356bd4" : "#aab8cb"}
+                stroke={i ? "#728cdc" : "#b6bfd3"}
                 strokeWidth={c.id === selected.id ? 2.8 : 1.7}
                 strokeLinejoin="round"
               />
@@ -546,7 +553,7 @@ export function NodeChart({
               x2={x(currentTime)}
               y1="25"
               y2="165"
-              stroke="#5d7fa8"
+              stroke="#a0b3d5"
               strokeDasharray="3 4"
               opacity=".55"
             />
@@ -575,7 +582,7 @@ export function NodeChart({
                   x={x(f.time_s)}
                   y="191"
                   textAnchor="middle"
-                  fill="#8797ac"
+                  fill="#939eb5"
                   fontSize="10"
                 >
                   {time(f.time_s)}

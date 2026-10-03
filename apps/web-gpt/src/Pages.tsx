@@ -330,10 +330,26 @@ export function Modeling({
   return (
     <div className="page-enter">
       <div className="section-intro model-intro">
+        <img
+          className="studio-scene"
+          src="/images/waterguard-studio-pearl-v3.png"
+          alt="银色泵组与钴蓝管道的 AI 概念展台"
+        />
+        <span className="studio-scene-caption">
+          AI 概念设计 · 非实际 Blender 成果
+        </span>
         <div>
           <span className="eyebrow">MODEL STUDIO</span>
-          <h1>建模与仿真展示</h1>
-          <p>Blender 建模成果展示区 · 设备、管道与仿真实体相互关联</p>
+          <h1>
+            设备与管道
+            <br />
+            模型展台
+          </h1>
+          <p>
+            建模与仿真展示
+            <br />
+            泵站设备 / 管道剖面 · 两项交互示意
+          </p>
         </div>
         <span className="badge neutral">
           <Icon name="cube" size={14} />
@@ -395,12 +411,9 @@ export function Modeling({
             <Icon name="arrow" size={16} />
           </button>
         </div>
-        <div className="concept-image">
-          <img
-            src="/images/waterguard-model.png"
-            alt="AI 生成的城市水务剖面概念图"
-          />
-          <span>AI 生成概念图 · 非实际模型几何</span>
+        <div className="foundation-mark" aria-hidden="true">
+          <Icon name="network" size={72} />
+          <span>MODEL → PHYSICS → EVIDENCE</span>
         </div>
       </section>
       <div className="model-data-grid">
