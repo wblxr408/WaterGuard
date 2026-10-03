@@ -12,6 +12,7 @@ import {
   time,
 } from "./data";
 import type { Candidate, Source, Workspace } from "./data";
+import AgentPage from "./AgentPage";
 import { AgentRunStrip } from "./AgentRun";
 import Cover from "./Cover";
 import Icon from "./Icon";
@@ -28,7 +29,7 @@ import {
   Violations,
 } from "./Pages";
 
-type Page = "cover" | "overview" | "compare" | "model" | "evidence";
+type Page = "cover" | "overview" | "agent" | "compare" | "model" | "evidence";
 const navigation: { id: Page; label: string; icon: string; english: string }[] =
   [
     { id: "cover", label: "首页", icon: "home", english: "Home" },
@@ -38,6 +39,7 @@ const navigation: { id: Page; label: string; icon: string; english: string }[] =
       icon: "network",
       english: "Operations",
     },
+    { id: "agent", label: "智能体", icon: "agent", english: "Agent" },
     {
       id: "compare",
       label: "方案对照",
@@ -981,7 +983,7 @@ export default function App() {
               </div>
             ) : (
               <>
-                {page !== "overview" && (
+                {page !== "overview" && page !== "agent" && (
                   <div className="page-candidate-select">
                     <label>
                       当前结果
@@ -1023,6 +1025,7 @@ export default function App() {
                     inspect={inspect}
                   />
                 )}
+                {page === "agent" && <AgentPage inspect={inspect} />}
                 {page === "model" && <Modeling w={w} c={c} inspect={inspect} />}
                 {page === "evidence" && (
                   <Evidence w={w} c={c} inspect={inspect} />

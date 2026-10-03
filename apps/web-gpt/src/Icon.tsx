@@ -1,6 +1,8 @@
 const paths: Record<string, string> = {
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   home: "M3 11l9-8 9 8 M5 9.5V21h14V9.5 M10 21v-6h4v6",
+  agent:
+    "M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2 M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8",
   network:
     "M6 6l12 0M6 6l6 12M18 6l-6 12 M3 3h6v6H3z M15 3h6v6h-6z M9 15h6v6H9z",
   compare: "M4 4h6v16H4z M14 4h6v16h-6z M7 8v8 M17 8v8",

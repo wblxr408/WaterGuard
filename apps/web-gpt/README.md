@@ -38,7 +38,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 
 | 页面 | 功能 |
 | --- | --- |
-| 首页（默认） | 深色主题，两块。开场是团队自建的闸阀渲染图配一句标题；往下滑时画面钉住，闸阀拆成 10 个零件、转半圈、再装回去。智能体单独一屏：三个角色、八个运行阶段与「没过就修改」的回路、哪些已真实运行、哪些等待接入，附一个从接口读出的真实计算结果 |
+| 首页（默认） | 深色主题，两块。开场是团队自建的闸阀渲染图配一句标题；往下滑时画面钉住，闸阀拆成 10 个零件、转半圈、再装回去。第二块「我们的系统」：四个模块的真实界面截图，可切换；点进入时用「波光粼粼」的水面转场 |
+| 智能体 | 一次运行的详细记录：运行概况（阶段、状态、结论、预算、AGH 会话、缺失项）；运行轨迹，逐条展开每个事件的方案、仿真、验收细节和原生调用号，可逐步回放；方案谱系；设计细节（角色与权限、工具契约、执行流程、边界与失败处理、接入进度）。AGH 未接入前数据是人工样例，页面如实标注 |
 | 应急工作台 | 顶部「智能体运行」条（运行阶段、方案提出者、接入状态，均来自契约数据）； 故障任务、真实指标、可缩放平移的拓扑（悬停数值卡、编号搜索定位、全屏）、压力/供需比/流量图层、节点/管段详情、时间回放、区间保持曲线、五层准入、违规定位 |
 | 方案对照 | 同任务 A/B 比较；场景库正常/故障工况明确标记为不同任务；显示服务端推荐结论和原始验收 |
 | 建模与仿真 | 泵站设备、管道剖面两张 Blender 渲染图，可下载 GLB（未配置渲染图时退回可交互的 SVG 示意）；计算参数、守恒检查、来源与实体映射 |
@@ -113,7 +114,13 @@ CLI 文件是函数表达式，末尾不加分号。浏览器回归覆盖真实 
 - `src/Network.tsx`：真实拓扑（缩放平移、就近点选、悬停数值卡、搜索定位、全屏）、实体选择、阶梯压力曲线。
 - `src/Pages.tsx`：对照、建模、证据、验收反馈与 Fixture SSE。
 - `src/ModelDemo.tsx` / `model-assets.ts`：交互示意与 Blender 资产入口。
-- `src/Cover.tsx` / `cover.css`：首页。`CoverHero.tsx` 是开场的闸阀拆装，序列帧在 `public/cover/hero-valve/`，由 `tools/blender/build_hero.py S` 生成；`CoverAgent.tsx` 是智能体板块。以下文件首页已不引用，等确认后删除：
+- `src/Cover.tsx` / `cover.css`：首页。
+  - `CoverHero.tsx` 是开场的闸阀拆装，序列帧在 `public/cover/hero-valve/`，由 `tools/blender/build_hero.py S` 生成；
+  - `CoverSystem.tsx` 是「我们的系统」，截图 `public/cover/system-*.webp` 由 `tools/capture-system.mjs` 生成；
+  - `water-transition.ts` 是进入模块时的水面转场。
+- `src/AgentPage.tsx` / `agent-page.css`：智能体页面。
+- 以下文件首页已不引用，等确认后删除：
+  - `CoverAgent.tsx`：上一版首页的智能体简介；
   - `cover-stage.ts`：旧版首页的管网全息沙盘；
   - `CoverTeardown.tsx`：旧版闸阀拆解，序列帧在 `public/cover/valve/`；
   - `public/cover/hero-a.webp`、`hero-b.webp`、`hero-c.webp`、`hero-c-lines.webp` 和 `src/cover-hero-anchors.ts`：挑开场方向时的三张备选。

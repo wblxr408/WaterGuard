@@ -21,7 +21,7 @@ const sourceText: Record<string, string> = {
   graph: "图算法",
   fixture: "人工样例",
 };
-const missingText: Record<string, string> = {
+export const missingText: Record<string, string> = {
   native_agh_trace: "原生 AGH 记录",
   real_hydraulic_results: "真实水力结果",
   "demand-plus-10pct": "需水 +10% 复验",
