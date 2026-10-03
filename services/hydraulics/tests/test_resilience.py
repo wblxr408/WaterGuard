@@ -1,11 +1,13 @@
 """Failure injection at actual filesystem and subprocess boundaries."""
 import copy
+import errno
 import json
 import math
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -38,6 +40,40 @@ class ResilienceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'finite and positive'):
                 self.adapter.simulate(*case(),timeout_s=value)
         self.assertEqual(list(self.root.iterdir()),[])
+
+    def test_fsync_failure_preserves_old_file_and_cleans_temporary(self):
+        target=self.root/'result.json';write(target,{'status':'old'})
+        with patch('services.hydraulics.storage.os.fsync',side_effect=OSError('injected fsync failure')):
+            with self.assertRaises(OSError):write(target,{'status':'new'})
+        self.assertEqual(load(target),{'status':'old'})
+        self.assertEqual([p.name for p in self.root.iterdir()],['result.json'])
+
+    def test_windows_atomic_read_retries_are_bounded_and_never_hide_bad_json(self):
+        from waterguard_contracts import core
+        target=self.root/'result.json';denied=PermissionError(errno.EACCES,'injected access denial')
+        with patch('waterguard_contracts.core.os.name','nt'),patch('waterguard_contracts.core.time.sleep'):
+            with patch.object(type(target),'read_text',side_effect=[denied,'{"ok":true}']) as attempted:
+                self.assertEqual(load(target),{'ok':True});self.assertEqual(attempted.call_count,2)
+            with patch.object(type(target),'read_text',side_effect=denied) as attempted:
+                with self.assertRaises(PermissionError):load(target)
+                self.assertEqual(attempted.call_count,6)
+            with patch.object(type(target),'read_text',return_value='{broken') as attempted:
+                with self.assertRaises(ValueError):load(target)
+                self.assertEqual(attempted.call_count,1)
+
+    def test_concurrent_reader_observes_only_complete_atomic_documents(self):
+        target=self.root/'result.json';write(target,dict(sequence=0,values=[0]*200))
+        failures=[]
+        def publish():
+            try:
+                for i in range(1,51):write(target,dict(sequence=i,values=[i]*200))
+            except Exception as exc:failures.append(exc)
+        thread=threading.Thread(target=publish);thread.start()
+        try:
+            for _ in range(200):
+                value=load(target);self.assertEqual(value['values'],[value['sequence']]*200)
+        finally:thread.join(timeout=10)
+        self.assertFalse(thread.is_alive());self.assertEqual(failures,[])
 
     def test_temporary_windows_replace_denial_retries_and_persistent_denial_preserves_old(self):
         from services.hydraulics import storage

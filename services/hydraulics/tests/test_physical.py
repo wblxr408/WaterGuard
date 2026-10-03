@@ -241,7 +241,7 @@ class PhysicalAcceptance(unittest.TestCase):
 
     def test_corrupted_evidence_and_material_numeric_changes_are_detected(self):
         import shutil
-        folder=self.root/'corrupted'
+        folder=self.root/'corrupted'/self.folder('leak').name
         shutil.copytree(self.folder('leak'),folder)
         with (folder/'source.inp').open('ab') as f:f.write(b'\n; tampered\n')
         with self.assertRaisesRegex(ValueError,'hash mismatch'):verify_evidence(folder)

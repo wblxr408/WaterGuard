@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+from stat import S_ISREG
 import sys
 import time
 from uuid import uuid4
@@ -28,7 +29,7 @@ def engine_identity(task):
     # Normalize repository source newlines before hashing across hosts.
     implementation = hashlib.sha256(code.replace(b'\r\n',b'\n')).hexdigest()
     engine = 'WNTRSimulator' if task['hydraulic_options']['engine']=='wntr' else 'EPANET/2.2'
-    return f'WNTR/{importlib.metadata.version("wntr")};{engine};adapter/0.4.0;code/{implementation};runtime/{digest(runtime_environment())[7:]}'
+    return f'WNTR/{importlib.metadata.version("wntr")};{engine};adapter/0.4.1;code/{implementation};runtime/{digest(runtime_environment())[7:]}'
 
 
 @dataclass(frozen=True)
@@ -41,12 +42,17 @@ class ExecutionLimits:
         require(type(self.max_result_values) is int and self.max_result_values > 0, 'Invalid result size limit')
 
 
+class ArtifactLimitExceeded(ValueError):
+    pass
+
+
 def runtime_environment():
     from importlib.util import find_spec
     from importlib.resources import files
     from wntr.epanet.toolkit import libepanet
     binaries={'epanet':Path(str(files('wntr.epanet').joinpath(libepanet)))}
-    for module in ('wntr.sim.aml._evaluator','wntr.sim.network_isolation._network_isolation'):
+    for module in ('wntr.sim.aml._evaluator','wntr.sim.network_isolation._network_isolation',
+                   'numpy.linalg._umath_linalg','scipy.sparse.linalg._dsolve._superlu','scipy.optimize._minpack'):
         binaries[module]=Path(find_spec(module).origin)
     return dict(python=platform.python_version(),system=platform.system(),machine=platform.machine(),
         packages={n:importlib.metadata.version(n) for n in ('wntr','numpy','pandas','scipy','networkx','jsonschema')},
@@ -55,23 +61,46 @@ def runtime_environment():
 
 
 def stop_worker(worker):
-    if worker is not None and worker.poll() is None:
-        worker.terminate()
+    if worker is None:return
+    if worker.poll() is None:
+        try:worker.terminate()
+        except OSError:
+            if worker.poll() is None:worker.kill()
+    try:worker.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:worker.kill()
+        except OSError:
+            if worker.poll() is None:raise
+        worker.wait(timeout=5)
+
+
+def artifact_bytes(folder):
+    size=0
+    for path in folder.iterdir():
         try:
-            worker.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            worker.kill()
-            worker.wait(timeout=5)
+            metadata=path.lstat()
+            require(S_ISREG(metadata.st_mode),'Unexpected artifact directory or symlink')
+            size+=metadata.st_size
+        except FileNotFoundError:continue  # Atomic writers remove temporary paths.
+    return size
 
 
 def execute_worker(folder,timeout,cancel_event,limits):
     started=time.monotonic()
     worker=None
+    outcome=None
+    interrupted=False
+    history=[]
+    # Capture parent-owned anchors before the child can touch its working directory.
+    anchors=dict(expected_request=load(folder/'request.json'),expected_manifest=load(folder/'input-manifest.json'),
+                 expected_environment=load(folder/'environment.json'))
     def state(status):
-        write(folder/'lifecycle.json',dict(status=status,updated_at=datetime.now(timezone.utc).isoformat(),
-            worker_pid=None if worker is None else worker.pid))
-    state('PREPARING')
-    try:
+        event=dict(status=status,updated_at=datetime.now(timezone.utc).isoformat(),worker_pid=None if worker is None else worker.pid)
+        history.append(event)
+        write(folder/'lifecycle.json',dict(**event,events=history))
+    def run():
+        nonlocal worker
+        state('PREPARING')
         if cancel_event is not None and cancel_event.is_set():
             return finish(folder,errors=['Cancelled before engine start'],error_code='CANCELLED',status='CANCELLED')
         with (folder/'worker.stdout.txt').open('wb') as stdout, (folder/'worker.stderr.txt').open('wb') as stderr:
@@ -82,15 +111,7 @@ def execute_worker(folder,timeout,cancel_event,limits):
             while True:
                 cancelled=cancel_event is not None and cancel_event.is_set()
                 expired=time.monotonic()-started>=timeout
-                # Atomic writers remove their temporary paths between directory reads.
-                size=0
-                for path in folder.iterdir():
-                    try:
-                        if path.is_file():
-                            size+=path.stat().st_size
-                    except FileNotFoundError:
-                        continue
-                exceeded=size>limits.max_artifact_bytes
+                exceeded=artifact_bytes(folder)>limits.max_artifact_bytes
                 if cancelled or expired or exceeded:
                     stop_worker(worker)
                     code='CANCELLED' if cancelled else ('TOOL_TIMEOUT' if expired else 'ARTIFACT_LIMIT')
@@ -101,24 +122,56 @@ def execute_worker(folder,timeout,cancel_event,limits):
         if worker.returncode!=0 or not (folder/'result.json').exists():
             return finish(folder,errors=[f'Engine worker exited {worker.returncode}; see worker.stderr.txt'],error_code='WORKER_FAILED')
         try:
-            return validate_output(folder)
+            state('VALIDATING')
+            result=validate_output(folder,**anchors)
+            if cancel_event is not None and cancel_event.is_set():
+                return finish(folder,errors=['CANCELLED during result validation'],error_code='CANCELLED',status='CANCELLED')
+            if time.monotonic()-started>=timeout:
+                return finish(folder,errors=['TOOL_TIMEOUT during result validation'],error_code='TOOL_TIMEOUT')
+            if artifact_bytes(folder)>limits.max_artifact_bytes:
+                return finish(folder,errors=['ARTIFACT_LIMIT after result validation'],error_code='ARTIFACT_LIMIT')
+            return result
         except Exception as exc:
             write_bytes(folder/'rejected-worker-result.json',(folder/'result.json').read_bytes())
+            # A damaged request cannot be used to construct the failure record.
+            # Preserve offending bytes and restore supervisor-owned JSON inputs.
+            frozen={'request.json':anchors['expected_request'],'input-manifest.json':anchors['expected_manifest'],
+                'environment.json':anchors['expected_environment'],'task.json':anchors['expected_request']['task'],
+                'plan.json':anchors['expected_request']['plan']}
+            for name,value in frozen.items():
+                try:unchanged=load(folder/name)==value
+                except (ValueError,FileNotFoundError):unchanged=False
+                if not unchanged:
+                    if (folder/name).exists():write_bytes(folder/('rejected-worker-'+name),(folder/name).read_bytes())
+                    write(folder/name,value)
             return finish(folder,errors=[f'Worker protocol rejected: {type(exc).__name__}: {exc}'],error_code='WORKER_PROTOCOL_ERROR')
+    try:
+        outcome=run()
     except Exception as exc:
         stop_worker(worker)
-        return finish(folder,errors=[f'Worker supervision failed: {type(exc).__name__}: {exc}'],error_code='WORKER_FAILED')
+        outcome=finish(folder,errors=[f'Worker supervision failed: {type(exc).__name__}: {exc}'],error_code='WORKER_FAILED')
     except BaseException:
-        stop_worker(worker)
-        finish(folder,errors=['Supervisor interrupted'],error_code='SUPERVISOR_INTERRUPTED',status='CANCELLED')
+        interrupted=True
+        try:
+            stop_worker(worker)
+            outcome=finish(folder,errors=['Supervisor interrupted'],error_code='SUPERVISOR_INTERRUPTED',status='CANCELLED')
+        except Exception:pass  # Storage failure must not replace the original interrupt.
         raise
     finally:
-        stop_worker(worker)
-        write(folder/'execution.json',dict(elapsed_s=time.monotonic()-started,timeout_s=timeout,process_isolated=True,
-            python_hash_seed=0,numerical_threads=1,limits=asdict(limits),
-            worker_pid=None if worker is None else worker.pid,worker_exit_code=None if worker is None else worker.returncode))
-        state(load(folder/'result.json')['artifact']['status'])
-        seal(folder)
+        try:
+            stop_worker(worker)
+            write(folder/'execution.json',dict(elapsed_s=time.monotonic()-started,timeout_s=timeout,process_isolated=True,
+                python_hash_seed=0,numerical_threads=1,limits=asdict(limits),artifact_bytes_before_seal=artifact_bytes(folder),
+                worker_pid=None if worker is None else worker.pid,worker_exit_code=None if worker is None else worker.returncode))
+            state(load(folder/'result.json')['artifact']['status'])
+            try:
+                seal(folder,max_artifact_bytes=limits.max_artifact_bytes if outcome is not None and outcome['artifact']['status']=='SUCCEEDED' else None)
+            except ArtifactLimitExceeded:
+                outcome=finish(folder,errors=['ARTIFACT_LIMIT including finalized evidence'],error_code='ARTIFACT_LIMIT')
+                state('FAILED');seal(folder)
+        except Exception:
+            if not interrupted:raise
+    return outcome
 
 
 def finish(folder, *, series=None, errors=None, warnings=None, raw_converged=None, error_code=None, status=None):
@@ -144,13 +197,17 @@ def finish(folder, *, series=None, errors=None, warnings=None, raw_converged=Non
     return result
 
 
-def seal(folder):
+def seal(folder,*,max_artifact_bytes=None):
     folder = Path(folder)
     result = load(folder/'result.json')
     entries = [dict(ref=p.name,sha256=file_hash(p),kind=p.suffix.lstrip('.')) for p in sorted(folder.iterdir()) if p.is_file() and p.name!='evidence-manifest.json']
     evidence = dict(schema_version='0.3.0',bundle_id='bundle-'+folder.name,run_id=folder.name,mode='benchmark',native_trace_ref=None,association_ref=None,
         artifacts=entries,hashes={e['ref']:e['sha256'] for e in entries},redactions=[],missing_items=['native_agh_trace','business_verification','required_stress_tests'],live_export_allowed=False)
     validate('EvidenceManifest',evidence)
+    if max_artifact_bytes is not None:
+        total=sum((folder/e['ref']).stat().st_size for e in entries)
+        total+=len((json.dumps(evidence,ensure_ascii=False,indent=2,allow_nan=False)+'\n').encode('utf-8'))
+        if total>max_artifact_bytes:raise ArtifactLimitExceeded('Final evidence exceeds artifact limit')
     write(folder/'evidence-manifest.json',evidence)
 
 
@@ -184,7 +241,7 @@ class PhysicalAdapter:
         write(folder/'environment.json',runtime_environment())
         write(folder/'input-manifest.json',dict(input_hash=input_hash(task,plan,engine),engine_version=engine,
             source_sha256=file_hash(folder/'source.inp'),overlay_sha256=file_hash(folder/'runtime-overlay.json'),
-            task_sha256=file_hash(folder/'task.json'),plan_sha256=file_hash(folder/'plan.json'),
+            task_sha256=file_hash(folder/'task.json'),plan_sha256=file_hash(folder/'plan.json'),environment_sha256=file_hash(folder/'environment.json'),
             failure_model=task['fault'],hydraulic_options=task['hydraulic_options'],control_policy=task['control_policy']))
         # Explicit placeholders remain meaningful for cancellation before compilation.
         write(folder/'entity-map.json',dict(status='not_compiled'))

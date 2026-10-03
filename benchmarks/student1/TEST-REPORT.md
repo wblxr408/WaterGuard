@@ -6,7 +6,7 @@
 
 | 检查 | 结果 |
 |---|---|
-| `python -m unittest discover -s services/hydraulics/tests -v` | 0.4 后 45 项全部通过，105.829 秒；含原有 9 项、物理验收 19 项、模型质量 7 项、故障注入 10 项 |
+| `python -m unittest discover -s services/hydraulics/tests -v` | 0.4.1 共 66 项，129.612 秒：Windows 64 项通过、2 项平台专属跳过；含原有 9 项、物理验收 19 项、模型质量 7 项、协议注入 18 项、可靠性注入 13 项 |
 | `python -m unittest discover -s packages/contracts/tests -v` | 19 项全部通过 |
 | `python packages/contracts/scripts/check.py` | Schema、绑定、哈希、事件、来源与独立指标复算通过 |
 | `npm run contracts:types:check` | 生成类型与 Schema 一致，TypeScript 检查通过 |
@@ -16,7 +16,7 @@
 | 0.4 读取 API | analysis/physics/mapping/series 实际读取通过，模式与版本一致 |
 | ZIP 清单审计 | 3 个 ZIP 总哈希、1,663 个产物哈希、50 次代码/运行环境绑定全部通过 |
 
-初版 `05ef5d5` 的 [共享契约 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631615) 和 [Windows/Linux 水力 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37036631848) 已通过。0.4 提交后的 CI 将执行 45 项水力测试、22 工况、A/B 和 26 组物理研究，并上传独立证据；本文件不预先声称该提交的 CI 通过。
+上一版 `bcc4ea8` 的 [共享契约 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37105186259) 和 [Windows/Linux 水力 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37105186243) 已通过。本次 CI 执行 66 项水力测试、22 工况、A/B 和 26 组物理研究，并上传独立证据；平台专属检查的实际结果以该提交 Actions 为准。
 
 ## 检查覆盖
 
@@ -43,3 +43,11 @@
 实际实现和适用边界见 [物理评估](../../docs/物理模型与算法评估.md)。新增模型质量测试使用原始结果核对能量/PDD/事件储水，篡改水头/水箱值时检测失败，局部需求与服务压力真实影响供水，背景漏损不算用户供水，内部低压能定位到公共采样之间。公开模型一致性不等于现场校准。
 
 开发阶段曾因直接把 SI 流量容差写成原生 GPM 导致 EPANET 迭代警告，转换后重新实算成功；未把警告结果作为有效结果。一次 Windows 本地 POST 连接异常在单独复现及后续两次完整回归中通过，未归因于物理模型。一次原子替换出现 WinError 5，已实现有限重试；临时成功与持续拒绝保留旧文件的故障注入测试通过。失败开发目录留在忽略的 artifacts 下，发布 ZIP 仅对应本次重新计算且通过检查的运行。
+
+## 七项修复的回归与平台覆盖
+
+Adapter 0.4.1 重建冻结物理模型并复算原始 CSV，对照每个 Series 值和汇总，同时绑定父进程启动前输入。验证阶段的迟到取消/超时、最终清单增长超限、被改坏的 request、EPANET 原生文件缺失/警告、原始数据篡改及清单篡改均有注入验证。fsync/替换失败与并发读写验证旧文档完整，真实中断和监督异常验证进程回收。
+
+Windows 本机无法创建符号链接，故该真实链接注入跳过；POSIX 忽略 SIGTERM 的进程也仅在 Linux 运行。Linux CI 必须实际执行这两项，Windows 直接终止行为由真实进程回收测试覆盖。
+
+新增物理校验曾错误地把 WNTR 孤立节点的零水头/压力当成高程不一致。核对 WNTR 1.5 的 `store_results_in_network` 和 `save_results` 后，父进程按每个原始时刻的开启管段图确认与水源断开，再检查零供水/漏损/相邻流量；连通节点仍校验水头与压力。重新计算的 Net1/Net3 隔离均通过。测试样本的 pandas 整数列误用小数被修正为浮点列，未改动真实计算。一次共享契约本机 POST 发生 WinError 10053，随后 19 项完整重跑通过，不计作物理结果失败。

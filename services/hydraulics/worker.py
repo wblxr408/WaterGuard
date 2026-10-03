@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import math
+import os
 from pathlib import Path
 import sys
 import warnings
@@ -25,10 +26,11 @@ def compute(folder):
     raw_converged=None
     code='INPUT_INVALID'
     try:
+        require(os.environ.get('PYTHONHASHSEED')=='0' and all(os.environ.get(k)=='1' for k in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')),'Worker numerical environment mismatch')
         require(request['engine_version']==engine_identity(task),'Worker implementation/runtime drift')
         require(task==load(folder/'task.json') and plan==load(folder/'plan.json'),'Request differs from frozen task/plan')
         require(load(folder/'environment.json')==runtime_environment(),'Worker environment differs from frozen input')
-        for key,name in [('source_sha256','source.inp'),('overlay_sha256','runtime-overlay.json'),('task_sha256','task.json'),('plan_sha256','plan.json')]:
+        for key,name in [('source_sha256','source.inp'),('overlay_sha256','runtime-overlay.json'),('task_sha256','task.json'),('plan_sha256','plan.json'),('environment_sha256','environment.json')]:
             require(load(folder/'input-manifest.json')[key]==file_hash(folder/name),'Frozen input drift: '+name)
         wn,source,scene,catalog,mapping=compile_task(task,plan)
         detailed=task['schema_version']=='0.4.0'
@@ -61,7 +63,7 @@ def compute(folder):
         raw_converged=True
         for category,tables in [('node',raw.node),('link',raw.link)]:
             for field,table in tables.items():
-                table.to_csv(folder/f'raw-{category}-{field}.csv',index_label='time_s',lineterminator='\n')
+                table.to_csv(folder/f'raw-{category}-{field}.csv',index_label='time_s',lineterminator='\n',float_format='%.17g')
         if engine=='epanet':
             require('WARNING' not in (folder/'engine.rpt').read_text(errors='replace').upper(),'EPANET report warning')
         # Three points determine three pump coefficients exactly; covariance cannot be
