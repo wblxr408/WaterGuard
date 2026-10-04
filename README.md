@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-已拉取官方 AGH 源码作为 Git 子模块基座，并构建官方 Web 与 daemon。WaterGuard 原生插件提供任务读取、候选提交、水力仿真、独立验证和证据工具；由 AGH 承担模型与工具调度。EPA Net1/Net3 的真实计算、任务存储、取消、Fixture、Replay 与证据导出已接入 FastAPI，公共契约为 0.4.0。Agnes 鉴权当前返回 401，模型驱动的 Live 尚未验证。
+已拉取官方 AGH 源码作为 Git 子模块基座，并构建官方 Web 与 daemon。WaterGuard 原生插件提供任务读取、候选提交、水力仿真、独立验证和证据工具；由 AGH 承担模型与工具调度。EPA Net1/Net3 的真实计算、任务存储、取消、Fixture、Replay 与证据导出已接入 FastAPI，公共契约为 0.4.0。当前尚无有效存储的模型账号，模型驱动的 Live 尚未验证。
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
@@ -12,7 +12,7 @@
 
 ### 最新前端
 
-展示前端以 [apps/web-gpt](apps/web-gpt/README.md) 为准：闸阀拆装开场、应急工作台、智能体分支导图与流程总览、方案对照、建模与仿真、证据中心。远程 PR #1 的完整页面与资产均已保留。
+唯一前端为 [apps/web-gpt](apps/web-gpt/README.md)：闸阀拆装开场、应急工作台、智能体分支导图与流程总览、方案对照、建模与仿真、证据中心。旧 HTML 工作台和早期 `apps/web` 原型已移除。
 
 ```powershell
 cd apps/web-gpt
@@ -20,9 +20,9 @@ npm ci
 pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 ```
 
-打开 [展示前端](http://127.0.0.1:5173/)。启动脚本使用 8000–8002 的只读数据服务；水力读数来自真实 Benchmark，智能体运行示例仍按页面标注为 Fixture。其真实任务与 AGH 事件接入应在这套前端上继续完成。
+打开 [WaterGuard 工作台](http://127.0.0.1:5173/)。启动脚本自动启动 8000–8002 的只读数据服务、8010 的任务 API 和新版前端。智能体页提供新建任务、取消运行和 AGH 模型账号配置；持续 SSE 推送工作流、原生工具摘要和 Info log，支持断线续读、运行选择、日志筛选与导出。人工 Fixture 回放需显式选择。
 
-展示服务与联调 API 同时运行时，API 请使用独立端口，例如在仓库根目录运行 `npm run start:api -- --port 8010`。AGH 启动器可用 `npm start -- --api-port 8010`；原生插件配置的 API 地址需与所选端口一致，参见 [AGH 基座与启动](docs/AGH基座与启动.md)。
+仓库根目录也可执行 `npm run start:web` 或双击 `scripts/start_waterguard.cmd`。单独启动 API 使用 `npm run start:api`，默认 8010；API 根地址重定向到唯一的 5173 前端。自定义端口需同步 Vite 的 `WATERGUARD_API_URL` 和原生插件配置，参见 [AGH 基座与启动](docs/AGH基座与启动.md)。
 
 ### AGH 与联调
 
@@ -33,7 +33,7 @@ cd D:\WaterGuard
 npm start
 ```
 
-打开 [官方 AGH 工作台](http://127.0.0.1:4180/) 使用原生会话与业务工具。[水力工作台](http://127.0.0.1:8000/) 用于冻结任务、运行 Benchmark、比较候选和查看证据；单独启动用 `npm run start:api`，步骤见 [前后端启动与接入](docs/前后端启动与接入.md)。支持 Net1/Net3 的正常、关闭、泄漏、断裂与隔离工况。本地运行数据写入未提交的 `artifacts/`；原生记录与会话关联完成前，API 的 `mode=live` 明确返回 `AGH_UNAVAILABLE`。
+AGH 启动器运行官方执行基座并复用或启动 8010 API；新版前端由上方 `start:web` 启动。[官方 AGH 工作台](http://127.0.0.1:4180/) 用于检查原生会话与插件。任务操作统一在 [WaterGuard](http://127.0.0.1:5173/) 智能体页完成，支持 Net1/Net3 的正常、关闭、泄漏、断裂与隔离工况。本地运行数据写入未提交的 `artifacts/`；缺少有效模型账号时 Live 明确返回 `MODEL_NOT_CONFIGURED`。完整步骤见 [前后端启动与接入](docs/前后端启动与接入.md)。
 
 现有 0.2 实施设计：
 
@@ -44,8 +44,6 @@ npm start
 | [Agent 设计](docs/Agent设计.md) | AGH 核心执行、Agnes 三角色、工具权限、反馈修正与评测 |
 
 三份文档是当前实施依据。已冻结的公共字段与状态以 [可执行 Schema](packages/contracts/schema/waterguard.schema.json) 和 [契约说明](packages/contracts/README.md) 为准；后端设计保留架构依据，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
-
-[二维工作台](design/waterguard-blueprint.html) 沿用初期布局并接入后端，打开本地服务地址使用。其架构、治理和评测页保留为设计参考；工作台和方案页的拓扑、读数与运行记录来自真实后端产物。
 
 ## 产品任务
 

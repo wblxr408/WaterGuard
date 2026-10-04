@@ -9,16 +9,16 @@ cd D:\WaterGuard
 npm start
 ```
 
-打开 [WaterGuard 工作台](http://127.0.0.1:8000/)，在“AGH 模型账号”配置模型。启动器自动选择 Node >=24.10，在需要时启动 Python API，并使用独立的 `.cache/agh-waterguard` 配置目录。[官方 AGH 工作台](http://127.0.0.1:4180/) 可用于检查会话与插件。关闭启动器按 Ctrl+C；仅停止它自己启动的 API，官方共享 daemon 按 AGH 生命周期管理。
+另开终端运行 `npm run start:web`，打开唯一的 [WaterGuard 工作台](http://127.0.0.1:5173/)，在“智能体 → 模型账号”配置模型。AGH 启动器自动选择 Node >=24.10，在需要时启动 8010 Python API，并使用独立的 `.cache/agh-waterguard` 配置目录。[官方 AGH 工作台](http://127.0.0.1:4180/) 可用于检查会话与插件。关闭启动器按 Ctrl+C；仅停止它自己启动的 API，官方共享 daemon 按 AGH 生命周期管理。
 
-水力地图与任务冻结入口为 [WaterGuard 工作台](http://127.0.0.1:8000/)，[API 文档](http://127.0.0.1:8000/docs) 提供完整接口。单独启动 API 用 `npm run start:api`。启动器支持 `npm start -- --port 4181 --api-port 8001`，也接受 Windows npm 转发的两个端口数值。
+任务冻结与运行入口为新版智能体页，[API 文档](http://127.0.0.1:8010/docs) 提供完整接口。单独启动 API 用 `npm run start:api`。API 根路径重定向到 5173。启动器支持 `npm start -- --port 4181 --api-port 8011`，自定义 API 端口时须同步 Vite 代理和插件地址，也接受 Windows npm 转发的两个端口数值。
 
 官方 daemon 会绑定已选 Web origin。改变 AGH 端口前，退出 Web，在使用 Node 24 的终端停止本项目的 daemon 再启动新端口；仅重启 Web 会得到 origin 不匹配错误：
 
 ```powershell
 $env:AGH_HOME = 'D:\WaterGuard\.cache\agh-waterguard'
 node vendor/agnes-harness/packages/cli/dist/local/agnes.mjs daemon stop --profile local-dev --data-dir D:/WaterGuard/.cache/agh-waterguard/data
-npm start -- --port 4181 --api-port 8001
+npm start -- --port 4181 --api-port 8011
 ```
 
 ## 首次构建
@@ -52,7 +52,7 @@ cd D:\WaterGuard
 node --import ./vendor/agnes-harness/node_modules/tsx/dist/loader.mjs scripts/configure_agh.mjs
 ```
 
-模型凭据在 WaterGuard 的“AGH 模型账号”输入，支持赛事 Agnes、DeepSeek 与 GLM，具体地址见 [模型接入](模型接入.md)。也可在官方 AGH 设置页配置，或在本机通过 `AGNES_API_KEY` 环境变量交给配置脚本。只有官方验证成功后才保存账号，报告不包含密钥。当前赛事凭据鉴权未通过，因此模型驱动的 Live 尚未验证。
+模型凭据在新版“智能体 → 模型账号”输入，支持赛事 Agnes、DeepSeek 与 GLM，具体地址见 [模型接入](模型接入.md)。也可在官方 AGH 设置页配置，或在本机通过 `AGNES_API_KEY` 环境变量交给配置脚本。只有官方验证成功后才保存账号，报告不包含密钥。当前没有有效存储的模型账号，因此模型驱动的 Live 尚未验证。
 
 ## 使用业务工具
 

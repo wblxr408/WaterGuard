@@ -28,7 +28,7 @@ def node_runtime():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=4180)
-    parser.add_argument("--api-port", type=int, default=8000)
+    parser.add_argument("--api-port", type=int, default=8010)
     # Windows npm may consume option names and forward only their values.
     parser.add_argument("ports", nargs="*", type=int, help="Optional AGH and API ports forwarded by npm")
     args = parser.parse_args()
@@ -54,7 +54,7 @@ if __name__ == "__main__":
             python = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             api = subprocess.Popen([str(python) if python.is_file() else sys.executable, "-m", "uvicorn", "services.api.main:app",
                                     "--host", "127.0.0.1", "--port", str(args.api_port), "--no-access-log"], cwd=ROOT, env=env)
-        print(f"WaterGuard: {env['WG_API_URL']}/; AGH inspection: http://127.0.0.1:{args.port}/", flush=True)
+        print(f"WaterGuard frontend: http://127.0.0.1:5173/; API: {env['WG_API_URL']}/; AGH inspection: http://127.0.0.1:{args.port}/", flush=True)
         raise SystemExit(subprocess.call([node, str(entry), "serve", "--profile", "local-dev", "--cwd", str(ROOT),
                                         "--data-dir", str(Path(env["AGH_HOME"]) / "data"), "--port", str(args.port)], cwd=ROOT, env=env))
     except KeyboardInterrupt:

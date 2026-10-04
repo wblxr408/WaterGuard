@@ -23,7 +23,9 @@ const sourceText: Record<string, string> = {
 };
 export const missingText: Record<string, string> = {
   native_agh_trace: "原生 AGH 记录",
+  agh_host_not_configured: "AGH 会话",
   real_hydraulic_results: "真实水力结果",
+  required_stress_tests: "扰动复验",
   "demand-plus-10pct": "需水 +10% 复验",
 };
 const short = (name: string) => name.split(" · ")[0];
@@ -81,7 +83,7 @@ export function AgentRunStrip({
             {revisions.length > 0 && ` · ${revisions.join("；")}`}
           </dd>
         </div>
-        {run ? (
+        {run && (
           <>
             <div>
               <dt>预算用量</dt>
@@ -99,11 +101,6 @@ export function AgentRunStrip({
               </div>
             )}
           </>
-        ) : (
-          <div>
-            <dt>接入后</dt>
-            <dd>这里逐步显示任务建模、方案规划、反例审查和每次工具调用</dd>
-          </div>
         )}
       </dl>
       {run && (

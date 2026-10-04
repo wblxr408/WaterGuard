@@ -375,12 +375,6 @@ input[type="range"]::-moz-range-thumb {
     width 0.32s var(--ease-expo);
   pointer-events: none;
 }
-.global-header-end {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
 .brand-caption {
   font-size: 11px;
   letter-spacing: 1.8px;
@@ -3109,9 +3103,6 @@ tbody tr:hover {
   .global-header nav {
     gap: 21px;
   }
-  .global-header-end {
-    display: none;
-  }
   .brand strong {
     font-size: 21px;
   }
@@ -3310,12 +3301,6 @@ tbody tr:hover {
   .global-header nav button {
     font-size: 13px;
     padding: 0 2px;
-  }
-  .global-header-end {
-    display: flex;
-    position: absolute;
-    top: 24px;
-    right: 20px;
   }
   .topbar {
     flex-direction: column-reverse;

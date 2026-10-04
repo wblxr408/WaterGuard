@@ -1,8 +1,6 @@
 @echo off
 cd /d "%~dp0.."
-if exist ".venv\Scripts\python.exe" (
-  ".venv\Scripts\python.exe" scripts\start_workbench.py
-) else (
-  python scripts\start_workbench.py
-)
-pause
+pwsh -NoProfile -ExecutionPolicy Bypass -File apps\web-gpt\scripts\start-demo.ps1 %*
+set "wgStartExit=%errorlevel%"
+if "%~1"=="" pause
+exit /b %wgStartExit%

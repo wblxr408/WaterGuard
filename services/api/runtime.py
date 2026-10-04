@@ -96,6 +96,10 @@ class RunStore:
               run_id TEXT NOT NULL, sequence INTEGER NOT NULL, payload TEXT NOT NULL,
               PRIMARY KEY (run_id, sequence), FOREIGN KEY (run_id) REFERENCES runs(run_id)
             );
+            CREATE TABLE IF NOT EXISTS run_stream (
+              run_id TEXT NOT NULL, sequence INTEGER NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL,
+              PRIMARY KEY (run_id, sequence), FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            );
             CREATE TABLE IF NOT EXISTS idempotency (
               scope TEXT NOT NULL, key TEXT NOT NULL, response TEXT NOT NULL,
               PRIMARY KEY (scope, key)
@@ -304,6 +308,7 @@ class RunStore:
     def _emit_serial(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None, native_tool_call_ref: str | None = None) -> dict:
         with self._db() as db:
             db.execute("BEGIN IMMEDIATE")
+            self._backfill_stream(db, run["run_id"])
             sequence = db.execute("SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM events WHERE run_id=?", (run["run_id"],)).fetchone()["sequence"]
             event = dict(schema_version=run["schema_version"], event_id="evt-" + uuid.uuid4().hex, sequence=sequence,
                          run_id=run["run_id"], task_revision=run["task_ref"]["revision"], constraint_hash=run["task_ref"]["constraint_hash"],
@@ -314,8 +319,88 @@ class RunStore:
                          payload_ref=payload_ref)
             validate("RunEvent", event)
             db.execute("INSERT INTO events VALUES (?, ?, ?)", (run["run_id"], sequence, canonical(event)))
+            self._insert_stream(db, run["run_id"], "workflow", event)
+            snapshot = json.loads(db.execute("SELECT payload FROM runs WHERE run_id=?", (run["run_id"],)).fetchone()["payload"])
+            self._insert_stream(db, run["run_id"], "info", self._event_log(event, snapshot))
+            self._insert_stream(db, run["run_id"], "run", snapshot)
         self._append_event(run["run_id"], event)
         return event
+
+    @staticmethod
+    def _insert_stream(db, run_id: str, kind: str, payload: dict):
+        sequence = db.execute("SELECT COALESCE(MAX(sequence), 0) + 1 FROM run_stream WHERE run_id=?", (run_id,)).fetchone()[0]
+        db.execute("INSERT INTO run_stream VALUES (?, ?, ?, ?)", (run_id, sequence, kind, canonical(payload)))
+        return sequence
+
+    @staticmethod
+    def _event_log(event: dict, run: dict | None = None) -> dict:
+        labels = {"run.started": "运行状态更新", "candidate.submitted": "已提交候选方案",
+                  "simulation.completed": "仿真结果已返回", "verification.completed": "独立验证结果已返回",
+                  "run.completed": "运行已结束"}
+        message, level = labels.get(event["type"], event["type"]), "INFO"
+        if run and event["type"] in {"run.started", "run.completed"}:
+            message += f" · {run['status']} / {run['phase']}"
+            level = "ERROR" if run['status'] == "ERROR" else "WARN" if run['status'] in {"CANCELLED", "BUDGET_EXHAUSTED"} else "INFO"
+        return dict(run_id=event["run_id"], occurred_at=event["occurred_at"], level=level, origin=event["origin"],
+                    message=message, event_type=event["type"],
+                    event_sequence=event["sequence"], candidate_id=event["candidate_id"], simulation_id=event["simulation_id"],
+                    native_tool_call_ref=event["native_tool_call_ref"], payload_ref=event["payload_ref"], tool_name=None)
+
+    def _backfill_stream(self, db, run_id: str):
+        # Migrate before the first new write, so resumed/recovered old runs retain their complete history.
+        if not db.execute("SELECT 1 FROM run_stream WHERE run_id=? AND kind='workflow' LIMIT 1", (run_id,)).fetchone():
+            completed = False
+            for row in db.execute("SELECT payload FROM events WHERE run_id=? ORDER BY sequence", (run_id,)).fetchall():
+                event = json.loads(row["payload"])
+                self._insert_stream(db, run_id, "workflow", event)
+                self._insert_stream(db, run_id, "info", self._event_log(event))
+                completed = completed or event['type'] == 'run.completed'
+            if completed:
+                snapshot = json.loads(db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()["payload"])
+                self._insert_stream(db, run_id, "run", snapshot)
+
+    def log(self, run_id: str, message: str, *, level: str = "INFO", origin: str = "agh",
+            tool_name: str | None = None, event_type: str | None = None, native_tool_call_ref: str | None = None):
+        """Persist operational summaries, never model text, credentials or tool arguments."""
+        if level not in {"INFO", "WARN", "ERROR"}:
+            raise ValueError("Unsupported log level")
+        self.get_run(run_id)
+        payload = dict(run_id=run_id, occurred_at=now(), level=level, origin=origin, message=message,
+                       tool_name=tool_name, event_type=event_type, native_tool_call_ref=native_tool_call_ref)
+        with self._event_lock, self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._backfill_stream(db, run_id)
+            self._insert_stream(db, run_id, "info", payload)
+
+    def stream_after(self, run_id: str, sequence: int = 0, limit: int = 200) -> list[dict]:
+        self.get_run(run_id)
+        with self._event_lock, self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._backfill_stream(db, run_id)
+            rows = db.execute("SELECT sequence, kind, payload FROM run_stream WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT ?",
+                              (run_id, sequence, limit)).fetchall()
+        return [dict(sequence=row["sequence"], kind=row["kind"], data=json.loads(row["payload"])) for row in rows]
+
+    def stream_finished(self, run_id: str, sequence: int) -> bool:
+        # A terminal state may commit before its event; close only after its durable snapshot has been delivered.
+        with self._db() as db:
+            db.execute("BEGIN")
+            last = db.execute("SELECT MAX(sequence) FROM run_stream WHERE run_id=?", (run_id,)).fetchone()[0]
+            snapshot = db.execute("SELECT payload FROM run_stream WHERE run_id=? AND kind='run' ORDER BY sequence DESC LIMIT 1", (run_id,)).fetchone()
+            if last is None or last > sequence or not snapshot:
+                return False
+            status = json.loads(snapshot['payload'])['status']
+            if status not in TERMINAL:
+                return False
+            submitted = self._run_directory(run_id) / 'submitted-plan.json'
+            if status == 'COMPLETED' and submitted.is_file():
+                # Submitted plans are simulated and verified by separate tool calls. A result file
+                # alone is insufficient: its verification event must commit and reach this cursor.
+                candidate_id = self._read_json(submitted)['candidate_id']
+                events = db.execute("SELECT payload FROM events WHERE run_id=?", (run_id,)).fetchall()
+                return any(event['type'] == 'verification.completed' and event.get('candidate_id') == candidate_id
+                           for event in (json.loads(row['payload']) for row in events))
+            return True
 
     def events_after(self, run_id: str, sequence: int = 0) -> list[dict]:
         self.get_run(run_id)

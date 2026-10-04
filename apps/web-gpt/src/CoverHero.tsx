@@ -275,22 +275,6 @@ export default function CoverHero({
 
         <footer className="hero-foot">
           <p className="hero-scroll">向下滑动，看闸阀拆开再装回</p>
-          <dl className="hero-status">
-            <div>
-              <dt>水力仿真与验收</dt>
-              <dd>
-                <i className="ok" />
-                真实运行
-              </dd>
-            </div>
-            <div>
-              <dt>AGH 智能体</dt>
-              <dd>
-                <i className="pending" />
-                待接入
-              </dd>
-            </div>
-          </dl>
         </footer>
       </div>
     </section>

@@ -1,0 +1,13 @@
+.run-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex-basis: 100%; padding-top: 12px; border-top: 1px solid var(--line); }
+.operation-dialog { max-width: 650px; border-radius: 18px; }
+.operation-dialog header h2 { margin: 0; }
+.operation-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; border: 0; margin: 0; padding: 22px 25px 12px; }
+.operation-fields label { display: flex; flex-direction: column; align-items: stretch; gap: 8px; font-size: 13px; color: var(--muted); }
+.operation-fields input, .operation-fields select { box-sizing: border-box; min-width: 0; width: 100%; height: 42px; padding: 9px 12px; color: var(--ink); font: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.operation-fields input:focus, .operation-fields select:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.operation-wide { grid-column: 1 / -1; }
+.operation-message { padding: 8px 25px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.operation-message p { margin: 0 0 6px; }
+.operation-error { color: #b42318; overflow-wrap: anywhere; }
+.operation-dialog footer { border-top: 1px solid var(--line); }
+@media (max-width: 580px) { .operation-fields { grid-template-columns: minmax(0, 1fr); padding-inline: 18px; gap: 14px; } .operation-message { padding-inline: 18px; } .operation-dialog footer { flex-wrap: wrap; } }

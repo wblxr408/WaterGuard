@@ -252,7 +252,7 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
         </div>
       )}
       <div className="model-handoff">
-        <span>{asset.author ?? "Blender 实际模型待接入"}</span>
+        {asset.author && <span>{asset.author}</span>}
         {asset.sourceUrl ? (
           <a href={asset.sourceUrl} download>
             <Icon name="download" size={14} />

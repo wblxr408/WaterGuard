@@ -347,26 +347,8 @@ main.cover-main {
 .cover.reduce .hero-scroll {
   visibility: hidden;
 }
-.hero-status,
 .agent-state {
   margin: 0;
-}
-.hero-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 26px;
-}
-.hero-status div {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.hero-status dd {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  color: #e3eaf9;
 }
 .cover i.ok,
 .cover i.pending {

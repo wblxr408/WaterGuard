@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Response, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
-from starlette.responses import FileResponse, StreamingResponse, JSONResponse
-from starlette.staticfiles import StaticFiles
+from starlette.responses import FileResponse, StreamingResponse, JSONResponse, RedirectResponse
 
 from .runtime import ConflictError, NotFoundError, ROOT, RunStore
 from .workbench import BenchmarkExecutor, TaskProposal, network_details, propose_task, run_results
@@ -56,7 +56,6 @@ def create_app(store: RunStore | None = None) -> FastAPI:
 
     app = FastAPI(title="WaterGuard API", version="0.1.0", lifespan=lifespan)
     app.state.benchmark_executor = executor
-    app.mount("/assets", StaticFiles(directory=ROOT / "design"), name="assets")
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request, error):
@@ -81,8 +80,11 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             raise HTTPException(422, {'code': 'AGH_MODEL_CONFIG_FAILED', 'message': str(error)})
 
     @app.get("/", include_in_schema=False)
-    def workbench():
-        return FileResponse(ROOT / "design" / "waterguard-blueprint.html", headers={"Cache-Control": "no-cache"})
+    def workbench(request: Request):
+        frontend = os.environ.get("WG_FRONTEND_URL", "http://127.0.0.1:5173/").rstrip("/") + "/"
+        if request.url.query:
+            frontend += "?" + request.url.query
+        return RedirectResponse(frontend, status_code=307, headers={"Cache-Control": "no-store"})
 
     def fail(error: Exception):
         if isinstance(error, NotFoundError):
@@ -367,6 +369,41 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             for event in pending:
                 yield f"id: {event['sequence']}\nevent: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
         return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/runs/{run_id}/stream")
+    def run_stream(run_id: str, request: Request, follow: bool = True, last_event_id: str | None = Header(default=None)):
+        try:
+            after = int(last_event_id or "0")
+            if not 0 <= after <= 9223372036854775807:
+                raise ValueError("Last-Event-ID is outside the supported cursor range")
+            store.get_run(run_id)
+        except Exception as error:
+            fail(error)
+
+        async def stream():
+            cursor, idle = after, 0
+            # The snapshot has no cursor: reconnects must retain the durable stream cursor.
+            yield f"event: run\ndata: {json.dumps(store.get_run(run_id), ensure_ascii=False)}\n\n"
+            while not await request.is_disconnected():
+                rows = await asyncio.to_thread(store.stream_after, run_id, cursor)
+                for row in rows:
+                    cursor = row['sequence']
+                    yield f"id: {cursor}\nevent: {row['kind']}\ndata: {json.dumps(row['data'], ensure_ascii=False)}\n\n"
+                if rows:
+                    idle = 0
+                    continue
+                current = await asyncio.to_thread(store.get_run, run_id)
+                if not follow or (current['status'] in {'COMPLETED', 'ERROR', 'CANCELLED', 'BUDGET_EXHAUSTED'}
+                                  and await asyncio.to_thread(store.stream_finished, run_id, cursor)):
+                    yield f"event: stream.complete\ndata: {json.dumps(current, ensure_ascii=False)}\n\n"
+                    return
+                idle += 1
+                if idle >= 40:
+                    yield ': heartbeat\n\n'
+                    idle = 0
+                await asyncio.sleep(.25)
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
     @app.get("/healthz")
     def health():

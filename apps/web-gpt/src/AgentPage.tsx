@@ -31,15 +31,18 @@ import {
   nodeXY,
 } from "./agent-flow";
 import type { NodeState } from "./agent-flow";
-import type { Candidate, Workspace } from "./data";
+import { useAgentRun } from "./agent-stream";
+import type { AgentCandidate as Candidate, AgentWorkspace as Workspace, StreamSource } from "./agent-stream";
+import AgentLogs from "./AgentLogs";
+import RunControls from "./RunControls";
 import {
   actionText,
   conclusionText,
   engineStatus,
   eventText,
   gates,
-  loadWorkspace,
   num,
+  recommendationBlockerText,
   runStatusText,
   statusText,
   time,
@@ -50,9 +53,8 @@ import "./agent-page.css";
 /* 智能体页面：两种看法，顶部切换。
    - 分支导图（默认，agent-mindmap.ts）：思维导图式的一棵树，在判断处分叉，分支名写在连线上，回到前面的步骤在叶子上标「↺」。
    - 流程总览（agent-flow.ts）：U 形两行的流程画布，含「否 · 修改方案」回路。
-   - 回放：按运行事件逐条点亮节点和连线；点节点，展开右侧面板，显示它做什么、能调用的工具、权限边界和本次运行的数据。
-   - 下方保留设计细节（角色与权限、工具契约、执行流程、边界与失败处理、接入进度，出自 docs/Agent设计.md）。
-   AGH 未接入前，唯一的运行记录是开发用的人工样例（Fixture），页面如实标注；不补造任何调用、失败或数值。 */
+   - 回放：按运行事件逐条点亮节点和连线；节点详情展示本次运行的记录、候选和验收结果。
+   SSE 持续订阅任务服务；人工样例是显式选择的数据源，不补造调用、失败或数值。 */
 
 /** 面板里展示的节点：两种看法的节点都满足 */
 type PanelNode = {
@@ -60,9 +62,6 @@ type PanelNode = {
   kind: MindKind;
   title: string;
   sub: string;
-  does: string;
-  bound?: string;
-  tools?: string[];
   agent?: boolean;
   tag?: MindNode["tag"];
   loop?: string;
@@ -123,193 +122,14 @@ const stateText: Record<NodeState, string> = {
   ok: "完成",
   fail: "未通过",
   wait: "待完成",
-  off: "未接入",
+  off: "无调用记录",
 };
-/** 建议预算（docs/Agent设计.md 第 8 节；实测后确定，不是性能承诺） */
-const BUDGET = { simulations: 40, rounds: 4 };
-
-/* ---------------------------------------------------------------- 设计细节（出自 docs/Agent设计.md） */
-const ROLES = [
-  {
-    name: "任务建模",
-    input: "用户需求、网络目录、来源",
-    decide: "解释字段、标出歧义、提出草案",
-    output: "TaskProposal",
-    bound: "不修改已冻结条件，不隐去未知项",
-    when: "开始或修订时调用一次",
-  },
-  {
-    name: "方案规划",
-    input: "TaskSpec、动作目录、工具结果",
-    decide: "选择生成策略、动作组合及修正方向",
-    output: "ActionPlan、DecisionRecord",
-    bound: "不降阈值，不写入验证通过",
-    when: "贯穿搜索与修正",
-  },
-  {
-    name: "反例审查",
-    input: "候选、验证及数据引用、已测场景",
-    decide: "指出缺失证据，选择域内扰动复验",
-    output: "StressTestRequest、ReviewFinding",
-    bound: "不改原候选、任务或授权范围",
-    when: "有希望的名义候选出现后介入",
-  },
-];
-const TOOLS: [string, string, string, string][] = [
-  ["wg_inspect_network", "network_ref", "摘要、动作目录、来源", "全部"],
-  ["wg_propose_task", "task_id、proposal", "冻结快照或澄清字段", "任务建模"],
-  [
-    "wg_generate_candidates",
-    "task_ref、strategy、candidate_limit",
-    "候选引用、生成诊断",
-    "规划",
-  ],
-  [
-    "wg_submit_plan",
-    "task_ref、actions、parent_candidate_id?",
-    "候选或非法动作错误",
-    "规划",
-  ],
-  [
-    "wg_simulate_candidate",
-    "task_ref、candidate_id、perturbation_id?",
-    "产物引用或作业句柄",
-    "规划；审查仅复验已有候选",
-  ],
-  ["wg_get_simulation", "simulation_id", "状态与结果引用", "规划、审查"],
-  ["wg_verify_candidate", "simulation_id", "VerificationReport", "规划、审查"],
-  [
-    "wg_create_perturbation",
-    "task_ref、candidate_id、parameters",
-    "扰动场景或越界错误",
-    "审查",
-  ],
-  [
-    "wg_compare_candidates",
-    "task_ref、candidate_ids",
-    "同口径指标与 Pareto 候选",
-    "规划、审查",
-  ],
-  [
-    "wg_build_evidence",
-    "run_id、selected_candidate_id?",
-    "证据包及准入结果",
-    "规划",
-  ],
-];
-const toolSpec = new Map(TOOLS.map((t) => [t[0], t]));
-const FLOW: [string, string][] = [
-  ["宿主", "API 建立运行记录并启动 AGH，后台负责生命周期与治理。"],
-  ["任务建模", "调用 wg_inspect_network，然后 wg_propose_task。"],
-  [
-    "网关",
-    "检查草案：输入完整且在授权内时冻结 TaskSpec；有实质歧义进入 NEEDS_INPUT，用户答复后恢复。",
-  ],
-  [
-    "方案规划",
-    "用 wg_submit_plan 提交故障基线的空动作方案，再调用 wg_simulate_candidate、wg_verify_candidate。",
-  ],
-  ["Agnes", "选择 wg_generate_candidates 的策略，或直接提出 ActionPlan。"],
-  ["AGH", "调用仿真和验证；工具返回指标、失败类型、最差节点/时段及产物引用。"],
-  ["Agnes", "根据反馈修改动作或策略，再发起下一轮；记录父候选和变更原因。"],
-  [
-    "反例审查",
-    "调用 wg_create_perturbation，再仿真和验证；规划者据此决定是否修正。",
-  ],
-  [
-    "Agnes",
-    "选择候选，调用 wg_build_evidence；后端校验准入条件，Agnes 引用证据形成结论。",
-  ],
-  ["宿主", "记录终止原因和结论范围：可行、未找到、预算结束、错误或取消。"],
-];
-const BOUNDS: [string, string, string][] = [
-  ["硬约束", "TaskSpec 只读、constraint_hash 校验", "TASK_REVISION_MISMATCH"],
-  ["动作", "设施目录、参数、时序和物理映射", "INVALID_ACTION"],
-  ["角色", "服务端能力矩阵", "PERMISSION_DENIED"],
-  ["结果", "原始产物复算、版本及完整性检查", "ARTIFACT_INVALID"],
-  ["资源", "派工前原子预留模型/仿真预算", "BUDGET_EXHAUSTED"],
-  ["数据", "结构化解析，内容不改变指令权限", "INPUT_INVALID"],
-  ["模型", "固定 Agnes 模型与提供商允许列表", "MODEL_NOT_ALLOWED"],
-  ["结论", "推荐准入与覆盖范围分离", "ELIGIBILITY_INCOMPLETE"],
-];
-const RECOVERY = [
-  `起始预算建议：最多 ${BUDGET.rounds} 轮修正、${BUDGET.simulations} 次仿真（含基线、失败尝试和扰动）、2 个并发计算进程。`,
-  "模型格式错误最多修复一次，仍失败则停止该阶段。",
-  "工具临时错误按声明重试；请求幂等，实际尝试计入资源消耗。",
-  "仿真不收敛属于计算无效，不计通过，也不证明无解。",
-  "预算结束返回最佳已验证候选和未完成项；没有候选则说明未找到。",
-  "审查失败保留名义验证，不标记复验完成。",
-  "取消同时传给 AGH 与计算进程；迟到结果归档，不覆盖取消状态。",
-];
-const PROBES = [
-  "核验赛事指定 AGH 的安装方式、版本、Agnes 模型标识、认证与一次模型调用",
-  "通过 AGH 调用最小网络检查工具，再接入小型真实水力仿真",
-  "在核心会话中连续完成检查、调用、反馈处理与验证，反馈重新进入 Agnes 上下文",
-  "验证原生子代理、上下文隔离，以及可信角色身份如何绑定工具权限",
-  "验证日志导出、工具标识、恢复与取消；缺原生调用标识时建立可核对的映射",
-  "核查实际模型、提供商、工具与扩展配置，覆盖后台总结、审查等模型调用",
-];
-const DESIGN_TABS = [
-  "角色与权限",
-  "工具契约",
-  "执行流程",
-  "边界与失败处理",
-  "接入进度",
-] as const;
-
-/* ---------------------------------------------------------------- 数据：人工样例的运行记录与事件流 */
-function useRun() {
-  const [w, setW] = useState<Workspace | null>(null);
-  const [events, setEvents] = useState<RunEvent[]>([]);
-  const [state, setState] = useState<
-    "loading" | "streaming" | "done" | "error"
-  >("loading");
-  useEffect(() => {
-    const c = new AbortController();
-    loadWorkspace("fixture", "", c.signal)
-      .then((x) => !c.signal.aborted && setW(x))
-      .catch(() => !c.signal.aborted && setState("error"));
-    return () => c.abort();
-  }, []);
-  useEffect(() => {
-    if (!w?.run) return;
-    setState("streaming");
-    const es = new EventSource(`${w.base}/api/runs/${w.run.run_id}/events`);
-    const onEvent = (e: MessageEvent) => {
-      try {
-        const ev = JSON.parse(e.data) as RunEvent;
-        if (ev.mode !== w.mode) throw new Error("mode");
-        setEvents((rows) =>
-          rows.some((r) => r.sequence === ev.sequence)
-            ? rows
-            : [...rows, ev].sort((a, b) => a.sequence - b.sequence),
-        );
-        if (ev.type === "run.completed") {
-          setState("done");
-          es.close();
-        }
-      } catch {
-        setState("error");
-        es.close();
-      }
-    };
-    for (const name of Object.keys(eventText))
-      es.addEventListener(name, onEvent as EventListener);
-    es.onerror = () => {
-      setState((s) => (s === "done" ? s : "error"));
-      es.close();
-    };
-    return () => es.close();
-  }, [w]);
-  return { w, events, state };
-}
-
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString("zh-CN", { hour12: false });
 
 /* ---------------------------------------------------------------- 页面 */
 export default function AgentPage({ inspect }: { inspect: Inspect }) {
-  const { w, events, state } = useRun();
+  const { w, events, logs, state, error, source, runs, runId, selectSource, selectRun, refreshRuns, reconnect } = useAgentRun();
   const run = w?.run ?? null;
   const byId = useMemo(
     () => new Map((w?.candidates ?? []).map((c) => [c.id, c])),
@@ -321,17 +141,37 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [panel, setPanel] = useState<"node" | "trace">("node");
   const [panelOpen, setPanelOpen] = useState(false);
-  const [tab, setTab] = useState<(typeof DESIGN_TABS)[number]>("角色与权限");
   const timer = useRef(0);
 
   const shown = step == null ? events : events.slice(0, step);
+  const agentLive = events.some((e) => e.origin === "agh" && !!e.native_tool_call_ref) || logs.some((l) => !!l.native_tool_call_ref);
+  const activeTool = [...logs].reverse().find((log) => log.event_type === "tool.started" || log.event_type === "tool.completed");
+  const activePhase = activeTool?.event_type === "tool.started" ? ({
+    wg_get_task: "freeze", wg_inspect_network: "start", wg_generate_candidates: "plan", wg_submit_plan: "plan",
+    wg_simulate_candidate: "sim", wg_verify_candidate: "verify", wg_build_evidence: "pack",
+  } as Record<string, string>)[activeTool.tool_name ?? ""] : ({
+    INTAKE: "start", MODELING: "model", BASELINE: "sim", PLANNING: "plan", SIMULATING: "sim",
+    VERIFYING: "verify", REVIEWING: "review", PACKAGING: "pack",
+  } as Record<string, string>)[run?.phase ?? ""];
+  const following = step == null && (run?.status === "RUNNING" || run?.status === "QUEUED");
   const flow = useMemo(
-    () => flowState(shown, run, byId, false),
-    [shown, run, byId],
+    () => {
+      const value = flowState(shown, run, byId, agentLive);
+      if (following && activePhase && value.nodes[activePhase]?.state !== "off") {
+        value.nodes[activePhase].state = "running"; value.current = activePhase;
+      }
+      return value;
+    },
+    [shown, run, byId, agentLive, following, activePhase],
   );
   const mind = useMemo(
-    () => mindState(shown, run, byId, false),
-    [shown, run, byId],
+    () => {
+      const value = mindState(shown, run, byId, agentLive);
+      const id = activePhase === "sim" || activePhase === "verify" ? "check" : activePhase;
+      if (following && id && value.nodes[id]?.state !== "off") { value.nodes[id].state = "running"; value.current = id; }
+      return value;
+    },
+    [shown, run, byId, agentLive, following, activePhase],
   );
   /** 一条事件在当前看法里落在哪个节点 */
   const nodeOf = (e: RunEvent) =>
@@ -371,23 +211,40 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
     setPlaying(false);
   };
   useEffect(() => () => clearInterval(timer.current), []);
+  useEffect(() => {
+    clearInterval(timer.current); setStep(null); setPlaying(false); setSelected(null); setPanelOpen(false);
+  }, [runId, source]);
 
   return (
     <div className="page-enter agent-page">
       <div className="section-intro">
         <h1>智能体</h1>
         <p>
-          一次爆管处置的工作流：三个角色由 Agnes
-          承担，仿真、验收和证据由工具完成；点节点看它做什么、能调用什么、这次运行交出了什么。
+          查看运行进度、工具调用、候选方案和验收结果。
         </p>
       </div>
 
+      <section className="agent-stream-controls" aria-label="运行连接">
+        <div className={`stream-indicator ${state}`} role="status"><i />{({ loading: "连接中", streaming: "已连接", reconnecting: "正在重连", done: "记录已同步", error: "连接异常", empty: "暂无运行" })[state]}</div>
+        <label>数据来源<select aria-label="工作流数据来源" value={source} onChange={(e) => selectSource(e.target.value as StreamSource)}>
+          <option value="runtime">任务运行服务</option><option value="fixture">人工样例回放</option>
+        </select></label>
+        {source === "runtime" && <label className="stream-run-select">运行<select aria-label="选择运行" value={runId} onChange={(e) => selectRun(e.target.value)}>
+          {!runs.length && <option value={runId}>{runId || "等待运行记录"}</option>}
+          {!!runs.length && !!runId && !runs.some((row) => row.run_id === runId) && <option value={runId}>指定运行 · {runId}</option>}
+          {runs.map((row) => <option key={row.run_id} value={row.run_id}>{modeText[row.mode]} · {runStatusText[row.status]} · {row.run_id}</option>)}
+        </select></label>}
+        <button className="button secondary" onClick={refreshRuns}>刷新运行</button>
+        <button className="button secondary" onClick={reconnect}>重新连接</button>
+        {source === "runtime" && <RunControls run={run} created={(value) => { selectRun(value.run_id); refreshRuns(); }} updated={reconnect} />}
+        {error && <p className="stream-error" role="alert">{error}</p>}
+      </section>
       <div className="notice agent-honesty" role="note">
         <Icon name="warning" size={18} />
         <p>
-          <b>AGH 尚未接入（同学 2 负责）。</b>
-          工作流里的运行记录是开发用的人工样例（Fixture），不是智能体的真实运行，网络和数值也是人工设定的；虚线框的三个角色节点因此显示「未接入」。接入后，同一张工作流显示真实运行（Replay
-          / Live）。
+          <b>{run ? `${modeText[run.mode]}运行。` : "请选择运行来源。"}</b>
+          {run?.mode === "fixture" ? "当前记录与数值为人工样例。" : run?.mode === "benchmark" ? "当前由固定工程脚本计算。" : "工作流按服务端实际事件更新。"}
+          {agentLive ? "已记录原生 AGH 调用。" : "本次运行无原生 AGH 调用记录。"}
         </p>
       </div>
 
@@ -395,9 +252,11 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
         <div className="error-state" role="alert">
           <h2>读不到运行记录</h2>
           <p>
-            样例服务（端口 8000）没有响应。启动后刷新；界面不会用虚构数据代替。
+            {error || "启动任务运行服务后重新连接，或选择人工样例回放。"}
           </p>
         </div>
+      ) : state === "empty" ? (
+        <div className="loading-state"><h2>暂无可订阅的运行</h2><p>点击“新建任务”开始运行。</p></div>
       ) : !w || !run ? (
         <div className="loading-state" role="status">
           <span className="loader" />
@@ -411,7 +270,7 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
                 <Icon name="agent" size={18} />
               </span>
               <div>
-                <b>爆管处置工作流</b>
+                <b>运行工作流</b>
                 <small>
                   运行 <span className="mono">{run.run_id}</span> ·{" "}
                   {modeText[run.mode] ?? run.mode} · 任务第{" "}
@@ -438,7 +297,7 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
               ))}
             </div>
             <div className="wf-status">
-              <span className={`wf-pill ${playing ? "running" : "done"}`}>
+              <span className={`wf-pill ${playing || following ? "running" : "done"}`}>
                 <i />
                 {playing
                   ? `回放中 ${step ?? 0}/${events.length}`
@@ -607,156 +466,11 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
         </section>
       )}
 
-      {/* 设计细节 */}
-      <section className="ag-design" aria-label="设计细节">
-        <header>
-          <h2>设计细节</h2>
-          <span>
-            出自 docs/Agent设计.md；工具名和接口是项目设计，接入后按实测锁定
-          </span>
-        </header>
-        <div className="ag-tabs" role="tablist">
-          {DESIGN_TABS.map((t) => (
-            <button
-              key={t}
-              role="tab"
-              aria-selected={tab === t}
-              className={tab === t ? "on" : ""}
-              onClick={() => setTab(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <div className="ag-tab-body" role="tabpanel">
-          {tab === "角色与权限" && (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>角色</th>
-                    <th>输入</th>
-                    <th>可作出的决定</th>
-                    <th>输出</th>
-                    <th>权限边界</th>
-                    <th>何时介入</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ROLES.map((r) => (
-                    <tr key={r.name}>
-                      <td>
-                        <b>{r.name}</b>
-                      </td>
-                      <td>{r.input}</td>
-                      <td>{r.decide}</td>
-                      <td className="mono">{r.output}</td>
-                      <td className="ag-bound">{r.bound}</td>
-                      <td>{r.when}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {tab === "工具契约" && (
-            <>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>工具</th>
-                      <th>主要参数</th>
-                      <th>结果</th>
-                      <th>可调用的角色</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TOOLS.map(([name, args, result, roles]) => (
-                      <tr key={name}>
-                        <td className="mono">{name}</td>
-                        <td className="mono">{args}</td>
-                        <td>{result}</td>
-                        <td>{roles}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="ag-note">
-                每个工具统一返回
-                status、code、data_ref、summary、violations、retryable、remaining_budget、correlation_id；大数组放在产物里，摘要能定位到节点与时段。真实角色身份由宿主和服务端凭证绑定，不信任模型自报。
-              </p>
-            </>
-          )}
-          {tab === "执行流程" && (
-            <>
-              <ol className="ag-flow">
-                {FLOW.map(([who, what], i) => (
-                  <li key={i}>
-                    <span className="ag-who">{who}</span>
-                    <p>{what}</p>
-                  </li>
-                ))}
-              </ol>
-              <p className="ag-note">
-                禁止一个工具包办任务解释、尝试、审查和报告；已经满足目标时可以提前结束，不为展示多轮而制造失败。
-              </p>
-            </>
-          )}
-          {tab === "边界与失败处理" && (
-            <div className="ag-two">
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>边界</th>
-                      <th>强制机制</th>
-                      <th>越界时返回</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {BOUNDS.map(([b, how, code]) => (
-                      <tr key={b}>
-                        <td>
-                          <b>{b}</b>
-                        </td>
-                        <td>{how}</td>
-                        <td className="mono">{code}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <ul className="ag-list">
-                {RECOVERY.map((r) => (
-                  <li key={r}>{r}</li>
-                ))}
-                <li>
-                  例：模型提议把最低压力从 20 m 降到 14
-                  m，网关拒绝；继续找合法方案，或生成独立的任务修订建议交给用户决定。
-                </li>
-              </ul>
-            </div>
-          )}
-          {tab === "接入进度" && (
-            <>
-              <ol className="ag-probes">
-                {PROBES.map((p) => (
-                  <li key={p}>
-                    <span className="badge pending">待实测</span>
-                    <p>{p}</p>
-                  </li>
-                ))}
-              </ol>
-              <p className="ag-note">
-                六项探针由同学 2 在 AGH
-                环境里实测并保存版本、配置和输出；原生子代理不可用时，降级为单会话的三个角色阶段并如实标记。状态目前一律「待实测」，前端没有它们的结果。
-              </p>
-            </>
-          )}
-        </div>
-      </section>
+      <AgentLogs logs={logs} runId={runId || "waterguard"} onInspect={inspect} onEvent={(sequence) => {
+        const event = events.find((event) => event.sequence === sequence);
+        if (event) { stop(); openNode(nodeOf(event)); }
+      }} />
+
     </div>
   );
 }
@@ -1124,61 +838,7 @@ function NodePanel({
           {stateText[info.state]}
         </span>
       </header>
-      {(node.tag || node.loop) && (
-        <dl className="wf-branch">
-          {node.tag && (
-            <div>
-              <dt>走到这里的条件</dt>
-              <dd>
-                <span className={`mm-tag ${node.tag.kind} on`}>
-                  {node.tag.kind}
-                </span>
-                {node.tag.text}
-              </dd>
-            </div>
-          )}
-          {node.loop && (
-            <div>
-              <dt>之后</dt>
-              <dd>↺ {node.loop}</dd>
-            </div>
-          )}
-        </dl>
-      )}
       {info.note && <p className="wf-note">{info.note}</p>}
-      <p className="wf-does">{node.does}</p>
-      {node.bound && (
-        <p className="wf-bound">
-          <Icon name="shield" size={14} />
-          不能做：{node.bound}
-        </p>
-      )}
-      {node.tools && (
-        <div className="wf-tools">
-          <h4>可调用的工具</h4>
-          <ul>
-            {node.tools.map((t) => {
-              const spec = toolSpec.get(t);
-              return (
-                <li key={t}>
-                  <code>{t}</code>
-                  {spec && (
-                    <span>
-                      参数 {spec[1]} → {spec[2]}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-      {node.agent && (
-        <p className="wf-agent-off">
-          这个角色由 Agnes 承担。AGH
-          接入前没有它的真实调用记录，这里不显示、也不补造。
-        </p>
-      )}
       {node.id === "end" && (
         <dl className="ag-kv">
           <div>
@@ -1283,7 +943,7 @@ function EventDetail({
           </dl>
         </>
       )}
-      {e.type === "simulation.completed" && c && (
+      {e.type === "simulation.completed" && c && c.verification && (
         <>
           <p className="ag-flag">{engineStatus(c).text}</p>
           <dl className="ag-kv">
@@ -1310,7 +970,7 @@ function EventDetail({
           </dl>
         </>
       )}
-      {e.type === "verification.completed" && c && (
+      {e.type === "verification.completed" && c && c.verification && (
         <>
           <Gates c={c} />
           {c.verification.violations.length > 0 && (
@@ -1334,7 +994,7 @@ function EventDetail({
           {c.verification.recommendation_blockers.length > 0 && (
             <p className="wf-line muted">
               不能推荐的原因：
-              {c.verification.recommendation_blockers.join("、")}
+              {c.verification.recommendation_blockers.map((reason) => recommendationBlockerText[reason] ?? reason).join("、")}
             </p>
           )}
         </>
@@ -1353,11 +1013,9 @@ function EventDetail({
           )}
         </dl>
       )}
-      <p className="wf-ids">
-        原生调用号：
-        {e.native_tool_call_ref ??
-          `无（${e.native_reference_missing_reason ?? "未说明原因"}）`}
-      </p>
+      {e.native_tool_call_ref && (
+        <p className="wf-ids">原生调用号：{e.native_tool_call_ref}</p>
+      )}
       <button
         className="ag-raw"
         onClick={() => inspect(`事件 ${e.sequence} 原文`, e)}
@@ -1370,10 +1028,12 @@ function EventDetail({
 }
 
 function Gates({ c }: { c: Candidate }) {
+  const verification = c.verification;
+  if (!verification) return <p className="wf-line muted">尚未取得验证报告。</p>;
   return (
     <ol className="ag-gates" aria-label="五层准入">
       {gates.map(([key, label]) => {
-        const st = c.verification.admission[key];
+        const st = verification.admission[key];
         return (
           <li key={key} className={st}>
             <span>{st === "pass" ? "✓" : st === "fail" ? "✕" : "…"}</span>

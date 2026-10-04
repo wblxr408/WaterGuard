@@ -51,11 +51,13 @@ class WorkbenchTests(unittest.TestCase):
             time.sleep(.05)
         self.fail("Benchmark did not finish within 45 seconds")
 
-    def test_same_origin_page_network_and_server_frozen_task(self):
-        page = self.client.get("/")
-        self.assertEqual(page.status_code, 200)
-        self.assertIn('/assets/workbench.js', page.text)
-        self.assertEqual(self.client.get('/assets/workbench.js').status_code, 200)
+    def test_single_frontend_redirect_network_and_server_frozen_task(self):
+        page = self.client.get("/?run=run-existing", follow_redirects=False)
+        self.assertEqual(page.status_code, 307)
+        self.assertEqual(page.headers['location'], 'http://127.0.0.1:5173/?run=run-existing')
+        self.assertEqual(self.client.get('/assets/workbench.js').status_code, 404)
+        self.assertEqual(self.client.get('/assets/workbench.css').status_code, 404)
+        self.assertEqual(self.client.get('/healthz').status_code, 200)
         details = self.client.get('/api/networks/epa-net1').json()
         self.assertEqual(len(details['scene']['nodes']), 11)
         self.assertIn('12', details['fault_link_ids'])

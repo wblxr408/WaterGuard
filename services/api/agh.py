@@ -112,6 +112,7 @@ class LiveExecutor:
                     run = self.store.bind_agh(run_id, row['session_id'], row['model'])
                     process.stdin.write(json.dumps({'bound_session_id': row['session_id']}) + '\n')
                     process.stdin.close()
+                    self.store.log(run_id, 'AGH 原生会话已绑定冻结任务', event_type='session.bound')
                 elif row['kind'] == 'event':
                     index += 1
                     event = row['event']
@@ -120,12 +121,32 @@ class LiveExecutor:
                     native_ref = f"agh:{run['agh_session_ref']}:tool:{native_id}" if native_id else None
                     if event['type'] == 'tool/call':
                         calls[native_id] = event['data'].get('name')
+                    tool_name = calls.get(native_id)
+                    if tool_name and tool_name.startswith('wg_') and event['type'] in {'tool/call', 'tool/result'}:
+                        failed = bool(event['data'].get('isError'))
+                        self.store.log(run_id, f"{'开始调用' if event['type'] == 'tool/call' else '调用返回'} {tool_name}",
+                                       level='ERROR' if failed else 'INFO', tool_name=tool_name,
+                                       event_type='tool.started' if event['type'] == 'tool/call' else 'tool.completed',
+                                       native_tool_call_ref=native_ref)
                     event_type = {'wg_submit_plan': 'candidate.submitted', 'wg_simulate_candidate': 'simulation.completed',
                                   'wg_verify_candidate': 'verification.completed'}.get(calls.get(native_id))
                     # Other raw native events stay in the projection files, without invented business labels.
                     if event['type'] == 'tool/result' and not event['data'].get('isError') and event_type:
+                        structured = event['data'].get('structured')
+                        candidate_id = simulation_id = None
+                        if tool_name == 'wg_submit_plan' and isinstance(structured, dict) and structured.get('run_id'):
+                            plans = self.store.list_candidates(structured['run_id'])
+                            candidate_id = plans[0]['candidate_id'] if plans else None
+                        elif tool_name == 'wg_simulate_candidate' and isinstance(structured, dict):
+                            results = structured.get('results') or []
+                            if results:
+                                candidate_id = results[0]['plan']['candidate_id']
+                                simulation_id = (results[0].get('artifact') or {}).get('simulation_id')
+                        elif tool_name == 'wg_verify_candidate' and isinstance(structured, list) and structured:
+                            candidate_id, simulation_id = structured[0]['candidate_id'], structured[0]['simulation_id']
                         self.store.emit(self.store.get_run(run_id), 'agh', event_type, ref,
-                                        correlation_id=str(event['id']), native_tool_call_ref=native_ref)
+                                        correlation_id=str(event['id']), native_tool_call_ref=native_ref,
+                                        candidate_id=candidate_id, simulation_id=simulation_id)
                 elif row['kind'] == 'completed':
                     outcome = row
             if process.wait(timeout=10) != 0 and not cancel.is_set():

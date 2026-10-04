@@ -221,7 +221,7 @@ class Acceptance:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8010")
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts" / "api-acceptance")
     args = parser.parse_args()
     acceptance = Acceptance(args.base_url, args.output)

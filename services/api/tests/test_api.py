@@ -24,9 +24,11 @@ class ApiTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(dir=sandbox_temp)
         root = Path(self.temp.name)
         self.client = TestClient(create_app(RunStore(root / "state.sqlite3", root / "artifacts")))
+        self.client.__enter__()
         self.task = load(FIXTURES / "task.json")
 
     def tearDown(self):
+        self.client.__exit__(None, None, None)
         self.temp.cleanup()
 
     def test_task_fixture_run_events_and_idempotent_cancel(self):

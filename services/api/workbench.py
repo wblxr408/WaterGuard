@@ -283,7 +283,7 @@ class BenchmarkExecutor:
 
 def run_results(store: RunStore, run_id: str) -> list[dict]:
     root = store._run_directory(run_id)
-    results = []
+    results = [row for child in store.live_children(run_id) for row in run_results(store, child['run_id'])]
     for plan in store.list_candidates(run_id):
         folder = root / "candidates" / plan["candidate_id"]
         result = store._read_json(folder / "result.json") if (folder / "result.json").is_file() else None
@@ -295,4 +295,4 @@ def run_results(store: RunStore, run_id: str) -> list[dict]:
         results.append(dict(plan=plan, artifact=result["artifact"] if result else None,
                             diagnostics=result["diagnostics"] if result else None, verification=report,
                             replay_comparison=store._read_json(folder / "replay-comparison.json") if (folder / "replay-comparison.json").is_file() else None))
-    return results
+    return list({row['plan']['candidate_id']: row for row in results}.values())

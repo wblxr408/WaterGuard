@@ -9,6 +9,7 @@ import {
   eventText,
   gates,
   num,
+  recommendationBlockerText,
   runStatusText,
   statusText,
   time,
@@ -317,7 +318,7 @@ export function Compare({
           </strong>
           <p>
             {selected.verification.recommendation_blockers.length
-              ? selected.verification.recommendation_blockers.join(" · ")
+              ? selected.verification.recommendation_blockers.map((reason) => recommendationBlockerText[reason] ?? reason).join(" · ")
               : "请查看五层准入与原始验收报告。"}
           </p>
         </div>
@@ -362,10 +363,6 @@ export function Modeling({
             均为团队自建的 Blender 模型
           </p>
         </div>
-        <span className="badge neutral">
-          <Icon name="cube" size={14} />
-          模型展示预留
-        </span>
       </div>
       <div className="model-grid">
         {modelAssets.map((asset) => (
@@ -377,25 +374,6 @@ export function Modeling({
         <p>
           以上为 Blender 自建模型的渲染图，可下载 GLB 模型；爆管喷水与剖切为示意表达。模型几何只用于展示，不参与水力验收。
         </p>
-        <button
-          className="text-button"
-          onClick={() =>
-            inspect("Blender 模型接入约定", {
-              资产目录: "apps/web-gpt/public/models",
-              配置入口: "apps/web-gpt/src/model-assets.ts",
-              预览图: "previewUrl：Blender 实际渲染图路径",
-              源文件: "sourceUrl：.blend / .glb 下载路径",
-              作者: "author：建模作者",
-              "实时 GLB":
-                "可替换 ModelDemo.tsx 的 SVG 区域；当前不包含 GLB 解析器",
-              实体关联:
-                "例如设备 pump_10 对应水力泵 10；几何尺寸不替代水力参数",
-            })
-          }
-        >
-          接入说明
-          <Icon name="arrow" size={15} />
-        </button>
       </div>
       <section className="model-context">
         <div>
@@ -673,8 +651,7 @@ export function Evidence({
       <div className="notice">
         <Icon name="help" size={18} />
         <p>
-          当前服务仅开放部分结构化结果。下表保留完整文件索引；灰色项可查看哈希，原始文件下载待后端开放。JSON
-          导出是接口读取副本，不能用来逐字节核对原始文件哈希。
+          可读取的结果支持导出 JSON 副本；文件哈希对应原始产物。
         </p>
       </div>
       <div className="evidence-toolbar">
@@ -728,7 +705,6 @@ export function Evidence({
                         inspect(`${a.ref} · 服务端原始字节哈希`, {
                           ref: a.ref,
                           sha256: a.sha256,
-                          note: "哈希证明一致性，不证明现场校准或物理真实性。JSON 接口副本的格式可能与原始字节不同。",
                         })
                       }
                     >

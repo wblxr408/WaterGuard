@@ -14,6 +14,12 @@ import type {
 } from "@waterguard/contracts";
 
 export type Source = "pair" | "bench" | "fixture";
+export const recommendationBlockerText: Record<string, string> = {
+  benchmark_only: "仅有固定脚本计算结果",
+  fixture_only: "仅有人工样例结果",
+  native_agh_trace_missing: "缺少原生 AGH 记录",
+  required_stress_tests_pending: "扰动复验未完成",
+};
 export const sources = {
   pair: { base: "/ab", label: "真实 A/B 对照", port: 8002, mode: "benchmark" },
   bench: { base: "/bm", label: "真实场景库", port: 8001, mode: "benchmark" },
@@ -229,7 +235,7 @@ export async function loadWorkspace(
  * 计算状态说明：只有引擎报告成功且收敛才写「已收敛」；converged 为 null 表示未测收敛，
  * 不能展示成收敛（契约 README）。Fixture 没有 SimulationResult，是人工样例。
  */
-export function engineStatus(c: Candidate): {
+export function engineStatus(c: { result: Pick<SimulationResult, "artifact" | "diagnostics"> | null }): {
   text: string;
   tone: "ok" | "warn" | "neutral";
 } {

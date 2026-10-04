@@ -91,7 +91,6 @@ function JsonDialog({
       </header>
       <pre>{JSON.stringify(item.data, null, 2)}</pre>
       <footer>
-        <span>接口原始字段 · 不修改服务端数据</span>
         <button
           className="button secondary"
           onClick={() => download("waterguard-api-copy.json", item.data)}
@@ -722,7 +721,7 @@ function Overview({
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>("cover");
+  const [page, setPage] = useState<Page>(() => new URLSearchParams(window.location.search).has("run") ? "agent" : "cover");
   const [source, setSource] = useState<Source>("pair");
   const [selection, setSelection] = useState("");
   const [w, setW] = useState<Workspace | null>(null);
@@ -735,6 +734,7 @@ export default function App() {
     null,
   );
   const [focus, setFocus] = useState(false);
+  const loadHydraulics = page !== "agent";
   const inspect = (title: string, data: unknown) => setDialog({ title, data });
   const navRef = useRef<HTMLElement>(null);
   // 导航指示条滑到当前页按钮下方；窗口或字体变化时重新定位。
@@ -756,6 +756,7 @@ export default function App() {
     return () => ro.disconnect();
   }, [page]);
   useEffect(() => {
+    if (!loadHydraulics) return;
     const controller = new AbortController();
     setW(null);
     setError("");
@@ -784,7 +785,7 @@ export default function App() {
           setError(e instanceof Error ? e.message : "数据读取失败");
       });
     return () => controller.abort();
-  }, [source, selection, retry]);
+  }, [source, selection, retry, loadHydraulics]);
   const c =
     w?.candidates.find((x) => x.id === candidateId) ?? w?.candidates.at(-1);
   const openPage = (p: Page) => {
@@ -849,35 +850,21 @@ export default function App() {
             ))}
             <span className="nav-indicator" aria-hidden="true" />
           </nav>
-          <div className="global-header-end">
-            <button
-              className="icon-button guide-button"
-              aria-label="演示与数据说明"
-              onClick={() =>
-                inspect("演示与数据说明", {
-                  建议演示路径: [
-                    "工作台：定位故障、切换 A/B、检查时间轴",
-                    "方案对照：改善与工程准入分别呈现",
-                    "建模与仿真：Blender 自建设备模型渲染与管道剖面交互示意",
-                    "证据中心：原始验收、物理检查与文件哈希",
-                  ],
-                  Benchmark: "固定脚本驱动的真实水力计算，不是 AI 决策。",
-                  Fixture: "人工开发样例，不证明真实水力行为。",
-                  AGH: "尚未接入 Live / Replay 实时作业。",
-                  坐标: "示意布局，不代表实际位置与距离。",
-                  只读服务: "不创建、修改、执行或取消计算。",
-                })
-              }
-            >
-              <Icon name="help" size={19} />
-            </button>
-          </div>
         </div>
       </header>
       {page === "cover" ? (
         <main id="main-content" className="cover-main">
           <Cover w={w} openPage={openPage} />
         </main>
+      ) : page === "agent" ? (
+        <div className="app-main">
+          <header className="topbar">
+            <div className="data-mode-note"><Icon name="agent" size={14} />智能体工作流与运行日志</div>
+            <button className="icon-button" title="切换专注展示" aria-label="切换专注展示"
+              aria-pressed={focus} onClick={() => setFocus(!focus)}><Icon name="expand" size={18} /></button>
+          </header>
+          <main id="main-content"><AgentPage inspect={inspect} /></main>
+        </div>
       ) : (
         <div className="app-main">
           <header className="topbar">
@@ -888,11 +875,6 @@ export default function App() {
                 : w
                   ? "Benchmark · 固定脚本驱动的真实计算，非 AI 实时决策"
                   : "正在核验数据来源与运行模式"}
-              <span>
-                {w
-                  ? "只读结果浏览 · AGH 未接入，执行来源待核验"
-                  : `接口端口 ${sources[source].port}`}
-              </span>
             </div>
             <div className="topbar-actions">
               <label className="source-select">
@@ -983,7 +965,7 @@ export default function App() {
               </div>
             ) : (
               <>
-                {page !== "overview" && page !== "agent" && (
+                {page !== "overview" && (
                   <div className="page-candidate-select">
                     <label>
                       当前结果
@@ -1025,7 +1007,6 @@ export default function App() {
                     inspect={inspect}
                   />
                 )}
-                {page === "agent" && <AgentPage inspect={inspect} />}
                 {page === "model" && <Modeling w={w} c={c} inspect={inspect} />}
                 {page === "evidence" && (
                   <Evidence w={w} c={c} inspect={inspect} />
@@ -1033,8 +1014,7 @@ export default function App() {
                 <footer className="app-footer">
                   <span>WaterGuard / 水脉卫士</span>
                   <span>
-                    {w.scene.network_id.toUpperCase()} · 契约{" "}
-                    {c.task.schema_version} · {w.mode.toUpperCase()}
+                    {w.scene.network_id.toUpperCase()} · {w.mode.toUpperCase()}
                   </span>
                   <span>所有推荐结论来自验收接口</span>
                 </footer>
