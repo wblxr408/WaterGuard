@@ -1,7 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import type { RunEvent } from "@waterguard/contracts";
-import { PHASES, missingText } from "./AgentRun";
+import { missingText } from "./AgentRun";
+import {
+  EDGES,
+  LAYOUT,
+  NODES,
+  STAGE_H,
+  STAGE_W,
+  edgeKey,
+  flowState,
+  nodeOfEvent,
+  nodeXY,
+} from "./agent-flow";
+import type { FlowNode, NodeKind, NodeState } from "./agent-flow";
 import type { Candidate, Workspace } from "./data";
 import {
   actionText,
@@ -18,13 +30,12 @@ import {
 import Icon from "./Icon";
 import "./agent-page.css";
 
-/* 智能体页面（详细版）：
-   1. 运行概况：运行记录（RunRecord）的模式、状态、阶段、预算、结论、缺失项；
-   2. 运行轨迹：运行事件（RunEvent）逐条展开——谁做的、提交了什么方案、仿真和验收结果、原生调用号；
-   3. 方案谱系：候选方案的父子关系、提出者与修改理由；
-   4. 设计细节：角色与权限、工具契约、执行流程、边界与失败处理、接入进度（出自 docs/Agent设计.md 第 3–8、11 节）。
-   AGH 未接入前，唯一的运行记录是开发用的人工样例（Fixture），页面顶部和每条事件都如实标注；
-   接入后改读 Replay / Live 运行，结构不变。不补造任何调用、失败或数值。 */
+/* 智能体页面：Dify 式工作流画布。
+   - 画布：开始 → 任务建模 → 冻结任务 → 方案规划 → 水力仿真 → 独立验收 → 达标？（否：回到方案规划）
+     → 反例审查 → 打包证据 → 结束。节点按类型着色；由 Agnes 承担的三个角色在 AGH 未接入时显示为虚线框。
+   - 回放：按运行事件逐条点亮节点和连线；点节点，右侧面板显示它做什么、能调用的工具、权限边界和本次运行的数据。
+   - 下方保留设计细节（角色与权限、工具契约、执行流程、边界与失败处理、接入进度，出自 docs/Agent设计.md）。
+   AGH 未接入前，唯一的运行记录是开发用的人工样例（Fixture），页面如实标注；不补造任何调用、失败或数值。 */
 
 type Inspect = (title: string, data: unknown) => void;
 
@@ -47,6 +58,30 @@ const modeText: Record<string, string> = {
   benchmark: "固定脚本",
   replay: "回放",
   live: "实时",
+};
+const kindText: Record<NodeKind, string> = {
+  start: "开始",
+  llm: "智能体角色",
+  gateway: "网关",
+  tool: "工具",
+  condition: "条件",
+  end: "结束",
+};
+const kindIcon: Record<NodeKind, string> = {
+  start: "play",
+  llm: "agent",
+  gateway: "shield",
+  tool: "cube",
+  condition: "compare",
+  end: "check",
+};
+const stateText: Record<NodeState, string> = {
+  idle: "未执行",
+  running: "进行中",
+  ok: "完成",
+  fail: "未通过",
+  wait: "待完成",
+  off: "未接入",
 };
 /** 建议预算（docs/Agent设计.md 第 8 节；实测后确定，不是性能承诺） */
 const BUDGET = { simulations: 40, rounds: 4 };
@@ -120,6 +155,7 @@ const TOOLS: [string, string, string, string][] = [
     "规划",
   ],
 ];
+const toolSpec = new Map(TOOLS.map((t) => [t[0], t]));
 const FLOW: [string, string][] = [
   ["宿主", "API 建立运行记录并启动 AGH，后台负责生命周期与治理。"],
   ["任务建模", "调用 wg_inspect_network，然后 wg_propose_task。"],
@@ -237,35 +273,51 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
     () => new Map((w?.candidates ?? []).map((c) => [c.id, c])),
     [w],
   );
-  const [open, setOpen] = useState<number | null>(null);
-  const [shown, setShown] = useState<number | null>(null); // 逐步回放时已显示的条数；null 为全部
+  const [step, setStep] = useState<number | null>(null); // 回放时已发生的事件数；null 为全部
+  const [playing, setPlaying] = useState(false);
+  const [selected, setSelected] = useState<string>("plan");
+  const [panel, setPanel] = useState<"node" | "trace">("node");
   const [tab, setTab] = useState<(typeof DESIGN_TABS)[number]>("角色与权限");
   const timer = useRef(0);
 
-  // 逐步回放：每 0.9 秒多显示一条并展开它，放完恢复全部显示
+  const shown = step == null ? events : events.slice(0, step);
+  const flow = useMemo(
+    () => flowState(shown, run, byId, false),
+    [shown, run, byId],
+  );
+
+  // 回放：每 1.1 秒发生一条事件，点亮对应节点，并把右侧面板切到这个节点
   const replay = () => {
     clearInterval(timer.current);
     let n = 0;
-    setOpen(null);
-    setShown(0);
+    setStep(0);
+    setPlaying(true);
+    setSelected("start");
     timer.current = window.setInterval(() => {
       n += 1;
-      setShown(n >= events.length ? null : n);
-      setOpen(events[n - 1]?.sequence ?? null);
-      if (n >= events.length) clearInterval(timer.current);
-    }, 900);
+      const e = events[n - 1];
+      if (e) setSelected(nodeOfEvent[e.type]);
+      if (n >= events.length) {
+        clearInterval(timer.current);
+        setStep(null);
+        setPlaying(false);
+      } else setStep(n);
+    }, 1100);
+  };
+  const stop = () => {
+    clearInterval(timer.current);
+    setStep(null);
+    setPlaying(false);
   };
   useEffect(() => () => clearInterval(timer.current), []);
-  const visible = shown == null ? events : events.slice(0, shown);
-  const phaseAt = run ? PHASES.findIndex(([p]) => p === run.phase) : -1;
 
   return (
     <div className="page-enter agent-page">
       <div className="section-intro">
         <h1>智能体</h1>
         <p>
-          三个角色在 AGH
-          里调用工具处理一次爆管；每一步谁做的、交了什么、结果如何，都记在运行记录里。
+          一次爆管处置的工作流：三个角色由 Agnes
+          承担，仿真、验收和证据由工具完成；点节点看它做什么、能调用什么、这次运行交出了什么。
         </p>
       </div>
 
@@ -273,8 +325,8 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
         <Icon name="warning" size={18} />
         <p>
           <b>AGH 尚未接入（同学 2 负责）。</b>
-          下面的运行记录是开发用的人工样例（Fixture），不是智能体的真实运行，网络和数值也是人工设定的；
-          接入后，同一位置显示真实运行（Replay / Live），页面结构不变。
+          工作流里的运行记录是开发用的人工样例（Fixture），不是智能体的真实运行，网络和数值也是人工设定的；虚线框的三个角色节点因此显示「未接入」。接入后，同一张工作流显示真实运行（Replay
+          / Live）。
         </p>
       </div>
 
@@ -291,188 +343,156 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
           <h2>正在读取运行记录</h2>
         </div>
       ) : (
-        <>
-          {/* 1. 运行概况 */}
-          <section className="ag-run" aria-label="运行概况">
-            <div className="ag-run-head">
+        <section className="wf" aria-label="智能体工作流">
+          <header className="wf-bar">
+            <div className="wf-title">
+              <span className="wf-app">
+                <Icon name="agent" size={18} />
+              </span>
               <div>
-                <span className="ag-label">运行</span>
-                <b className="mono">{run.run_id}</b>
+                <b>爆管处置工作流</b>
+                <small>
+                  运行 <span className="mono">{run.run_id}</span> ·{" "}
+                  {modeText[run.mode] ?? run.mode} · 任务第{" "}
+                  {run.task_ref.revision} 版
+                </small>
               </div>
-              <span className="badge pending">
-                {modeText[run.mode] ?? run.mode}
-              </span>
-              <span className="ag-meta">
-                任务 <span className="mono">{run.task_ref.task_id}</span> · 第{" "}
-                {run.task_ref.revision} 版
-              </span>
             </div>
-            <ol className="ag-phases" aria-label="运行阶段">
-              {PHASES.map(([p, label], i) => (
-                <li
-                  key={p}
-                  className={i < phaseAt ? "done" : i === phaseAt ? "now" : ""}
+            <div className="wf-status">
+              <span className={`wf-pill ${playing ? "running" : "done"}`}>
+                <i />
+                {playing
+                  ? `回放中 ${step ?? 0}/${events.length}`
+                  : `${runStatusText[run.status] ?? run.status} · ${conclusionText[run.conclusion] ?? run.conclusion}`}
+              </span>
+              <span className="wf-meta">
+                仿真 {run.budget_usage.simulations} 次 · 模型调用{" "}
+                {run.budget_usage.model_calls ?? "—"} · 修改 {flow.loops} 轮
+              </span>
+              {playing ? (
+                <button className="button secondary" onClick={stop}>
+                  <Icon name="pause" size={15} />
+                  停止
+                </button>
+              ) : (
+                <button
+                  className="button primary"
+                  onClick={replay}
+                  disabled={!events.length}
                 >
-                  <i />
-                  <span>{label}</span>
-                </li>
-              ))}
-            </ol>
-            <dl className="ag-facts">
-              <div>
-                <dt>状态</dt>
-                <dd>{runStatusText[run.status] ?? run.status}</dd>
-              </div>
-              <div>
-                <dt>结论</dt>
-                <dd>{conclusionText[run.conclusion] ?? run.conclusion}</dd>
-              </div>
-              <div>
-                <dt>选定方案</dt>
-                <dd>{run.selected_candidate_id ?? "未选定"}</dd>
-              </div>
-              <div>
-                <dt>仿真次数</dt>
-                <dd>
-                  {run.budget_usage.simulations}
-                  <small> / 建议上限 {BUDGET.simulations}</small>
-                </dd>
-              </div>
-              <div>
-                <dt>模型调用</dt>
-                <dd>{run.budget_usage.model_calls ?? "—（未接入）"}</dd>
-              </div>
-              <div>
-                <dt>耗时</dt>
-                <dd>{num(run.budget_usage.wall_time_s, 0)} s</dd>
-              </div>
-              <div>
-                <dt>AGH 会话</dt>
-                <dd>{run.agh_session_ref ?? "未接入"}</dd>
-              </div>
-              <div>
-                <dt>模型配置</dt>
-                <dd>{run.model_config_ref ?? "未配置"}</dd>
-              </div>
-            </dl>
-            {run.missing_items.length > 0 && (
-              <p className="ag-missing">
-                <Icon name="warning" size={15} />
-                还缺：
-                {run.missing_items.map((m) => missingText[m] ?? m).join("、")}
-              </p>
-            )}
-          </section>
+                  <Icon name="play" size={15} />
+                  回放运行
+                </button>
+              )}
+            </div>
+          </header>
 
-          <div className="ag-grid">
-            {/* 2. 运行轨迹 */}
-            <section className="ag-trace" aria-label="运行轨迹">
-              <header>
-                <div>
-                  <h2>运行轨迹</h2>
-                  <span>
-                    {events.length} 个事件 ·{" "}
-                    {state === "done"
-                      ? "已读完"
-                      : state === "error"
-                        ? "事件流中断"
-                        : "读取中"}
-                  </span>
-                </div>
-                <div className="ag-trace-actions">
-                  <button
-                    className="button secondary"
-                    onClick={replay}
-                    disabled={!events.length}
-                  >
-                    <Icon name="play" size={15} />
-                    逐步回放
-                  </button>
-                  <button
-                    className="button secondary"
-                    onClick={() => {
-                      clearInterval(timer.current);
-                      setShown(null);
-                    }}
-                    disabled={shown == null}
-                  >
-                    全部显示
-                  </button>
-                </div>
-              </header>
-              <ol className="ag-events">
-                {visible.map((e, i) => (
-                  <EventRow
-                    key={e.sequence}
-                    e={e}
-                    i={i}
-                    c={e.candidate_id ? byId.get(e.candidate_id) : undefined}
-                    w={w}
-                    open={open === e.sequence}
-                    onToggle={() =>
-                      setOpen(open === e.sequence ? null : e.sequence)
-                    }
-                    inspect={inspect}
-                  />
-                ))}
-              </ol>
-            </section>
-
-            {/* 3. 方案谱系 */}
-            <aside className="ag-lineage" aria-label="方案谱系">
-              <h2>方案谱系</h2>
-              <p className="ag-sub">每个方案的提出者、父方案和修改理由</p>
-              <ol>
-                {w.candidates.map((c, i) => (
-                  <li key={c.id}>
-                    {i > 0 && (
-                      <p className="ag-edge">
-                        <Icon name="down" size={15} />
-                        {c.plan.reason || "（未写理由）"}
-                      </p>
-                    )}
-                    <article>
-                      <header>
-                        <b>{c.name}</b>
-                        <span className="mono">{c.id}</span>
-                      </header>
-                      <dl>
-                        <div>
-                          <dt>提出者</dt>
-                          <dd>{sourceText[c.plan.source] ?? c.plan.source}</dd>
-                        </div>
-                        <div>
-                          <dt>父方案</dt>
-                          <dd className="mono">
-                            {c.plan.parent_candidate_id ?? "—"}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>缺水</dt>
-                          <dd>{num(c.verification.metrics.shortage_m3)} m³</dd>
-                        </div>
-                        <div>
-                          <dt>最低压力</dt>
-                          <dd>
-                            {num(c.verification.metrics.min_pressure_m)} m
-                          </dd>
-                        </div>
-                      </dl>
-                      <Gates c={c} />
-                    </article>
+          <div className="wf-body">
+            <FlowCanvas
+              flow={flow}
+              selected={selected}
+              onSelect={(id) => {
+                setSelected(id);
+                setPanel("node");
+              }}
+            />
+            {/* 窄屏：画布太小，按流程顺序竖排节点 */}
+            <ol className="wf-list" aria-label="工作流节点">
+              {NODES.map((n) => {
+                const info = flow.nodes[n.id];
+                return (
+                  <li key={n.id}>
+                    <button
+                      className={`wf-li ${n.kind} ${info.state} ${selected === n.id ? "sel" : ""} ${n.agent ? "agent" : ""}`}
+                      onClick={() => {
+                        setSelected(n.id);
+                        setPanel("node");
+                      }}
+                    >
+                      <span className={`wf-icon ${n.kind}`}>
+                        <Icon name={kindIcon[n.kind]} size={15} />
+                      </span>
+                      <span className="wf-text">
+                        <b>{n.title}</b>
+                        <small>{n.sub}</small>
+                      </span>
+                      <span className={`wf-badge ${info.state}`}>
+                        {stateText[info.state]}
+                        {info.count > 1 ? ` ×${info.count}` : ""}
+                      </span>
+                    </button>
                   </li>
-                ))}
-              </ol>
-              <p className="ag-note">
-                真实管网（Net3）的 A/B
-                方案在「方案对照」页；那两份是工程预设，不是智能体提出的。
-              </p>
+                );
+              })}
+            </ol>
+            <aside className="wf-panel" aria-label="详情">
+              <div className="wf-panel-tabs" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={panel === "node"}
+                  className={panel === "node" ? "on" : ""}
+                  onClick={() => setPanel("node")}
+                >
+                  节点详情
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={panel === "trace"}
+                  className={panel === "trace" ? "on" : ""}
+                  onClick={() => setPanel("trace")}
+                >
+                  追踪 · {shown.length}
+                </button>
+              </div>
+              {panel === "node" ? (
+                <NodePanel
+                  node={NODES.find((n) => n.id === selected)!}
+                  info={flow.nodes[selected]}
+                  events={shown.filter((e) => nodeOfEvent[e.type] === selected)}
+                  w={w}
+                  byId={byId}
+                  inspect={inspect}
+                />
+              ) : (
+                <ol className="wf-trace">
+                  {shown.map((e) => (
+                    <li key={e.sequence} className={e.origin}>
+                      <button
+                        onClick={() => {
+                          setSelected(nodeOfEvent[e.type]);
+                          setPanel("node");
+                        }}
+                      >
+                        <span className="seq">
+                          {String(e.sequence).padStart(2, "0")}
+                        </span>
+                        <span className="what">
+                          <b>{eventText[e.type] ?? e.type}</b>
+                          <small>
+                            {originText[e.origin] ?? e.origin}
+                            {e.candidate_id ? ` · ${e.candidate_id}` : ""}
+                          </small>
+                        </span>
+                        <time>{clock(e.occurred_at)}</time>
+                      </button>
+                    </li>
+                  ))}
+                  {!shown.length && <li className="empty">还没有事件</li>}
+                </ol>
+              )}
             </aside>
           </div>
-        </>
+          {run.missing_items.length > 0 && (
+            <p className="wf-missing">
+              <Icon name="warning" size={15} />
+              这次运行还缺：
+              {run.missing_items.map((m) => missingText[m] ?? m).join("、")}
+            </p>
+          )}
+        </section>
       )}
 
-      {/* 4. 设计细节 */}
+      {/* 设计细节 */}
       <section className="ag-design" aria-label="设计细节">
         <header>
           <h2>设计细节</h2>
@@ -626,219 +646,467 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
   );
 }
 
-/* ---------------------------------------------------------------- 一条事件 */
-function EventRow({
-  e,
-  i,
-  c,
+/* ---------------------------------------------------------------- 画布：节点、连线、平移缩放 */
+function FlowCanvas({
+  flow,
+  selected,
+  onSelect,
+}: {
+  flow: ReturnType<typeof flowState>;
+  selected: string;
+  onSelect: (id: string) => void;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState({ x: 0, y: 0, k: 1 });
+  const drag = useRef<{ x: number; y: number; vx: number; vy: number } | null>(
+    null,
+  );
+
+  // 适应画布宽度：整张流程放得下，最大不放大到 1 倍以上
+  const fit = () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const k = Math.min(
+      1,
+      (el.clientWidth - 24) / STAGE_W,
+      (el.clientHeight - 24) / STAGE_H,
+    );
+    setView({
+      k,
+      x: (el.clientWidth - STAGE_W * k) / 2,
+      y: (el.clientHeight - STAGE_H * k) / 2,
+    });
+  };
+  useLayoutEffect(() => {
+    fit();
+    const ro = new ResizeObserver(fit);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, []);
+  const zoom = (f: number) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    setView((v) => {
+      const k = Math.max(0.4, Math.min(1.6, v.k * f));
+      const cx = el.clientWidth / 2,
+        cy = el.clientHeight / 2;
+      return {
+        k,
+        x: cx - ((cx - v.x) * k) / v.k,
+        y: cy - ((cy - v.y) * k) / v.k,
+      };
+    });
+  };
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest(".wf-node, .wf-zoom")) return;
+    drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    setView((v) => ({
+      ...v,
+      x: d.vx + e.clientX - d.x,
+      y: d.vy + e.clientY - d.y,
+    }));
+  };
+  const onUp = () => (drag.current = null);
+
+  const pos = useMemo(() => new Map(NODES.map((n) => [n.id, nodeXY(n)])), []);
+  const { nodeW: W, nodeH: H } = LAYOUT;
+  const path = (from: string, to: string) => {
+    const a = pos.get(from)!,
+      b = pos.get(to)!;
+    if (a.y === b.y) {
+      // 同一行：上行往右、下行往左
+      const right = b.x > a.x;
+      const x1 = right ? a.x + W : a.x,
+        x2 = right ? b.x : b.x + W,
+        y = a.y + H / 2;
+      const dx = (x2 - x1) / 2;
+      return `M${x1},${y} C${x1 + dx},${y} ${x2 - dx},${y} ${x2},${y}`;
+    }
+    // 上下两行之间：从下沿到上沿，或从上沿到下沿
+    const down = b.y > a.y;
+    const x = a.x + W / 2,
+      y1 = down ? a.y + H : a.y,
+      y2 = down ? b.y : b.y + H;
+    const dy = (y2 - y1) / 2;
+    return `M${x},${y1} C${x},${y1 + dy} ${x},${y2 - dy} ${x},${y2}`;
+  };
+
+  return (
+    <div
+      className="wf-canvas"
+      ref={wrapRef}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+    >
+      <div
+        className="wf-stage"
+        style={{
+          width: STAGE_W,
+          height: STAGE_H,
+          transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
+        }}
+      >
+        <svg
+          className="wf-edges"
+          width={STAGE_W}
+          height={STAGE_H}
+          aria-hidden="true"
+        >
+          <defs>
+            <marker
+              id="wf-arrow"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L10,5 L0,10 z" />
+            </marker>
+          </defs>
+          {EDGES.map((e) => {
+            const on = flow.edges.has(edgeKey(e));
+            const live = on && flow.current === e.to;
+            const d = path(e.from, e.to);
+            const a = pos.get(e.from)!,
+              b = pos.get(e.to)!;
+            const lx =
+              a.y === b.y
+                ? (a.x + b.x + W) / 2
+                : a.x + W / 2 + (e.loop ? -12 : 12);
+            const ly = a.y === b.y ? a.y + H / 2 - 12 : (a.y + b.y + H) / 2;
+            return (
+              <g
+                key={edgeKey(e)}
+                className={`wf-edge ${on ? "on" : ""} ${live ? "live" : ""} ${e.loop ? "loop" : ""}`}
+              >
+                <path d={d} markerEnd="url(#wf-arrow)" />
+                {e.label && (
+                  <text
+                    x={lx}
+                    y={ly}
+                    textAnchor={
+                      a.y === b.y ? "middle" : e.loop ? "end" : "start"
+                    }
+                  >
+                    {e.label}
+                    {e.loop && flow.loops > 0 ? ` ×${flow.loops}` : ""}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        {NODES.map((n) => {
+          const p = pos.get(n.id)!;
+          const info = flow.nodes[n.id];
+          return (
+            <button
+              key={n.id}
+              className={`wf-node ${n.kind} ${info.state} ${selected === n.id ? "sel" : ""} ${n.agent ? "agent" : ""}`}
+              style={{ left: p.x, top: p.y, width: W, height: H }}
+              onClick={() => onSelect(n.id)}
+              aria-label={`${n.title}：${stateText[info.state]}`}
+            >
+              <span className="wf-icon">
+                <Icon name={kindIcon[n.kind]} size={16} />
+              </span>
+              <span className="wf-text">
+                <b>{n.title}</b>
+                <small>{n.sub}</small>
+              </span>
+              <span className="wf-state">
+                <i />
+                {stateText[info.state]}
+                {info.count > 1 ? ` ×${info.count}` : ""}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="wf-zoom">
+        <button onClick={() => zoom(1.2)} aria-label="放大">
+          <Icon name="plus" size={15} />
+        </button>
+        <button onClick={() => zoom(1 / 1.2)} aria-label="缩小">
+          <Icon name="minus" size={15} />
+        </button>
+        <button onClick={fit} aria-label="适应画布">
+          <Icon name="fit" size={15} />
+        </button>
+      </div>
+      <div className="wf-legend" aria-hidden="true">
+        <span className="k-llm">智能体角色</span>
+        <span className="k-tool">工具</span>
+        <span className="k-gateway">网关</span>
+        <span className="k-condition">条件</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- 右侧：节点详情 */
+function NodePanel({
+  node,
+  info,
+  events,
   w,
-  open,
-  onToggle,
+  byId,
   inspect,
 }: {
-  e: RunEvent;
-  i: number;
-  c: Candidate | undefined;
+  node: FlowNode;
+  info: { state: NodeState; count: number; note: string };
+  events: RunEvent[];
   w: Workspace;
-  open: boolean;
-  onToggle: () => void;
+  byId: Map<string, Candidate>;
   inspect: Inspect;
 }) {
   const run = w.run!;
   return (
-    <li
-      className={`ag-event ${e.origin} ${open ? "open" : ""}`}
-      style={{ "--i": i } as CSSProperties}
-    >
-      <button className="ag-event-head" onClick={onToggle} aria-expanded={open}>
-        <span className="ag-seq">{String(e.sequence).padStart(2, "0")}</span>
-        <span className={`ag-origin ${e.origin}`}>
-          {originText[e.origin] ?? e.origin}
+    <div className="wf-node-panel">
+      <header>
+        <span className={`wf-icon ${node.kind}`}>
+          <Icon name={kindIcon[node.kind]} size={16} />
         </span>
-        <span className="ag-what">
-          <b>{eventText[e.type] ?? e.type}</b>
-          <small className="mono">
-            {e.type}
-            {e.candidate_id ? ` · ${e.candidate_id}` : ""}
-            {e.simulation_id ? ` · ${e.simulation_id}` : ""}
+        <div>
+          <b>{node.title}</b>
+          <small>
+            {kindText[node.kind]} · {node.sub}
           </small>
+        </div>
+        <span className={`wf-badge ${info.state}`}>
+          {stateText[info.state]}
         </span>
+      </header>
+      {info.note && <p className="wf-note">{info.note}</p>}
+      <p className="wf-does">{node.does}</p>
+      {node.bound && (
+        <p className="wf-bound">
+          <Icon name="shield" size={14} />
+          不能做：{node.bound}
+        </p>
+      )}
+      {node.tools && (
+        <div className="wf-tools">
+          <h4>可调用的工具</h4>
+          <ul>
+            {node.tools.map((t) => {
+              const spec = toolSpec.get(t);
+              return (
+                <li key={t}>
+                  <code>{t}</code>
+                  {spec && (
+                    <span>
+                      参数 {spec[1]} → {spec[2]}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {node.agent && (
+        <p className="wf-agent-off">
+          这个角色由 Agnes 承担。AGH
+          接入前没有它的真实调用记录，这里不显示、也不补造。
+        </p>
+      )}
+      {node.id === "end" && (
+        <dl className="ag-kv">
+          <div>
+            <dt>状态</dt>
+            <dd>{runStatusText[run.status] ?? run.status}</dd>
+          </div>
+          <div>
+            <dt>结论</dt>
+            <dd>{conclusionText[run.conclusion] ?? run.conclusion}</dd>
+          </div>
+          <div className="wide">
+            <dt>选定方案</dt>
+            <dd>{run.selected_candidate_id ?? "未选定"}</dd>
+          </div>
+        </dl>
+      )}
+      {node.id === "freeze" && (
+        <dl className="ag-kv">
+          <div>
+            <dt>任务</dt>
+            <dd className="mono">{run.task_ref.task_id}</dd>
+          </div>
+          <div>
+            <dt>版本</dt>
+            <dd>第 {run.task_ref.revision} 版</dd>
+          </div>
+          <div className="wide">
+            <dt>约束哈希</dt>
+            <dd className="mono">{run.task_ref.constraint_hash}</dd>
+          </div>
+        </dl>
+      )}
+      {events.length > 0 && (
+        <div className="wf-runs">
+          <h4>本次运行 · {events.length} 条记录</h4>
+          {events.map((e) => (
+            <EventDetail
+              key={e.sequence}
+              e={e}
+              c={e.candidate_id ? byId.get(e.candidate_id) : undefined}
+              w={w}
+              inspect={inspect}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- 一条事件的数据 */
+function EventDetail({
+  e,
+  c,
+  w,
+  inspect,
+}: {
+  e: RunEvent;
+  c: Candidate | undefined;
+  w: Workspace;
+  inspect: Inspect;
+}) {
+  const run = w.run!;
+  return (
+    <article className={`wf-event ${e.origin}`}>
+      <header>
+        <span className="seq">{String(e.sequence).padStart(2, "0")}</span>
+        <b>{eventText[e.type] ?? e.type}</b>
+        <span className="who">{originText[e.origin] ?? e.origin}</span>
         <time>{clock(e.occurred_at)}</time>
-        <Icon name="chevron" size={15} />
-      </button>
-      {open && (
-        <div className="ag-event-body">
-          {e.type === "candidate.submitted" && c && (
-            <>
-              <h4>提交的方案</h4>
-              {c.plan.actions.length ? (
-                <ul className="ag-actions">
-                  {c.plan.actions.map((a, k) => (
-                    <li key={k}>
-                      {actionText[a.kind]} <b className="mono">{a.link_id}</b> ·
-                      仿真时刻 {time(a.simulation_time_s)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>不操作任何设施（故障基线）。</p>
-              )}
-              <dl className="ag-kv">
-                <div>
-                  <dt>提出者</dt>
-                  <dd>{sourceText[c.plan.source] ?? c.plan.source}</dd>
-                </div>
-                <div>
-                  <dt>父方案</dt>
-                  <dd className="mono">{c.plan.parent_candidate_id ?? "—"}</dd>
-                </div>
-                <div className="wide">
-                  <dt>理由</dt>
-                  <dd>{c.plan.reason || "—"}</dd>
-                </div>
-                <div className="wide">
-                  <dt>方案哈希</dt>
-                  <dd className="mono">{c.plan.plan_hash}</dd>
-                </div>
-              </dl>
-            </>
+      </header>
+      {e.type === "candidate.submitted" && c && (
+        <>
+          <p className="wf-line">
+            <b>{c.name}</b>
+          </p>
+          {c.plan.actions.length ? (
+            <ul className="ag-actions">
+              {c.plan.actions.map((a, k) => (
+                <li key={k}>
+                  {actionText[a.kind]} <b className="mono">{a.link_id}</b> ·
+                  仿真时刻 {time(a.simulation_time_s)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="wf-line">不操作任何设施（故障基线）。</p>
           )}
-          {e.type === "simulation.completed" && c && (
-            <>
-              <h4>仿真结果</h4>
-              <p className="ag-flag">{engineStatus(c).text}</p>
-              <dl className="ag-kv">
-                <div>
-                  <dt>缺水</dt>
-                  <dd>{num(c.verification.metrics.shortage_m3)} m³</dd>
-                </div>
-                <div>
-                  <dt>最低压力</dt>
-                  <dd>{num(c.verification.metrics.min_pressure_m)} m</dd>
-                </div>
-                <div>
-                  <dt>供需比</dt>
-                  <dd>
-                    {c.verification.metrics.supply_ratio == null
-                      ? "—"
-                      : `${num(c.verification.metrics.supply_ratio * 100)}%`}
-                  </dd>
-                </div>
-                <div>
-                  <dt>时序帧数</dt>
-                  <dd>{c.series?.frames.length ?? "—"}</dd>
-                </div>
-              </dl>
-            </>
-          )}
-          {e.type === "verification.completed" && c && (
-            <>
-              <h4>独立验收</h4>
-              <Gates c={c} />
-              {c.verification.violations.length > 0 && (
-                <div className="table-wrap ag-violations">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>违反项</th>
-                        <th>节点</th>
-                        <th>时段</th>
-                        <th>实测</th>
-                        <th>要求</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {c.verification.violations.slice(0, 8).map((v, k) => (
-                        <tr key={k}>
-                          <td>
-                            {v.code === "MIN_PRESSURE"
-                              ? "压力不足"
-                              : "供需比不足"}
-                          </td>
-                          <td className="mono">{v.node_id}</td>
-                          <td>
-                            {time(v.start_s)}–{time(v.end_s)}
-                          </td>
-                          <td>
-                            {v.unit === "ratio"
-                              ? `${num(v.observed * 100)}%`
-                              : `${num(v.observed)} m`}
-                          </td>
-                          <td>
-                            {v.unit === "ratio"
-                              ? `≥ ${num(v.threshold * 100, 0)}%`
-                              : `≥ ${num(v.threshold, 0)} m`}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <p className="ag-meta">
-                验收程序{" "}
-                <span className="mono">{c.verification.verifier_version}</span>
-                {c.verification.recommendation_blockers.length > 0 &&
-                  ` · 不能推荐的原因：${c.verification.recommendation_blockers.join("、")}`}
-              </p>
-            </>
-          )}
-          {(e.type === "run.started" || e.type === "run.completed") && (
-            <>
-              <h4>{e.type === "run.started" ? "建立运行" : "运行结束"}</h4>
-              <dl className="ag-kv">
-                <div>
-                  <dt>任务版本</dt>
-                  <dd>第 {e.task_revision} 版</dd>
-                </div>
-                {e.type === "run.completed" && (
-                  <>
-                    <div>
-                      <dt>状态</dt>
-                      <dd>{runStatusText[run.status] ?? run.status}</dd>
-                    </div>
-                    <div>
-                      <dt>结论</dt>
-                      <dd>
-                        {conclusionText[run.conclusion] ?? run.conclusion}
-                      </dd>
-                    </div>
-                  </>
-                )}
-                <div className="wide">
-                  <dt>约束哈希</dt>
-                  <dd className="mono">{e.constraint_hash}</dd>
-                </div>
-              </dl>
-            </>
-          )}
-          <dl className="ag-kv ag-trace-ids">
+          <dl className="ag-kv">
             <div>
-              <dt>原生调用号</dt>
+              <dt>提出者</dt>
+              <dd>{sourceText[c.plan.source] ?? c.plan.source}</dd>
+            </div>
+            <div>
+              <dt>父方案</dt>
+              <dd className="mono">{c.plan.parent_candidate_id ?? "—"}</dd>
+            </div>
+            <div className="wide">
+              <dt>理由</dt>
+              <dd>{c.plan.reason || "—"}</dd>
+            </div>
+          </dl>
+        </>
+      )}
+      {e.type === "simulation.completed" && c && (
+        <>
+          <p className="ag-flag">{engineStatus(c).text}</p>
+          <dl className="ag-kv">
+            <div>
+              <dt>缺水</dt>
+              <dd>{num(c.verification.metrics.shortage_m3)} m³</dd>
+            </div>
+            <div>
+              <dt>最低压力</dt>
+              <dd>{num(c.verification.metrics.min_pressure_m)} m</dd>
+            </div>
+            <div>
+              <dt>供需比</dt>
               <dd>
-                {e.native_tool_call_ref ??
-                  `无（${e.native_reference_missing_reason ?? "未说明原因"}）`}
+                {c.verification.metrics.supply_ratio == null
+                  ? "—"
+                  : `${num(c.verification.metrics.supply_ratio * 100)}%`}
               </dd>
             </div>
             <div>
-              <dt>关联号</dt>
-              <dd className="mono">{e.correlation_id}</dd>
-            </div>
-            <div>
-              <dt>载荷</dt>
-              <dd className="mono">{e.payload_ref}</dd>
+              <dt>时序帧数</dt>
+              <dd>{c.series?.frames.length ?? "—"}</dd>
             </div>
           </dl>
-          <button
-            className="ag-raw"
-            onClick={() => inspect(`事件 ${e.sequence} 原文`, e)}
-          >
-            查看事件原文
-            <Icon name="arrow" size={14} />
-          </button>
-        </div>
+        </>
       )}
-    </li>
+      {e.type === "verification.completed" && c && (
+        <>
+          <Gates c={c} />
+          {c.verification.violations.length > 0 && (
+            <p className="wf-line">
+              违规 {c.verification.violations.length} 条，例：节点{" "}
+              <span className="mono">
+                {c.verification.violations[0].node_id}
+              </span>{" "}
+              {time(c.verification.violations[0].start_s)}–
+              {time(c.verification.violations[0].end_s)}{" "}
+              {c.verification.violations[0].unit === "ratio"
+                ? `供需比 ${num(c.verification.violations[0].observed * 100)}%`
+                : `压力 ${num(c.verification.violations[0].observed)} m`}
+              （要求{" "}
+              {c.verification.violations[0].unit === "ratio"
+                ? `≥ ${num(c.verification.violations[0].threshold * 100, 0)}%`
+                : `≥ ${num(c.verification.violations[0].threshold, 0)} m`}
+              ）
+            </p>
+          )}
+          {c.verification.recommendation_blockers.length > 0 && (
+            <p className="wf-line muted">
+              不能推荐的原因：
+              {c.verification.recommendation_blockers.join("、")}
+            </p>
+          )}
+        </>
+      )}
+      {(e.type === "run.started" || e.type === "run.completed") && (
+        <dl className="ag-kv">
+          <div>
+            <dt>任务版本</dt>
+            <dd>第 {e.task_revision} 版</dd>
+          </div>
+          {e.type === "run.completed" && (
+            <div>
+              <dt>结论</dt>
+              <dd>{conclusionText[run.conclusion] ?? run.conclusion}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+      <p className="wf-ids">
+        原生调用号：
+        {e.native_tool_call_ref ??
+          `无（${e.native_reference_missing_reason ?? "未说明原因"}）`}
+      </p>
+      <button
+        className="ag-raw"
+        onClick={() => inspect(`事件 ${e.sequence} 原文`, e)}
+      >
+        查看事件原文
+        <Icon name="arrow" size={14} />
+      </button>
+    </article>
   );
 }
 
