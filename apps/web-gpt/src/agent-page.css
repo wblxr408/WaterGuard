@@ -1,6 +1,7 @@
 /* 智能体页面：Dify 式工作流画布（点阵底、白色节点卡片、类型色块、状态小标、贝塞尔连线），
    右侧是节点详情与追踪；下方是设计细节。沿用全站明亮风格的变量。 */
 .agent-page {
+  --wf-user: #0086c9;
   --wf-start: #2970ff;
   --wf-llm: #6938ef;
   --wf-tool: #0e9384;
@@ -104,9 +105,36 @@
   font-size: 12.5px;
   color: var(--muted);
 }
+/* 详情面板平时收起，画布占满整宽；点节点后右侧让出 360px */
 .wf-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.wf-body.open {
   grid-template-columns: minmax(0, 1fr) 360px;
+}
+.wf-views {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+.wf-views button {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  color: var(--muted);
+  transition:
+    background-color 0.25s var(--ease-out),
+    color 0.25s var(--ease-out);
+}
+.wf-views button.on {
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
 }
 .wf-missing {
   display: flex;
@@ -254,6 +282,75 @@
 .wf-node.end .wf-icon,
 .wf-icon.end {
   --wf-k: var(--wf-end);
+}
+.wf-node.user .wf-icon,
+.wf-icon.user {
+  --wf-k: var(--wf-user);
+}
+
+/* ---------------------------------------------------------------- 分支导图 */
+.wf-canvas.mind {
+  height: 560px;
+}
+.mm-node .wf-text b {
+  font-size: 16px;
+}
+/* 叶子上标「↺ 回到……」：虚线框，副标题用琥珀色 */
+.mm-node.leaf-loop {
+  border-style: dashed;
+}
+.mm-node.leaf-loop .wf-text small {
+  color: var(--wf-wait);
+  font-weight: 600;
+}
+/* 分支名写在连线末端、子节点左上方 */
+.mm-tag {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--tag-line, #d0d5dd);
+  background: #ffffff;
+  color: var(--tag, #475467);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.78;
+}
+.mm-tag.on {
+  opacity: 1;
+  background: var(--tag-bg, #f2f4f7);
+}
+.mm-tag.IF {
+  --tag: #b93815;
+  --tag-line: #f9dbaf;
+  --tag-bg: #fef6ee;
+}
+.mm-tag.ELIF {
+  --tag: #93370d;
+  --tag-line: #fedf89;
+  --tag-bg: #fffaeb;
+}
+.mm-tag.ELSE {
+  --tag: #067647;
+  --tag-line: #abefc6;
+  --tag-bg: #ecfdf3;
+}
+.wf-edge.t-IF.on path,
+.wf-edge.t-ELIF.on path {
+  stroke: var(--wf-condition);
+}
+.wf-edge.t-ELSE.on path {
+  stroke: var(--wf-ok);
+}
+.wf-legend .k-loop::before {
+  content: none;
+}
+.wf-legend .k-loop {
+  color: var(--wf-wait);
+  font-weight: 600;
 }
 .wf-text {
   min-width: 0;
@@ -438,6 +535,12 @@
 .wf-li .wf-text b {
   font-size: 14.5px;
 }
+/* 分支导图的大纲：分支名写在卡片上方 */
+.wf-list li.branch .mm-tag {
+  position: static;
+  display: inline-flex;
+  margin-bottom: 6px;
+}
 
 /* ---------------------------------------------------------------- 右侧面板 */
 .wf-panel {
@@ -465,6 +568,52 @@
   border-bottom-color: var(--wf-start);
   color: var(--ink);
   font-weight: 600;
+}
+.wf-panel-tabs .wf-close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: 0 0 4px auto;
+  padding: 0;
+  border-radius: 7px;
+  color: var(--muted);
+}
+.wf-panel-tabs .wf-close:hover {
+  background: #f2f4f7;
+  color: var(--ink);
+}
+.wf-branch {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  background: #fcfcfd;
+}
+.wf-branch div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.wf-branch dt {
+  flex: none;
+  width: 92px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-branch dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wf-branch .mm-tag {
+  position: static;
 }
 .wf-node-panel,
 .wf-trace {
@@ -880,7 +1029,8 @@
 }
 
 @media (max-width: 1100px) {
-  .wf-body {
+  .wf-body,
+  .wf-body.open {
     grid-template-columns: 1fr;
   }
   .wf-panel {

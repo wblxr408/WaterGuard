@@ -1,7 +1,24 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { RunEvent } from "@waterguard/contracts";
 import { missingText } from "./AgentRun";
+import {
+  M,
+  MSTAGE_H,
+  MSTAGE_W,
+  PLACED,
+  TREE,
+  mindNodeOf,
+  mindState,
+} from "./agent-mindmap";
+import type { MindKind, MindNode, TagKind } from "./agent-mindmap";
 import {
   EDGES,
   LAYOUT,
@@ -13,7 +30,7 @@ import {
   nodeOfEvent,
   nodeXY,
 } from "./agent-flow";
-import type { FlowNode, NodeKind, NodeState } from "./agent-flow";
+import type { NodeState } from "./agent-flow";
 import type { Candidate, Workspace } from "./data";
 import {
   actionText,
@@ -30,12 +47,26 @@ import {
 import Icon from "./Icon";
 import "./agent-page.css";
 
-/* 智能体页面：Dify 式工作流画布。
-   - 画布：开始 → 任务建模 → 冻结任务 → 方案规划 → 水力仿真 → 独立验收 → 达标？（否：回到方案规划）
-     → 反例审查 → 打包证据 → 结束。节点按类型着色；由 Agnes 承担的三个角色在 AGH 未接入时显示为虚线框。
-   - 回放：按运行事件逐条点亮节点和连线；点节点，右侧面板显示它做什么、能调用的工具、权限边界和本次运行的数据。
+/* 智能体页面：两种看法，顶部切换。
+   - 分支导图（默认，agent-mindmap.ts）：思维导图式的一棵树，在判断处分叉，分支名写在连线上，回到前面的步骤在叶子上标「↺」。
+   - 流程总览（agent-flow.ts）：U 形两行的流程画布，含「否 · 修改方案」回路。
+   - 回放：按运行事件逐条点亮节点和连线；点节点，展开右侧面板，显示它做什么、能调用的工具、权限边界和本次运行的数据。
    - 下方保留设计细节（角色与权限、工具契约、执行流程、边界与失败处理、接入进度，出自 docs/Agent设计.md）。
    AGH 未接入前，唯一的运行记录是开发用的人工样例（Fixture），页面如实标注；不补造任何调用、失败或数值。 */
+
+/** 面板里展示的节点：两种看法的节点都满足 */
+type PanelNode = {
+  id: string;
+  kind: MindKind;
+  title: string;
+  sub: string;
+  does: string;
+  bound?: string;
+  tools?: string[];
+  agent?: boolean;
+  tag?: MindNode["tag"];
+  loop?: string;
+};
 
 type Inspect = (title: string, data: unknown) => void;
 
@@ -59,22 +90,33 @@ const modeText: Record<string, string> = {
   replay: "回放",
   live: "实时",
 };
-const kindText: Record<NodeKind, string> = {
+const kindText: Record<MindKind, string> = {
   start: "开始",
   llm: "智能体角色",
   gateway: "网关",
   tool: "工具",
   condition: "条件",
   end: "结束",
+  user: "等待用户",
 };
-const kindIcon: Record<NodeKind, string> = {
+const kindIcon: Record<MindKind, string> = {
   start: "play",
   llm: "agent",
   gateway: "shield",
   tool: "cube",
   condition: "compare",
   end: "check",
+  user: "help",
 };
+/** 分支导图的大纲顺序（先序），窄屏竖排用 */
+const MIND_OUTLINE: { n: MindNode; depth: number }[] = [];
+{
+  const walk = (n: MindNode, depth: number) => {
+    MIND_OUTLINE.push({ n, depth });
+    n.children?.forEach((c) => walk(c, depth + 1));
+  };
+  walk(TREE, 0);
+}
 const stateText: Record<NodeState, string> = {
   idle: "未执行",
   running: "进行中",
@@ -275,8 +317,10 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
   );
   const [step, setStep] = useState<number | null>(null); // 回放时已发生的事件数；null 为全部
   const [playing, setPlaying] = useState(false);
-  const [selected, setSelected] = useState<string>("plan");
+  const [view, setView] = useState<"mind" | "flow">("mind");
+  const [selected, setSelected] = useState<string | null>(null);
   const [panel, setPanel] = useState<"node" | "trace">("node");
+  const [panelOpen, setPanelOpen] = useState(false);
   const [tab, setTab] = useState<(typeof DESIGN_TABS)[number]>("角色与权限");
   const timer = useRef(0);
 
@@ -285,6 +329,23 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
     () => flowState(shown, run, byId, false),
     [shown, run, byId],
   );
+  const mind = useMemo(
+    () => mindState(shown, run, byId, false),
+    [shown, run, byId],
+  );
+  /** 一条事件在当前看法里落在哪个节点 */
+  const nodeOf = (e: RunEvent) =>
+    view === "mind" ? mindNodeOf(e) : nodeOfEvent[e.type];
+  const openNode = (id: string) => {
+    setSelected(id);
+    setPanel("node");
+    setPanelOpen(true);
+  };
+  const switchView = (v: "mind" | "flow") => {
+    setView(v);
+    setSelected(null);
+    setPanelOpen(false);
+  };
 
   // 回放：每 1.1 秒发生一条事件，点亮对应节点，并把右侧面板切到这个节点
   const replay = () => {
@@ -292,11 +353,11 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
     let n = 0;
     setStep(0);
     setPlaying(true);
-    setSelected("start");
+    openNode("start");
     timer.current = window.setInterval(() => {
       n += 1;
       const e = events[n - 1];
-      if (e) setSelected(nodeOfEvent[e.type]);
+      if (e) setSelected(nodeOf(e));
       if (n >= events.length) {
         clearInterval(timer.current);
         setStep(null);
@@ -358,6 +419,24 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
                 </small>
               </div>
             </div>
+            <div className="wf-views" role="tablist" aria-label="看法">
+              {(
+                [
+                  ["mind", "分支导图"],
+                  ["flow", "流程总览"],
+                ] as const
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={view === v}
+                  className={view === v ? "on" : ""}
+                  onClick={() => switchView(v)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="wf-status">
               <span className={`wf-pill ${playing ? "running" : "done"}`}>
                 <i />
@@ -367,8 +446,19 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
               </span>
               <span className="wf-meta">
                 仿真 {run.budget_usage.simulations} 次 · 模型调用{" "}
-                {run.budget_usage.model_calls ?? "—"} · 修改 {flow.loops} 轮
+                {run.budget_usage.model_calls ?? "—"} · 修改{" "}
+                {view === "mind" ? mind.nodes.revise.count : flow.loops} 轮
               </span>
+              <button
+                className="button secondary"
+                onClick={() => {
+                  setPanel("trace");
+                  setPanelOpen(true);
+                }}
+              >
+                <Icon name="layers" size={15} />
+                追踪
+              </button>
               {playing ? (
                 <button className="button secondary" onClick={stop}>
                   <Icon name="pause" size={15} />
@@ -387,34 +477,46 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
             </div>
           </header>
 
-          <div className="wf-body">
-            <FlowCanvas
-              flow={flow}
-              selected={selected}
-              onSelect={(id) => {
-                setSelected(id);
-                setPanel("node");
-              }}
-            />
-            {/* 窄屏：画布太小，按流程顺序竖排节点 */}
+          <div className={`wf-body ${panelOpen ? "open" : ""}`}>
+            {view === "mind" ? (
+              <MindCanvas st={mind} selected={selected} onSelect={openNode} />
+            ) : (
+              <FlowCanvas flow={flow} selected={selected} onSelect={openNode} />
+            )}
+            {/* 窄屏：画布太小。分支导图按缩进大纲列出，流程总览按顺序竖排 */}
             <ol className="wf-list" aria-label="工作流节点">
-              {NODES.map((n) => {
-                const info = flow.nodes[n.id];
+              {(view === "mind"
+                ? MIND_OUTLINE.map(({ n, depth }) => ({ n, depth }))
+                : NODES.map((n) => ({ n, depth: 0 }))
+              ).map(({ n, depth }) => {
+                const info =
+                  view === "mind" ? mind.nodes[n.id] : flow.nodes[n.id];
+                const tag = "tag" in n ? n.tag : undefined;
                 return (
-                  <li key={n.id}>
+                  <li
+                    key={n.id}
+                    style={{ marginLeft: depth * 14 }}
+                    className={view === "mind" && depth > 0 ? "branch" : ""}
+                  >
+                    {tag && (
+                      <span
+                        className={`mm-tag ${tag.kind} ${mind.edges.has(n.id) ? "on" : ""}`}
+                      >
+                        {tag.kind} · {tag.text}
+                      </span>
+                    )}
                     <button
                       className={`wf-li ${n.kind} ${info.state} ${selected === n.id ? "sel" : ""} ${n.agent ? "agent" : ""}`}
-                      onClick={() => {
-                        setSelected(n.id);
-                        setPanel("node");
-                      }}
+                      onClick={() => openNode(n.id)}
                     >
                       <span className={`wf-icon ${n.kind}`}>
                         <Icon name={kindIcon[n.kind]} size={15} />
                       </span>
                       <span className="wf-text">
                         <b>{n.title}</b>
-                        <small>{n.sub}</small>
+                        <small>
+                          {"loop" in n && n.loop ? `↺ ${n.loop}` : n.sub}
+                        </small>
                       </span>
                       <span className={`wf-badge ${info.state}`}>
                         {stateText[info.state]}
@@ -425,62 +527,75 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
                 );
               })}
             </ol>
-            <aside className="wf-panel" aria-label="详情">
-              <div className="wf-panel-tabs" role="tablist">
-                <button
-                  role="tab"
-                  aria-selected={panel === "node"}
-                  className={panel === "node" ? "on" : ""}
-                  onClick={() => setPanel("node")}
-                >
-                  节点详情
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={panel === "trace"}
-                  className={panel === "trace" ? "on" : ""}
-                  onClick={() => setPanel("trace")}
-                >
-                  追踪 · {shown.length}
-                </button>
-              </div>
-              {panel === "node" ? (
-                <NodePanel
-                  node={NODES.find((n) => n.id === selected)!}
-                  info={flow.nodes[selected]}
-                  events={shown.filter((e) => nodeOfEvent[e.type] === selected)}
-                  w={w}
-                  byId={byId}
-                  inspect={inspect}
-                />
-              ) : (
-                <ol className="wf-trace">
-                  {shown.map((e) => (
-                    <li key={e.sequence} className={e.origin}>
-                      <button
-                        onClick={() => {
-                          setSelected(nodeOfEvent[e.type]);
-                          setPanel("node");
-                        }}
-                      >
-                        <span className="seq">
-                          {String(e.sequence).padStart(2, "0")}
-                        </span>
-                        <span className="what">
-                          <b>{eventText[e.type] ?? e.type}</b>
-                          <small>
-                            {originText[e.origin] ?? e.origin}
-                            {e.candidate_id ? ` · ${e.candidate_id}` : ""}
-                          </small>
-                        </span>
-                        <time>{clock(e.occurred_at)}</time>
-                      </button>
-                    </li>
-                  ))}
-                  {!shown.length && <li className="empty">还没有事件</li>}
-                </ol>
-              )}
-            </aside>
+            {panelOpen && (
+              <aside className="wf-panel" aria-label="详情">
+                <div className="wf-panel-tabs" role="tablist">
+                  <button
+                    role="tab"
+                    aria-selected={panel === "node"}
+                    className={panel === "node" ? "on" : ""}
+                    onClick={() => setPanel("node")}
+                    disabled={!selected}
+                  >
+                    节点详情
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={panel === "trace"}
+                    className={panel === "trace" ? "on" : ""}
+                    onClick={() => setPanel("trace")}
+                  >
+                    追踪 · {shown.length}
+                  </button>
+                  <button
+                    className="wf-close"
+                    aria-label="收起详情"
+                    onClick={() => setPanelOpen(false)}
+                  >
+                    <Icon name="close" size={15} />
+                  </button>
+                </div>
+                {panel === "node" && selected ? (
+                  <NodePanel
+                    node={
+                      (view === "mind"
+                        ? PLACED.find((n) => n.id === selected)
+                        : NODES.find((n) => n.id === selected)) as PanelNode
+                    }
+                    info={
+                      view === "mind"
+                        ? mind.nodes[selected]
+                        : flow.nodes[selected]
+                    }
+                    events={shown.filter((e) => nodeOf(e) === selected)}
+                    w={w}
+                    byId={byId}
+                    inspect={inspect}
+                  />
+                ) : (
+                  <ol className="wf-trace">
+                    {shown.map((e) => (
+                      <li key={e.sequence} className={e.origin}>
+                        <button onClick={() => openNode(nodeOf(e))}>
+                          <span className="seq">
+                            {String(e.sequence).padStart(2, "0")}
+                          </span>
+                          <span className="what">
+                            <b>{eventText[e.type] ?? e.type}</b>
+                            <small>
+                              {originText[e.origin] ?? e.origin}
+                              {e.candidate_id ? ` · ${e.candidate_id}` : ""}
+                            </small>
+                          </span>
+                          <time>{clock(e.occurred_at)}</time>
+                        </button>
+                      </li>
+                    ))}
+                    {!shown.length && <li className="empty">还没有事件</li>}
+                  </ol>
+                )}
+              </aside>
+            )}
           </div>
           {run.missing_items.length > 0 && (
             <p className="wf-missing">
@@ -646,43 +761,34 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
   );
 }
 
-/* ---------------------------------------------------------------- 画布：节点、连线、平移缩放 */
-function FlowCanvas({
-  flow,
-  selected,
-  onSelect,
-}: {
-  flow: ReturnType<typeof flowState>;
-  selected: string;
-  onSelect: (id: string) => void;
-}) {
+/* ---------------------------------------------------------------- 画布：平移缩放（两种看法共用） */
+function usePanZoom(stageW: number, stageH: number) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const drag = useRef<{ x: number; y: number; vx: number; vy: number } | null>(
     null,
   );
-
-  // 适应画布宽度：整张流程放得下，最大不放大到 1 倍以上
-  const fit = () => {
+  // 适应画布：整张图放得下，最大不放大到 1 倍以上；面板展开收起时自动重排
+  const fit = useCallback(() => {
     const el = wrapRef.current;
     if (!el) return;
     const k = Math.min(
       1,
-      (el.clientWidth - 24) / STAGE_W,
-      (el.clientHeight - 24) / STAGE_H,
+      (el.clientWidth - 24) / stageW,
+      (el.clientHeight - 24) / stageH,
     );
     setView({
       k,
-      x: (el.clientWidth - STAGE_W * k) / 2,
-      y: (el.clientHeight - STAGE_H * k) / 2,
+      x: (el.clientWidth - stageW * k) / 2,
+      y: (el.clientHeight - stageH * k) / 2,
     });
-  };
+  }, [stageW, stageH]);
   useLayoutEffect(() => {
     fit();
     const ro = new ResizeObserver(fit);
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, []);
+  }, [fit]);
   const zoom = (f: number) => {
     const el = wrapRef.current;
     if (!el) return;
@@ -697,22 +803,175 @@ function FlowCanvas({
       };
     });
   };
-  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest(".wf-node, .wf-zoom")) return;
-    drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
-    e.currentTarget.setPointerCapture(e.pointerId);
+  const handlers = {
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => {
+      if ((e.target as HTMLElement).closest(".wf-node, .wf-zoom")) return;
+      drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
+      const d = drag.current;
+      if (!d) return;
+      setView((v) => ({
+        ...v,
+        x: d.vx + e.clientX - d.x,
+        y: d.vy + e.clientY - d.y,
+      }));
+    },
+    onPointerUp: () => {
+      drag.current = null;
+    },
+    onPointerCancel: () => {
+      drag.current = null;
+    },
   };
-  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d) return;
-    setView((v) => ({
-      ...v,
-      x: d.vx + e.clientX - d.x,
-      y: d.vy + e.clientY - d.y,
-    }));
+  return {
+    wrapRef,
+    fit,
+    zoom,
+    handlers,
+    transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
   };
-  const onUp = () => (drag.current = null);
+}
 
+function ZoomBar({ pz }: { pz: ReturnType<typeof usePanZoom> }) {
+  return (
+    <div className="wf-zoom">
+      <button onClick={() => pz.zoom(1.2)} aria-label="放大">
+        <Icon name="plus" size={15} />
+      </button>
+      <button onClick={() => pz.zoom(1 / 1.2)} aria-label="缩小">
+        <Icon name="minus" size={15} />
+      </button>
+      <button onClick={pz.fit} aria-label="适应画布">
+        <Icon name="fit" size={15} />
+      </button>
+    </div>
+  );
+}
+
+const tagText: Record<TagKind, string> = {
+  IF: "如果",
+  ELIF: "否则如果",
+  ELSE: "否则",
+};
+
+/* ---------------------------------------------------------------- 分支导图 */
+function MindCanvas({
+  st,
+  selected,
+  onSelect,
+}: {
+  st: ReturnType<typeof mindState>;
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const pz = usePanZoom(MSTAGE_W, MSTAGE_H);
+  const byId = useMemo(() => new Map(PLACED.map((n) => [n.id, n])), []);
+  return (
+    <div className="wf-canvas mind" ref={pz.wrapRef} {...pz.handlers}>
+      <div
+        className="wf-stage"
+        style={{ width: MSTAGE_W, height: MSTAGE_H, transform: pz.transform }}
+      >
+        <svg
+          className="wf-edges"
+          width={MSTAGE_W}
+          height={MSTAGE_H}
+          aria-hidden="true"
+        >
+          <defs>
+            <marker
+              id="mm-arrow"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L10,5 L0,10 z" />
+            </marker>
+          </defs>
+          {PLACED.filter((n) => n.parent).map((n) => {
+            const p = byId.get(n.parent!)!;
+            const x1 = p.x + M.w,
+              y1 = p.y + M.h / 2,
+              x2 = n.x,
+              y2 = n.y + M.h / 2;
+            const dx = (x2 - x1) * 0.6;
+            const on = st.edges.has(n.id);
+            return (
+              <g
+                key={n.id}
+                className={`wf-edge ${on ? "on" : ""} ${on && st.current === n.id ? "live" : ""} ${n.tag ? `t-${n.tag.kind}` : ""}`}
+              >
+                <path
+                  d={`M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`}
+                  markerEnd="url(#mm-arrow)"
+                />
+              </g>
+            );
+          })}
+        </svg>
+        {PLACED.filter((n) => n.tag).map((n) => (
+          <span
+            key={`tag-${n.id}`}
+            className={`mm-tag ${n.tag!.kind} ${st.edges.has(n.id) ? "on" : ""}`}
+            style={{ left: n.x, top: n.y - 27 }}
+            title={tagText[n.tag!.kind]}
+          >
+            {n.tag!.kind} · {n.tag!.text}
+          </span>
+        ))}
+        {PLACED.map((n) => {
+          const info = st.nodes[n.id];
+          return (
+            <button
+              key={n.id}
+              className={`wf-node mm-node ${n.kind} ${info.state} ${selected === n.id ? "sel" : ""} ${n.agent ? "agent" : ""} ${n.loop ? "leaf-loop" : ""}`}
+              style={{ left: n.x, top: n.y, width: M.w, height: M.h }}
+              onClick={() => onSelect(n.id)}
+              aria-label={`${n.title}：${stateText[info.state]}`}
+            >
+              <span className="wf-icon">
+                <Icon name={kindIcon[n.kind]} size={16} />
+              </span>
+              <span className="wf-text">
+                <b>{n.title}</b>
+                <small>{n.loop ? `↺ ${n.loop}` : n.sub}</small>
+              </span>
+              <span className="wf-state">
+                <i />
+                {stateText[info.state]}
+                {info.count > 1 ? ` ×${info.count}` : ""}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <ZoomBar pz={pz} />
+      <div className="wf-legend" aria-hidden="true">
+        <span className="k-llm">智能体角色</span>
+        <span className="k-tool">工具</span>
+        <span className="k-gateway">网关</span>
+        <span className="k-loop">↺ 回到前面的步骤</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- 流程总览 */
+function FlowCanvas({
+  flow,
+  selected,
+  onSelect,
+}: {
+  flow: ReturnType<typeof flowState>;
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const pz = usePanZoom(STAGE_W, STAGE_H);
   const pos = useMemo(() => new Map(NODES.map((n) => [n.id, nodeXY(n)])), []);
   const { nodeW: W, nodeH: H } = LAYOUT;
   const path = (from: string, to: string) => {
@@ -737,21 +996,10 @@ function FlowCanvas({
   };
 
   return (
-    <div
-      className="wf-canvas"
-      ref={wrapRef}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-    >
+    <div className="wf-canvas" ref={pz.wrapRef} {...pz.handlers}>
       <div
         className="wf-stage"
-        style={{
-          width: STAGE_W,
-          height: STAGE_H,
-          transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
-        }}
+        style={{ width: STAGE_W, height: STAGE_H, transform: pz.transform }}
       >
         <svg
           className="wf-edges"
@@ -832,17 +1080,7 @@ function FlowCanvas({
           );
         })}
       </div>
-      <div className="wf-zoom">
-        <button onClick={() => zoom(1.2)} aria-label="放大">
-          <Icon name="plus" size={15} />
-        </button>
-        <button onClick={() => zoom(1 / 1.2)} aria-label="缩小">
-          <Icon name="minus" size={15} />
-        </button>
-        <button onClick={fit} aria-label="适应画布">
-          <Icon name="fit" size={15} />
-        </button>
-      </div>
+      <ZoomBar pz={pz} />
       <div className="wf-legend" aria-hidden="true">
         <span className="k-llm">智能体角色</span>
         <span className="k-tool">工具</span>
@@ -862,7 +1100,7 @@ function NodePanel({
   byId,
   inspect,
 }: {
-  node: FlowNode;
+  node: PanelNode;
   info: { state: NodeState; count: number; note: string };
   events: RunEvent[];
   w: Workspace;
@@ -886,6 +1124,27 @@ function NodePanel({
           {stateText[info.state]}
         </span>
       </header>
+      {(node.tag || node.loop) && (
+        <dl className="wf-branch">
+          {node.tag && (
+            <div>
+              <dt>走到这里的条件</dt>
+              <dd>
+                <span className={`mm-tag ${node.tag.kind} on`}>
+                  {node.tag.kind}
+                </span>
+                {node.tag.text}
+              </dd>
+            </div>
+          )}
+          {node.loop && (
+            <div>
+              <dt>之后</dt>
+              <dd>↺ {node.loop}</dd>
+            </div>
+          )}
+        </dl>
+      )}
       {info.note && <p className="wf-note">{info.note}</p>}
       <p className="wf-does">{node.does}</p>
       {node.bound && (
