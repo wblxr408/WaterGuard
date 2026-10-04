@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from .runtime import PhysicalAdapter
 from .adapter import write
-from .scenarios import case
+from .scenarios import case, physical_case
 from waterguard_contracts.core import load
 
 
@@ -15,6 +15,7 @@ def main():
     example.add_argument('--network',choices=['epa-net1','epa-net3'],default='epa-net1')
     example.add_argument('--kind',choices=['normal','closure','leak','rupture','isolation','pump-cycle','link-cycle'],default='leak')
     example.add_argument('--engine',choices=['wntr','epanet'],default='wntr')
+    example.add_argument('--physics',action='store_true',help='Use 0.4 physics parameters and event-resolved output')
     example.add_argument('--output',type=Path,required=True)
     simulate=commands.add_parser('simulate')
     simulate.add_argument('--task',type=Path,required=True)
@@ -23,7 +24,7 @@ def main():
     simulate.add_argument('--timeout',type=float)
     args=parser.parse_args()
     if args.command=='example':
-        task,plan=case(args.network,args.kind,args.engine)
+        task,plan=(physical_case if args.physics else case)(args.network,args.kind,args.engine)
         write(args.output/'task.json',task)
         write(args.output/'plan.json',plan)
         return 0

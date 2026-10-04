@@ -6,17 +6,17 @@
 
 | 检查 | 结果 |
 |---|---|
-| `python -m unittest discover -s services/hydraulics/tests -v` | 27 项全部通过，72.677 秒；含旧 9 项及新 18 项 |
-| 随后新增的 `PhysicalAcceptance.test_same_task_feedback_pair_improves_without_claiming_recommendation` | 单独运行通过，61.452 秒（含 22 工况前置重算）；水力测试现共 28 项 |
+| `python -m unittest discover -s services/hydraulics/tests -v` | 0.4.1 共 66 项，129.612 秒：Windows 64 项通过、2 项平台专属跳过；含原有 9 项、物理验收 19 项、模型质量 7 项、协议注入 18 项、可靠性注入 13 项 |
 | `python -m unittest discover -s packages/contracts/tests -v` | 19 项全部通过 |
 | `python packages/contracts/scripts/check.py` | Schema、绑定、哈希、事件、来源与独立指标复算通过 |
 | `npm run contracts:types:check` | 生成类型与 Schema 一致，TypeScript 检查通过 |
 | `python -m services.hydraulics.acceptance` | 22/22 实际计算成功，物理检查通过，参考结果有效 |
 | `python -m services.hydraulics.pair` | A/B 均成功，预热一致，B 缺供改善，未冒充约束通过 |
-| JSON CLI example + simulate | Net3 泄漏真实计算成功，JSON 输出可解析 |
-| ZIP 清单审计 | 2 个 ZIP 总哈希、776 个产物哈希、24 次代码版本绑定全部通过 |
+| 0.4 物理研究 | 26/26 实算成功，时间细化目标通过，物理方程检查通过 |
+| 0.4 读取 API | analysis/physics/mapping/series 实际读取通过，模式与版本一致 |
+| ZIP 清单审计 | 3 个 ZIP 总哈希、1,663 个产物哈希、50 次代码/运行环境绑定全部通过 |
 
-GitHub Actions 将在 Windows/Linux 重新执行全部 28 项水力测试、22 工况及 A/B，并上传独立证据；本文件只陈述已完成的本机验证，不预先声称 CI 通过。
+上一版 `bcc4ea8` 的 [共享契约 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37105186259) 和 [Windows/Linux 水力 CI](https://github.com/wblxr408/WaterGuard/actions/runs/37105186243) 已通过。本次 CI 执行 66 项水力测试、22 工况、A/B 和 26 组物理研究，并上传独立证据；平台专属检查的实际结果以该提交 Actions 为准。
 
 ## 检查覆盖
 
@@ -25,6 +25,8 @@ GitHub Actions 将在 Windows/Linux 重新执行全部 28 项水力测试、22 �
 同输入重算与并发运行使用不同进程及产物目录。真实计算在声明容差内一致；两引擎共同支持工况允许最大压力差 0.5 m、流量差 0.001 m³/s，已全部通过。这个阈值仅适用于本次网络与工况，不推广为任意引擎等价保证。
 
 数据边界覆盖未知/冲突动作、源控制覆盖缺项、故障时间不对齐、PDD 参数无效、超截面积泄漏、不完整隔离边界、禁止将 WNTR 泄漏替换成 EPANET、需求倍数真实作用、输入版本/哈希、篡改证据、实质数值变化、worker 启动失败、引擎失败、超时和取消。失败无成功时序；进程退出后封存诊断。
+
+工程加固另验证原子替换失败仍保留旧文档、NaN/Inf timeout 拒绝、运行环境变化改变输入身份、原生进程退出码 23 的失败留证、截断 JSON 隔离、监督异常与 KeyboardInterrupt 回收真实子进程、产物与结果规模超限、读取拒绝被篡改产物及不一致清单。详见 [工程可靠性审查](../../docs/仿真工程可靠性审查.md)。
 
 ## 检查中修复的真实问题
 
@@ -35,3 +37,17 @@ GitHub Actions 将在 Windows/Linux 重新执行全部 28 项水力测试、22 �
 ## 结果边界
 
 这是 EPA 公开示例模型上的真实数值计算，不是现场传感器或现场校准结论。破口面积、流量系数、操作权限、手动控制策略与阈值是声明的工程假设。没有水锤、变速泵或阀门节流模型。图形坐标单位未知，不计算地理距离。参考业务指标仅帮助联调，正式独立验证器、AGH 决策/日志、扰动准入及产品交付仍由对应成员实现。
+
+## 本次物理模型优化
+
+实际实现和适用边界见 [物理评估](../../docs/物理模型与算法评估.md)。新增模型质量测试使用原始结果核对能量/PDD/事件储水，篡改水头/水箱值时检测失败，局部需求与服务压力真实影响供水，背景漏损不算用户供水，内部低压能定位到公共采样之间。公开模型一致性不等于现场校准。
+
+开发阶段曾因直接把 SI 流量容差写成原生 GPM 导致 EPANET 迭代警告，转换后重新实算成功；未把警告结果作为有效结果。一次 Windows 本地 POST 连接异常在单独复现及后续两次完整回归中通过，未归因于物理模型。一次原子替换出现 WinError 5，已实现有限重试；临时成功与持续拒绝保留旧文件的故障注入测试通过。失败开发目录留在忽略的 artifacts 下，发布 ZIP 仅对应本次重新计算且通过检查的运行。
+
+## 七项修复的回归与平台覆盖
+
+Adapter 0.4.1 重建冻结物理模型并复算原始 CSV，对照每个 Series 值和汇总，同时绑定父进程启动前输入。验证阶段的迟到取消/超时、最终清单增长超限、被改坏的 request、EPANET 原生文件缺失/警告、原始数据篡改及清单篡改均有注入验证。fsync/替换失败与并发读写验证旧文档完整，真实中断和监督异常验证进程回收。
+
+Windows 本机无法创建符号链接，故该真实链接注入跳过；POSIX 忽略 SIGTERM 的进程也仅在 Linux 运行。Linux CI 必须实际执行这两项，Windows 直接终止行为由真实进程回收测试覆盖。
+
+新增物理校验曾错误地把 WNTR 孤立节点的零水头/压力当成高程不一致。核对 WNTR 1.5 的 `store_results_in_network` 和 `save_results` 后，父进程按每个原始时刻的开启管段图确认与水源断开，再检查零供水/漏损/相邻流量；连通节点仍校验水头与压力。重新计算的 Net1/Net3 隔离均通过。测试样本的 pandas 整数列误用小数被修正为浮点列，未改动真实计算。一次共享契约本机 POST 发生 WinError 10053，随后 19 项完整重跑通过，不计作物理结果失败。

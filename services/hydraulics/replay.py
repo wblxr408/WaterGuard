@@ -5,6 +5,7 @@ from pathlib import Path
 from .adapter import write
 from .datasets import ROOT
 from .runtime import PhysicalAdapter, engine_identity
+from .integrity import verify_inventory, validate_output
 from waterguard_contracts.core import file_hash, load, require, resolve
 
 
@@ -31,12 +32,8 @@ def compare_frames(a,b):
 
 def verify_evidence(folder):
     folder=Path(folder).resolve()
-    manifest=load(folder/'evidence-manifest.json')
-    files={p.name for p in folder.iterdir() if p.is_file() and p.name!='evidence-manifest.json'}
-    require(files==set(manifest['hashes']),'Evidence inventory mismatch')
-    for ref,expected in manifest['hashes'].items():
-        require(file_hash(resolve(folder,ref))==expected,'Evidence hash mismatch: '+ref)
-    result=load(folder/'result.json')
+    verify_inventory(folder)
+    result=validate_output(folder)
     require(result['artifact']['status']=='SUCCEEDED','Cannot numerically replay an invalid run')
     return result
 

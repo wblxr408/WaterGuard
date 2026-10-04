@@ -8,6 +8,10 @@
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
+[物理模型与算法评估](docs/物理模型与算法评估.md) 逐项核对现实物理因素，包含局部需求/PDD、背景漏损、能量与储水检查、内部事件采样和 26 组步长/参数敏感性实算；明确水锤、气穴、破口变形和现场校准的缺口。
+
+[工程可靠性审查](docs/仿真工程可靠性审查.md) 记录进程、协议、原子写入、资源边界与回放环境加固，以及进入工业部署前仍需完成的验证。
+
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 
 ### 最新前端（对外演示以此为准）
@@ -48,6 +52,8 @@ npm start
 | [前端设计](docs/前端设计.md) | 数据驱动三维管网、Blender 资产、二维分析、AGH 事件和证据界面 |
 | [后端设计](docs/后端设计.md) | API、会话宿主、工具网关、水力仿真、契约、治理和证据存储 |
 | [Agent 设计](docs/Agent设计.md) | AGH 核心执行、Agnes 三角色、工具权限、反馈修正与评测 |
+| [AGH 验收清单](docs/AGH验收清单.md) | 配置模型 Key 后的真实工具闭环、异常与证据核验步骤 |
+| [Agent 设计审查](docs/Agent设计审查-2026-10-04.md) | 当前环境实测、Agent 工具链缺口、优先级与设计优化 |
 
 三份文档是当前实施依据。已冻结的公共字段与状态以 [可执行 Schema](packages/contracts/schema/waterguard.schema.json) 和 [契约说明](packages/contracts/README.md) 为准；后端设计保留架构依据，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
 

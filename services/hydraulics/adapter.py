@@ -19,8 +19,8 @@ ENGINE = f'WNTR/{wntr.__version__};EPANET/2.2'
 
 
 def write(path, value):
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)+'\n', encoding='utf-8', newline='\n')
+    from .storage import write as atomic_write
+    atomic_write(path,value)
 
 
 def network_assets(network_id):

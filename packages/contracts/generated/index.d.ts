@@ -18,7 +18,7 @@ export type Hash = string;
 export type TaskSpec = {
   [k: string]: unknown;
 } & {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   task_id: string;
   revision: number;
   network_ref: NetworkRef;
@@ -45,6 +45,7 @@ export type TaskSpec = {
   constraint_hash: Hash;
   hydraulic_options?: HydraulicOptions;
   control_policy?: ControlPolicy;
+  physical_parameters?: PhysicalParameters;
 };
 export type Fault = {
   [k: string]: unknown;
@@ -65,7 +66,7 @@ export type Fault = {
 export type NetworkScene = {
   [k: string]: unknown;
 } & {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   network_id: string;
   mode: Mode;
   coordinate_system: string;
@@ -84,7 +85,7 @@ export type Mode = "live" | "replay" | "fixture" | "benchmark";
 export type SimulationArtifact = {
   [k: string]: unknown;
 } & {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   simulation_id: string;
   candidate_id: string;
   task_ref: TaskRef;
@@ -103,7 +104,7 @@ export type SimulationArtifact = {
 export type Series = {
   [k: string]: unknown;
 } & {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   simulation_id: string;
   mode: Mode;
   units: Units;
@@ -116,7 +117,7 @@ export type Series = {
 export type Diagnostics = {
   [k: string]: unknown;
 } & {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   simulation_id: string;
   mode: Mode;
   converged: boolean | null;
@@ -137,7 +138,7 @@ export type RunPhase =
   "INTAKE" | "MODELING" | "BASELINE" | "PLANNING" | "SIMULATING" | "VERIFYING" | "REVIEWING" | "PACKAGING";
 
 export interface NetworkManifest {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   network_id: string;
   revision: number;
   sha256: Hash;
@@ -241,8 +242,34 @@ export interface ControlOverride {
   control_names: [string, ...string[]];
   reason: string;
 }
+export interface PhysicalParameters {
+  roughness_multiplier: number;
+  reservoir_head_offset_m: number;
+  tank_level_offset_m: number;
+  node_demand_multipliers: {
+    [k: string]: number;
+  };
+  node_pdd: {
+    [k: string]: NodePDD;
+  };
+  /**
+   * @maxItems 100
+   */
+  background_leaks: BackgroundLeak[];
+  solver_tolerance: number;
+}
+export interface NodePDD {
+  minimum_pressure_m: number;
+  required_pressure_m: number;
+  pressure_exponent: number;
+}
+export interface BackgroundLeak {
+  node_id: string;
+  area_m2: number;
+  discharge_coefficient: number;
+}
 export interface ActionPlan {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   candidate_id: string;
   task_ref: TaskRef;
   parent_candidate_id: string | null;
@@ -266,7 +293,7 @@ export interface Action {
   simulation_time_s: number;
 }
 export interface ActionCatalog {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   catalog_id: string;
   network_id: string;
   /**
@@ -306,7 +333,7 @@ export interface SceneLink {
   initial_status: "open" | "closed";
 }
 export interface SimulationResult {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   mode: Mode;
   artifact: SimulationArtifact;
   series: Series | null;
@@ -356,7 +383,7 @@ export interface TankSample {
   net_inflow_m3s: number;
 }
 export interface VerificationReport {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   verification_id: string;
   simulation_id: string;
   candidate_id: string;
@@ -420,7 +447,7 @@ export interface Admission {
   recommendation_eligible: "pass" | "fail" | "pending";
 }
 export interface RunRecord {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   run_id: string;
   task_ref: TaskRef;
   mode: Mode;
@@ -441,7 +468,7 @@ export interface RunRecord {
   missing_items: string[];
 }
 export interface RunEvent {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   event_id: string;
   sequence: number;
   run_id: string;
@@ -461,7 +488,7 @@ export interface RunEvent {
   payload_ref: string;
 }
 export interface EvidenceManifest {
-  schema_version: "0.1.0" | "0.2.0" | "0.3.0";
+  schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   bundle_id: string;
   run_id: string;
   mode: Mode;

@@ -16,7 +16,7 @@ def make_server(output_root=ROOT/'artifacts/hydraulics', port=8001):
     server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
     server.output_root=Path(output_root)
     server.index=index
-    if index['schema_version']=='0.3.0':
+    if index['schema_version'] in ('0.3.0','0.4.0'):
         from .compiler import assets
         server.assets={key:assets(key) for key in NETWORKS}
     else:
@@ -78,10 +78,10 @@ class Handler(BaseHTTPRequestHandler):
             if endpoint=='series':
                 kwargs={k:v[0] if k=='node_id' else int(v[0]) for k,v in query.items()}
                 from .runtime import PhysicalAdapter
-                adapter=PhysicalAdapter if self.server.index['schema_version']=='0.3.0' else EpanetAdapter
+                adapter=PhysicalAdapter if self.server.index['schema_version'] in ('0.3.0','0.4.0') else EpanetAdapter
                 return self.respond(200,adapter(self.server.output_root).get_series(sid,**kwargs))
-            if endpoint in ('result','verification','evidence','task','plan','physics','mapping'):
-                file={'evidence':'evidence-manifest.json','physics':'physical-checks.json','mapping':'entity-map.json'}.get(endpoint,endpoint+'.json')
+            if endpoint in ('result','verification','evidence','task','plan','physics','mapping','analysis'):
+                file={'evidence':'evidence-manifest.json','physics':'physical-checks.json','mapping':'entity-map.json','analysis':'hydraulic-analysis.json'}.get(endpoint,endpoint+'.json')
                 return self.respond(200,load(resolve(self.server.output_root,sid+'/'+file)))
         self.respond(404,dict(mode='benchmark',code='NOT_FOUND'))
 

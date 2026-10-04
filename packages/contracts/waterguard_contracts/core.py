@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import copy
+import errno
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
+import time
 from typing import Protocol
 
 from jsonschema import Draft7Validator, FormatChecker
@@ -17,7 +20,16 @@ VERIFIER = 'fixture-reference/0.1.0'
 
 
 def load(path: Path):
-    return json.loads(path.read_text(encoding='utf-8'), parse_constant=lambda x: fail(f'Non-finite JSON: {x}'))
+    for attempt in range(6):
+        try:
+            text=path.read_text(encoding='utf-8')
+            break
+        except PermissionError as exc:
+            # Windows atomic replacement can briefly make a pathname inaccessible.
+            # Retry only this OS access error; malformed JSON is never retried.
+            if os.name!='nt' or exc.errno!=errno.EACCES or attempt==5:raise
+            time.sleep(.01*2**attempt)
+    return json.loads(text, parse_constant=lambda x: fail(f'Non-finite JSON: {x}'))
 
 
 def fail(message):
@@ -109,7 +121,7 @@ def check_task(task, catalog, scene):
     limits = task['action_limits']
     require(set(limits['allowed_link_ids']) <= set(facilities), 'Unknown allowed facility')
     require(w['evaluation_start_s'] <= limits['earliest_s'] <= limits['latest_s'] < w['end_s'], 'Invalid action window')
-    require(task['schema_version'] == '0.3.0' or task['fault'] is None or task['fault']['kind'] == 'closure', 'Reference verifier supports closure only before 0.3.0')
+    require(task['schema_version'] in ('0.3.0','0.4.0') or task['fault'] is None or task['fault']['kind'] == 'closure', 'Reference verifier supports closure only before 0.3.0')
 
 
 def check_plan(task, plan, catalog):
@@ -124,7 +136,7 @@ def check_plan(task, plan, catalog):
         link, kind, time = action['link_id'], action['kind'], action['simulation_time_s']
         require(link in limits['allowed_link_ids'] and link in facilities, 'Unknown or unauthorized facility')
         require(kind in limits['allowed_kinds'] and kind in facilities[link]['allowed_actions'], 'Action not allowed')
-        require(task['schema_version'] == '0.3.0' or kind in ('link_open', 'link_close'), 'Pump actions require a verified real adapter')
+        require(task['schema_version'] in ('0.3.0','0.4.0') or kind in ('link_open', 'link_close'), 'Pump actions require a verified real adapter')
         require(limits['earliest_s'] <= time <= limits['latest_s'], 'Action outside time window')
         require((time - task['time_window']['start_s']) % task['time_window']['step_s'] == 0, 'Action not on sample boundary')
         require(task['fault'] is None or link != task['fault']['link_id'], 'Action conflicts with forced fault state')

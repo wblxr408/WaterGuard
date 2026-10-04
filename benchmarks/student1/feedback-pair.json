@@ -5,13 +5,13 @@
   "cases": [
     {
       "case": "real-candidate-a",
-      "simulation_id": "sim-ac2868ca1179461b98ab4c83778270e8",
+      "simulation_id": "sim-43b498c358c74e1d9267fcf5bf4c8319",
       "network_id": "epa-net3",
       "engine": "wntr",
       "metrics": {
         "shortage_m3": 187.305852698,
-        "supply_ratio": 0.9657389616564475,
-        "min_pressure_m": -24.472849915648634,
+        "supply_ratio": 0.9657389616564501,
+        "min_pressure_m": -24.47284991564924,
         "critical_node_time_pass_ratio": null,
         "action_cost": 0
       },
@@ -22,12 +22,12 @@
         "required_stress_tests_pass": "pending",
         "recommendation_eligible": "fail"
       },
-      "result_ref": "sim-ac2868ca1179461b98ab4c83778270e8/result.json",
-      "verification_ref": "sim-ac2868ca1179461b98ab4c83778270e8/verification.json"
+      "result_ref": "sim-43b498c358c74e1d9267fcf5bf4c8319/result.json",
+      "verification_ref": "sim-43b498c358c74e1d9267fcf5bf4c8319/verification.json"
     },
     {
       "case": "real-candidate-b",
-      "simulation_id": "sim-970c2250885444f4b01071b4ef5d2c80",
+      "simulation_id": "sim-3a7c096541f94f6fafe78d545ecc34d3",
       "network_id": "epa-net3",
       "engine": "wntr",
       "metrics": {
@@ -44,8 +44,8 @@
         "required_stress_tests_pass": "pending",
         "recommendation_eligible": "fail"
       },
-      "result_ref": "sim-970c2250885444f4b01071b4ef5d2c80/result.json",
-      "verification_ref": "sim-970c2250885444f4b01071b4ef5d2c80/verification.json"
+      "result_ref": "sim-3a7c096541f94f6fafe78d545ecc34d3/result.json",
+      "verification_ref": "sim-3a7c096541f94f6fafe78d545ecc34d3/verification.json"
     }
   ],
   "prewarm_comparison": {
@@ -58,12 +58,12 @@
       "expected_demand_m3s": 0,
       "delivered_demand_m3s": 0,
       "leak_flow_m3s": 0,
-      "flow_m3s": 2.325234189221037e-14,
-      "downstream_flow_m3s": 2.325234189221037e-14,
+      "flow_m3s": 5.273559366969494e-16,
+      "downstream_flow_m3s": 5.273559366969494e-16,
       "head_m": 7.105427357601002e-15,
       "level_m": 7.105427357601002e-15,
       "volume_m3": 1.1368683772161603e-12,
-      "net_inflow_m3s": 3.608224830031759e-16
+      "net_inflow_m3s": 4.718447854656915e-16
     }
   },
   "task_constraint_hash": "sha256:ff172c7f90e03068db3ebc691112b6a5a46f322471380dc94bfa4c0284fc3457",
