@@ -4,12 +4,28 @@
 
 ## 当前状态
 
+<<<<<<< Updated upstream
 已完成三人共同前置的 [contracts](packages/contracts/README.md) 和 [同学 1 的仿真与数据交付](docs/同学1交付与复现.md)：EPA Net1/Net3、真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、管段与泵操作、独立进程、物理检查、回放和证据包。公共 Schema 0.3.0 兼容旧 Fixture；计算标为 Benchmark。Agnes、AGH 和前端工作台仍待接入。
+=======
+已完成三人共同前置的 [contracts](packages/contracts/README.md)、[同学 1 的仿真与数据交付](docs/同学1交付与复现.md)，以及后端运行治理基础：EPA Net1/Net3 的真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、独立进程、物理检查、回放和基准证据；任务/运行的 SQLite 状态、JSONL 事件、SSE、有限动作域候选生成、独立验证、预算与证据清单。公共 Schema 已升级至 0.4.0 并兼容旧 Fixture；计算标为 Benchmark。AGH 守护进程与 11 项 WaterGuard MCP 工具已挂载，但真实 Agnes 模型会话、原生轨迹、取消/恢复和 live 反馈修正仍需配置赛事 Key 后实测；二维前端工作台已接入 API、真实水力计算与独立校验。
+>>>>>>> Stashed changes
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 
+<<<<<<< Updated upstream
+=======
+前后端统一启动（优先使用项目已有 `.venv`，无需激活环境）：
+
+```powershell
+cd D:\WaterGuard
+npm start
+```
+
+打开 [工作台](http://127.0.0.1:8000/) 即可选择管网、创建故障任务、运行 Benchmark、比较候选和查看证据；完整步骤见 [前后端启动与接入](docs/前后端启动与接入.md)。支持 Net1/Net3 的正常、关闭、泄漏和断裂工况，默认固定零动作/单动作枚举。它默认将本地运行数据写入未提交的 `artifacts/`。`POST /api/tasks/{id}/runs` 的 `mode=live` 在 AGH 宿主完成前会明确返回 `AGH_UNAVAILABLE`，不会暗中替换为其他 Agent 循环。
+
+>>>>>>> Stashed changes
 现有 0.2 实施设计：
 
 | 文档 | 内容 |
@@ -20,7 +36,7 @@
 
 三份文档是当前实施依据。已冻结的公共字段与状态以 [可执行 Schema](packages/contracts/schema/waterguard.schema.json) 和 [契约说明](packages/contracts/README.md) 为准；后端设计保留架构依据，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
 
-[0.1 历史交互蓝图](design/waterguard-blueprint.html) 保留用于查看初期布局，下载后可直接用浏览器打开。其架构已由上述文档取代；拓扑、读数与运行记录全部是示意数据，不是可参赛运行证据。
+[二维工作台](design/waterguard-blueprint.html) 沿用初期布局并接入后端，打开本地服务地址使用。其架构、治理和评测页保留为设计参考；工作台和方案页的拓扑、读数与运行记录来自真实后端产物。
 
 ## 产品任务
 
