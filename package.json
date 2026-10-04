@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": ["packages/contracts"],
   "scripts": {
+    "start": "python scripts/start_workbench.py",
     "contracts:types": "npm run generate --workspace @waterguard/contracts",
     "contracts:types:check": "npm run check --workspace @waterguard/contracts",
     "contracts:check": "python packages/contracts/scripts/check.py",

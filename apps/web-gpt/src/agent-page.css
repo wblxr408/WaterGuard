@@ -1,0 +1,1068 @@
+/* 智能体页面：Dify 式工作流画布（点阵底、白色节点卡片、类型色块、状态小标、贝塞尔连线），
+   右侧是节点详情与追踪；下方是设计细节。沿用全站明亮风格的变量。 */
+.agent-page {
+  --wf-user: #0086c9;
+  --wf-start: #2970ff;
+  --wf-llm: #6938ef;
+  --wf-tool: #0e9384;
+  --wf-gateway: #475467;
+  --wf-condition: #dc6803;
+  --wf-end: #2970ff;
+  --wf-ok: #079455;
+  --wf-fail: #d92d20;
+  --wf-wait: #b54708;
+  --wf-run: #2970ff;
+}
+.agent-honesty {
+  align-items: flex-start;
+  border-color: #f1d9ad;
+  background: var(--warn-bg);
+  color: #6f4a10;
+}
+.agent-honesty p b {
+  margin-right: 4px;
+}
+
+/* ---------------------------------------------------------------- 工作流外框 */
+.wf {
+  margin-top: 18px;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+.wf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.wf-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wf-app {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #7a5af8, #5925dc);
+  color: #fff;
+}
+.wf-title b {
+  display: block;
+  font-size: 16px;
+  color: var(--ink);
+}
+.wf-title small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wf-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.wf-status .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--wf-wait);
+  background: #fef6ee;
+}
+.wf-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.wf-pill.running {
+  color: var(--wf-run);
+  background: #eff4ff;
+}
+.wf-pill.running i {
+  animation: wf-blink 1s ease-in-out infinite;
+}
+.wf-meta {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+/* 详情面板平时收起，画布占满整宽；点节点后右侧让出 360px */
+.wf-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.wf-body.open {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+.wf-views {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+.wf-views button {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  color: var(--muted);
+  transition:
+    background-color 0.25s var(--ease-out),
+    color 0.25s var(--ease-out);
+}
+.wf-views button.on {
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
+}
+.wf-missing {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--wf-wait);
+  background: #fffaf3;
+}
+
+/* ---------------------------------------------------------------- 画布 */
+.wf-canvas {
+  position: relative;
+  height: 480px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background-color: #f2f4f7;
+  background-image: radial-gradient(#d0d5dd 1.1px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+.wf-canvas:active {
+  cursor: grabbing;
+}
+.wf-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+.wf-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.wf-edges marker path {
+  fill: #98a2b3;
+}
+.wf-edge path {
+  fill: none;
+  stroke: #98a2b3;
+  stroke-width: 1.6;
+  transition:
+    stroke 0.4s var(--ease-out),
+    stroke-width 0.4s var(--ease-out);
+}
+.wf-edge.on path {
+  stroke: var(--wf-start);
+  stroke-width: 2.2;
+}
+.wf-edge.loop path {
+  stroke-dasharray: 6 5;
+}
+.wf-edge.loop.on path {
+  stroke: var(--wf-condition);
+}
+.wf-edge.live path {
+  stroke-dasharray: 7 6;
+  animation: wf-flow 0.8s linear infinite;
+}
+.wf-edge text {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--muted);
+  paint-order: stroke;
+  stroke: #f2f4f7;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+.wf-edge.loop text {
+  fill: var(--wf-condition);
+}
+
+.wf-node {
+  position: absolute;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 11px;
+  align-items: center;
+  padding: 12px 13px;
+  border: 1.5px solid #eaecf0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.05),
+    0 6px 16px -8px rgba(16, 24, 40, 0.18);
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color 0.3s var(--ease-out),
+    box-shadow 0.3s var(--ease-out),
+    transform 0.3s var(--ease-out);
+}
+.wf-node:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 2px 4px rgba(16, 24, 40, 0.06),
+    0 12px 26px -10px rgba(16, 24, 40, 0.28);
+}
+.wf-node.sel {
+  border-color: var(--wf-start);
+  box-shadow:
+    0 0 0 3px rgba(41, 112, 255, 0.16),
+    0 12px 26px -10px rgba(41, 112, 255, 0.35);
+}
+.wf-node.agent.off {
+  border-style: dashed;
+  border-color: #c4b5fd;
+  background: #fcfaff;
+}
+.wf-icon {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: #ffffff;
+  background: var(--wf-k, var(--wf-gateway));
+}
+.wf-node.start .wf-icon,
+.wf-icon.start {
+  --wf-k: var(--wf-start);
+}
+.wf-node.llm .wf-icon,
+.wf-icon.llm {
+  --wf-k: var(--wf-llm);
+}
+.wf-node.tool .wf-icon,
+.wf-icon.tool {
+  --wf-k: var(--wf-tool);
+}
+.wf-node.gateway .wf-icon,
+.wf-icon.gateway {
+  --wf-k: var(--wf-gateway);
+}
+.wf-node.condition .wf-icon,
+.wf-icon.condition {
+  --wf-k: var(--wf-condition);
+}
+.wf-node.end .wf-icon,
+.wf-icon.end {
+  --wf-k: var(--wf-end);
+}
+.wf-node.user .wf-icon,
+.wf-icon.user {
+  --wf-k: var(--wf-user);
+}
+
+/* ---------------------------------------------------------------- 分支导图 */
+.wf-canvas.mind {
+  height: 560px;
+}
+.mm-node .wf-text b {
+  font-size: 16px;
+}
+/* 叶子上标「↺ 回到……」：虚线框，副标题用琥珀色 */
+.mm-node.leaf-loop {
+  border-style: dashed;
+}
+.mm-node.leaf-loop .wf-text small {
+  color: var(--wf-wait);
+  font-weight: 600;
+}
+/* 分支名写在连线末端、子节点左上方 */
+.mm-tag {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--tag-line, #d0d5dd);
+  background: #ffffff;
+  color: var(--tag, #475467);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.78;
+}
+.mm-tag.on {
+  opacity: 1;
+  background: var(--tag-bg, #f2f4f7);
+}
+.mm-tag.IF {
+  --tag: #b93815;
+  --tag-line: #f9dbaf;
+  --tag-bg: #fef6ee;
+}
+.mm-tag.ELIF {
+  --tag: #93370d;
+  --tag-line: #fedf89;
+  --tag-bg: #fffaeb;
+}
+.mm-tag.ELSE {
+  --tag: #067647;
+  --tag-line: #abefc6;
+  --tag-bg: #ecfdf3;
+}
+.wf-edge.t-IF.on path,
+.wf-edge.t-ELIF.on path {
+  stroke: var(--wf-condition);
+}
+.wf-edge.t-ELSE.on path {
+  stroke: var(--wf-ok);
+}
+.wf-legend .k-loop::before {
+  content: none;
+}
+.wf-legend .k-loop {
+  color: var(--wf-wait);
+  font-weight: 600;
+}
+.wf-text {
+  min-width: 0;
+}
+.wf-text b {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.wf-text small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wf-state {
+  position: absolute;
+  top: -11px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #667085;
+  background: #ffffff;
+  border: 1px solid #eaecf0;
+}
+.wf-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.wf-node.ok .wf-state {
+  color: var(--wf-ok);
+  border-color: #abefc6;
+  background: #ecfdf3;
+}
+.wf-node.fail .wf-state {
+  color: var(--wf-fail);
+  border-color: #fecdca;
+  background: #fef3f2;
+}
+.wf-node.wait .wf-state {
+  color: var(--wf-wait);
+  border-color: #fedf89;
+  background: #fffaeb;
+}
+.wf-node.running .wf-state {
+  color: var(--wf-run);
+  border-color: #b2ccff;
+  background: #eff4ff;
+}
+.wf-node.running .wf-state i {
+  animation: wf-blink 0.9s ease-in-out infinite;
+}
+.wf-node.off .wf-state {
+  color: #7f56d9;
+  border-style: dashed;
+  border-color: #d6bbfb;
+  background: #faf5ff;
+}
+.wf-node.running {
+  border-color: #84adff;
+}
+
+.wf-zoom {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px -6px rgba(16, 24, 40, 0.2);
+}
+.wf-zoom button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  color: var(--ink-2);
+}
+.wf-zoom button:hover {
+  background: #f2f4f7;
+}
+.wf-legend {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 3px;
+  vertical-align: -1px;
+  background: var(--c);
+}
+.wf-legend .k-llm {
+  --c: var(--wf-llm);
+}
+.wf-legend .k-tool {
+  --c: var(--wf-tool);
+}
+.wf-legend .k-gateway {
+  --c: var(--wf-gateway);
+}
+.wf-legend .k-condition {
+  --c: var(--wf-condition);
+}
+
+/* 窄屏的竖排节点列表（宽屏隐藏） */
+.wf-list {
+  display: none;
+  margin: 0;
+  padding: 14px;
+  list-style: none;
+  background-color: #f2f4f7;
+  background-image: radial-gradient(#d0d5dd 1.1px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+.wf-list li + li {
+  position: relative;
+  margin-top: 14px;
+}
+.wf-list li + li::before {
+  content: "";
+  position: absolute;
+  left: 30px;
+  top: -14px;
+  width: 2px;
+  height: 14px;
+  background: #98a2b3;
+}
+.wf-li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #eaecf0;
+  border-radius: 12px;
+  background: #ffffff;
+  text-align: left;
+  color: var(--ink);
+}
+.wf-li.sel {
+  border-color: var(--wf-start);
+}
+.wf-li.agent.off {
+  border-style: dashed;
+  border-color: #c4b5fd;
+  background: #fcfaff;
+}
+.wf-li .wf-icon {
+  grid-row: auto;
+  width: 32px;
+  height: 32px;
+}
+.wf-li .wf-text b {
+  font-size: 14.5px;
+}
+/* 分支导图的大纲：分支名写在卡片上方 */
+.wf-list li.branch .mm-tag {
+  position: static;
+  display: inline-flex;
+  margin-bottom: 6px;
+}
+
+/* ---------------------------------------------------------------- 右侧面板 */
+.wf-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 480px;
+  border-left: 1px solid var(--line);
+  background: #ffffff;
+}
+.wf-panel-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.wf-panel-tabs button {
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.wf-panel-tabs button.on {
+  border-bottom-color: var(--wf-start);
+  color: var(--ink);
+  font-weight: 600;
+}
+.wf-panel-tabs .wf-close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: 0 0 4px auto;
+  padding: 0;
+  border-radius: 7px;
+  color: var(--muted);
+}
+.wf-panel-tabs .wf-close:hover {
+  background: #f2f4f7;
+  color: var(--ink);
+}
+.wf-branch {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  background: #fcfcfd;
+}
+.wf-branch div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.wf-branch dt {
+  flex: none;
+  width: 92px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-branch dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wf-branch .mm-tag {
+  position: static;
+}
+.wf-node-panel,
+.wf-trace {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+.wf-node-panel header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.wf-node-panel header b {
+  display: block;
+  font-size: 16px;
+  color: var(--ink);
+}
+.wf-node-panel header small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wf-node-panel .wf-icon {
+  grid-row: auto;
+}
+.wf-badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #667085;
+  background: #f2f4f7;
+}
+.wf-badge.ok {
+  color: var(--wf-ok);
+  background: #ecfdf3;
+}
+.wf-badge.fail {
+  color: var(--wf-fail);
+  background: #fef3f2;
+}
+.wf-badge.wait {
+  color: var(--wf-wait);
+  background: #fffaeb;
+}
+.wf-badge.running {
+  color: var(--wf-run);
+  background: #eff4ff;
+}
+.wf-badge.off {
+  color: #7f56d9;
+  background: #faf5ff;
+}
+.wf-note {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  background: #f9fafb;
+}
+.wf-does {
+  margin-top: 12px;
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+.wf-bound {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--warn);
+}
+.wf-bound svg {
+  flex: none;
+  margin-top: 3px;
+}
+.wf-tools h4,
+.wf-runs h4 {
+  margin-top: 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.wf-tools ul {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.wf-tools li {
+  display: grid;
+  gap: 3px;
+}
+.wf-tools code {
+  justify-self: start;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+  color: #5925dc;
+  background: #f4f3ff;
+}
+.wf-tools span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wf-agent-off {
+  margin-top: 12px;
+  padding: 9px 11px;
+  border: 1px dashed #d6bbfb;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #6941c6;
+  background: #fcfaff;
+}
+.wf-event {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #fcfcfd;
+}
+.wf-event header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.wf-event .seq,
+.wf-trace .seq {
+  font-family: var(--num);
+  font-weight: 700;
+  color: var(--muted);
+}
+.wf-event .who {
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-event time,
+.wf-trace time {
+  font-family: var(--num);
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-line {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.wf-ids {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-trace {
+  margin: 0;
+  list-style: none;
+}
+.wf-trace li + li {
+  margin-top: 4px;
+}
+.wf-trace button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 8px;
+  border-radius: 8px;
+  text-align: left;
+}
+.wf-trace button:hover {
+  background: #f2f4f7;
+}
+.wf-trace b {
+  display: block;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.wf-trace small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-trace .empty {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- 共用小件 */
+.ag-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 12px 0 0;
+}
+.ag-kv .wide {
+  grid-column: 1 / -1;
+}
+.ag-kv dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.ag-kv dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.ag-flag {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 12.5px;
+}
+.ag-actions {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+.ag-raw,
+.ag-note {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ag-raw {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 0;
+  color: var(--accent-strong);
+}
+.ag-gates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ag-gates li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: #eef0f7;
+}
+.ag-gates li span {
+  font-weight: 700;
+}
+.ag-gates li small {
+  color: var(--muted);
+}
+.ag-gates li.pass {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+.ag-gates li.fail {
+  color: var(--bad);
+  background: var(--bad-bg);
+}
+.ag-gates li.pending {
+  background: var(--pending-bg);
+}
+
+/* ---------------------------------------------------------------- 设计细节 */
+.ag-design {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+.ag-design > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.ag-design h2 {
+  font-size: 17px;
+  color: var(--ink);
+}
+.ag-design > header > span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ag-design table {
+  font-size: 13px;
+}
+.ag-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.ag-tabs button {
+  padding: 9px 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.ag-tabs button.on {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.ag-tab-body {
+  margin-top: 14px;
+}
+.ag-tab-body td,
+.ag-tab-body th {
+  vertical-align: top;
+}
+.ag-bound {
+  color: var(--warn);
+}
+.ag-flow {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.ag-flow li {
+  display: grid;
+  grid-template-columns: 30px 92px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  counter-increment: step;
+}
+.ag-flow li::before {
+  content: counter(step);
+  font-family: var(--num);
+  font-weight: 700;
+  color: var(--accent);
+}
+.ag-who {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.ag-flow p {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.ag-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 22px;
+}
+.ag-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+.ag-probes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ag-probes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.ag-design .ag-note {
+  margin-top: 12px;
+  line-height: 1.7;
+}
+
+@keyframes wf-flow {
+  to {
+    stroke-dashoffset: -26;
+  }
+}
+@keyframes wf-blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (max-width: 1100px) {
+  .wf-body,
+  .wf-body.open {
+    grid-template-columns: 1fr;
+  }
+  .wf-panel {
+    max-height: none;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .ag-two {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .wf-canvas {
+    display: none;
+  }
+  .wf-list {
+    display: block;
+  }
+  .ag-flow li {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .ag-flow li p {
+    grid-column: 2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wf-edge.live path,
+  .wf-pill.running i,
+  .wf-node.running .wf-state i {
+    animation: none;
+  }
+  .wf-node {
+    transition: none;
+  }
+}

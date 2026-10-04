@@ -1,0 +1,903 @@
+/* 首页：深色（其余页面保持明亮）。只有两块——
+   开场：白瓷闸阀的渲染序列钉在屏幕上，往下滑时拆开再装回；
+   智能体：三个角色、八个运行阶段、接入状态和一个真实计算结果。 */
+main.cover-main {
+  padding-top: 0;
+}
+.cover {
+  --cv-bg: #02050d;
+  --cv-ink: #eaf0fb;
+  --cv-ink-2: rgba(212, 222, 244, 0.8);
+  --cv-muted: rgba(196, 208, 234, 0.62);
+  --cv-line: rgba(150, 180, 255, 0.14);
+  --cv-cyan: #46d6ff;
+  --cv-amber: #ffb547;
+  --cv-teal: #2fe0b5;
+  --cv-mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
+  --cv-pad: max(40px, calc((100vw - 1440px) / 2));
+  position: relative;
+  isolation: isolate;
+  color: var(--cv-ink);
+  background: var(--cv-bg);
+  overflow: clip;
+}
+.cover h1,
+.cover h2,
+.cover h3 {
+  color: #f3f6ff;
+  text-wrap: balance;
+}
+
+/* ---------------------------------------------------------------- 开场
+   外层很高，里面一层钉在屏幕上（sticky）；滑过的距离就是拆开再装回的进度。
+   闸阀所在的“舞台”由脚本按进度平移、缩放，序列帧画在舞台里的画布上。 */
+@property --k {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+.cv-hero {
+  position: relative;
+  height: 240vh;
+}
+.cover.reduce .cv-hero {
+  height: 100vh;
+  height: 100svh;
+}
+.hero-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 0 var(--cv-pad);
+  overflow: hidden;
+  background: linear-gradient(180deg, #040b1f, #030817 55%, var(--cv-bg));
+}
+.hero-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 30% 52% at 50% 50%,
+    rgba(40, 92, 210, 0.34),
+    transparent 70%
+  );
+  will-change: transform;
+}
+
+/* 舞台：竖幅 2:3，与序列帧同比例。实物从上往下“显影”（--k 由进场动画推进），
+   停在阀体下部，最下面留一截线稿；一开始滑动（--reveal 由脚本给），整只阀显出来 */
+.hero-stage {
+  --m0: 6%;
+  --m1: 70%;
+  --m: calc(var(--m0) + (var(--m1) - var(--m0)) * var(--k));
+  --mm: calc(var(--m) + (112% - var(--m)) * var(--reveal, 0));
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 92vh;
+  height: 92svh;
+  aspect-ratio: 2 / 3;
+  will-change: transform;
+  animation: hero-develop 2.9s cubic-bezier(0.65, 0, 0.35, 1) 1.1s both;
+}
+.hero-enter {
+  position: absolute;
+  inset: 0;
+  animation: hero-in 2.4s var(--ease-expo) both;
+}
+.hero-canvas,
+.hero-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.hero-canvas {
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 calc(var(--mm) - 7%),
+    transparent var(--mm)
+  );
+  mask-image: linear-gradient(
+    180deg,
+    #000 calc(var(--mm) - 7%),
+    transparent var(--mm)
+  );
+}
+.hero-lines {
+  opacity: calc(0.95 * (1 - var(--reveal, 0)));
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent calc(var(--mm) - 9%),
+    #000 calc(var(--mm) + 1%)
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent calc(var(--mm) - 9%),
+    #000 calc(var(--mm) + 1%)
+  );
+}
+.hero-scan {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: calc(var(--mm) - 3.5%);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(160, 232, 255, 0.95) 25% 75%,
+    transparent
+  );
+  box-shadow: 0 0 22px 3px rgba(70, 200, 255, 0.45);
+  opacity: calc(
+    min(1, var(--k) * 10) * min(1, (1 - var(--k)) * 5) * (1 - var(--reveal, 0))
+  );
+}
+
+/* 零件名：圆点在零件中轴上，细线引到右侧一列 */
+.hero-parts {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+.hero-parts li {
+  position: absolute;
+  left: var(--x, 50%);
+  top: var(--y, 50%);
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity 0.45s var(--ease-out);
+}
+.hero-parts li.on {
+  opacity: 1;
+}
+.hero-parts li::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a6e8ff;
+  box-shadow: 0 0 10px rgba(110, 210, 255, 0.9);
+}
+.hero-parts li::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 0;
+  width: calc(var(--len, 40px) - 8px);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(160, 225, 255, 0.7),
+    rgba(160, 225, 255, 0.28)
+  );
+}
+.hero-parts span {
+  position: absolute;
+  left: var(--len, 40px);
+  top: 0;
+  transform: translate(10px, -50%);
+  white-space: nowrap;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: #e6f1ff;
+}
+
+/* 文字 */
+.hero-copy {
+  position: relative;
+  z-index: 2;
+  align-self: center;
+  max-width: min(860px, 56vw);
+  padding-top: 88px;
+}
+.cv-hero h1 {
+  font-size: clamp(38px, 5.3vw, 92px);
+  font-weight: 300;
+  line-height: 1.16;
+  letter-spacing: 0.02em;
+}
+.cv-hero h1 .ln {
+  display: block;
+  white-space: nowrap;
+}
+.cv-hero h1 .ch {
+  display: inline-block;
+  animation: hero-ch 1.3s var(--ease-expo) both;
+  animation-delay: calc(420ms + var(--i) * 46ms);
+}
+.hero-lead {
+  margin-top: 30px;
+  max-width: min(30em, 46vw);
+  font-size: clamp(15px, 1.12vw, 18px);
+  line-height: 1.9;
+  color: var(--cv-ink-2);
+  animation: hero-up 1.2s var(--ease-expo) 1.25s both;
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 42px;
+  animation: hero-up 1.2s var(--ease-expo) 1.45s both;
+}
+.hero-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 52px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  transition:
+    background-color 0.35s var(--ease-out),
+    border-color 0.35s var(--ease-out),
+    color 0.35s var(--ease-out);
+}
+.hero-btn:focus-visible {
+  outline: 2px solid var(--cv-cyan);
+  outline-offset: 3px;
+}
+.hero-btn.primary {
+  padding-left: 26px;
+  background: #e9effc;
+  color: #07112b;
+}
+.hero-btn.primary:hover {
+  background: #ffffff;
+}
+.hero-btn.primary .sq {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-left: 26px;
+  background: #2d6bff;
+  color: #fff;
+}
+.hero-btn.primary .sq svg {
+  transition: transform 0.45s var(--ease-expo);
+}
+.hero-btn.primary:hover .sq svg {
+  transform: translateX(3px);
+}
+.hero-btn.ghost {
+  gap: 12px;
+  padding: 0 22px;
+  color: #e3eaf9;
+  background: rgba(14, 30, 72, 0.42);
+  border: 1px solid rgba(150, 180, 255, 0.24);
+}
+.hero-btn.ghost:hover {
+  border-color: rgba(150, 205, 255, 0.6);
+  color: #ffffff;
+}
+
+/* 拆装过程中左下角的说明（脚本按进度淡入） */
+.hero-caption {
+  position: absolute;
+  z-index: 2;
+  left: var(--cv-pad);
+  bottom: 13vh;
+  max-width: min(26em, 27vw);
+  opacity: 0;
+  pointer-events: none;
+}
+.hero-caption b {
+  display: block;
+  font-size: clamp(17px, 1.4vw, 22px);
+  font-weight: 500;
+  color: #f3f6ff;
+}
+.hero-caption p {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--cv-ink-2);
+}
+.hero-caption small {
+  display: block;
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--cv-muted);
+}
+
+.hero-foot {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 28px;
+  padding: 18px 0 24px;
+  border-top: 1px solid var(--cv-line);
+  font-size: 12.5px;
+  color: var(--cv-muted);
+}
+.hero-foot > * {
+  animation: hero-up 1s var(--ease-expo) 1.8s both;
+}
+.hero-scroll {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  letter-spacing: 0.06em;
+}
+.hero-scroll::before {
+  content: "";
+  width: 1px;
+  height: 26px;
+  background: linear-gradient(var(--cv-cyan), transparent);
+  animation: drip 2.2s var(--ease-expo) infinite;
+  transform-origin: top;
+}
+/* 「减少动画」时不播拆装，这句提示也不出现 */
+.cover.reduce .hero-scroll {
+  visibility: hidden;
+}
+.hero-status,
+.agent-state {
+  margin: 0;
+}
+.hero-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+}
+.hero-status div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hero-status dd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #e3eaf9;
+}
+.cover i.ok,
+.cover i.pending {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.cover i.ok {
+  background: var(--cv-teal);
+  box-shadow: 0 0 10px var(--cv-teal);
+}
+.cover i.pending {
+  background: var(--cv-amber);
+  box-shadow: 0 0 10px var(--cv-amber);
+}
+
+/* ---------------------------------------------------------------- 我们的系统
+   四个模块的真实界面截图，标签切换；屏幕的倾斜和缩放由脚本按滚动给 */
+.cv-system {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  justify-content: center;
+  padding: 56px var(--cv-pad);
+  border-top: 1px solid rgba(150, 180, 255, 0.1);
+  background:
+    radial-gradient(
+      ellipse 70% 50% at 50% 58%,
+      rgba(40, 92, 210, 0.22),
+      transparent 70%
+    ),
+    var(--cv-bg);
+}
+.sys-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(150, 180, 255, 0.2);
+  background: rgba(10, 22, 52, 0.5);
+}
+.sys-tabs button {
+  height: 40px;
+  padding: 0 20px;
+  font-size: 14.5px;
+  letter-spacing: 0.04em;
+  color: rgba(214, 224, 245, 0.75);
+  transition:
+    background-color 0.3s var(--ease-out),
+    color 0.3s var(--ease-out);
+}
+.sys-tabs button:hover {
+  color: #ffffff;
+}
+.sys-tabs button.on {
+  background: #e9effc;
+  color: #07112b;
+}
+.sys-tabs button:focus-visible,
+.sys-screen:focus-visible {
+  outline: 2px solid var(--cv-cyan);
+  outline-offset: 3px;
+}
+/* 标签、屏幕、按钮要在一屏里放下：屏幕宽度也受视口高度约束（16:10） */
+.sys-stage {
+  width: min(1200px, 100%, calc((100svh - 300px) * 1.6));
+  margin-top: clamp(28px, 4.5vh, 48px);
+}
+.sys-frame {
+  transform-origin: 50% 0%;
+  will-change: transform, opacity;
+}
+.sys-screen {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #f4f6fb;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 50px 120px -40px rgba(20, 70, 200, 0.55),
+    0 30px 60px -30px rgba(0, 0, 0, 0.8);
+  transition:
+    transform 0.5s var(--ease-expo),
+    box-shadow 0.5s var(--ease-expo);
+}
+.sys-screen:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 0 0 1px rgba(150, 200, 255, 0.25),
+    0 60px 140px -40px rgba(40, 110, 255, 0.7),
+    0 30px 60px -30px rgba(0, 0, 0, 0.8);
+}
+.sys-screen img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  opacity: 0;
+  transition: opacity 0.5s var(--ease-out);
+}
+.sys-screen img.on {
+  opacity: 1;
+}
+/* 屏幕上一道很淡的斜向反光 */
+.sys-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.14),
+    transparent 28%,
+    transparent 72%,
+    rgba(255, 255, 255, 0.05)
+  );
+}
+.sys-cta {
+  margin-top: clamp(28px, 4.5vh, 48px);
+}
+
+/* ---------------------------------------------------------------- 智能体简介（首页已不引用，CoverAgent 留给智能体页面复用） */
+.cv-agent {
+  position: relative;
+  padding: clamp(96px, 14vh, 160px) var(--cv-pad) clamp(80px, 12vh, 140px);
+  border-top: 1px solid rgba(150, 180, 255, 0.1);
+  background:
+    radial-gradient(
+      ellipse 60% 40% at 50% 0%,
+      rgba(40, 92, 210, 0.16),
+      transparent 70%
+    ),
+    var(--cv-bg);
+}
+.agent-head h2 {
+  max-width: 18em;
+  font-size: clamp(30px, 3.4vw, 56px);
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+/* 按词组折行，不把「角色」拆到两行 */
+.agent-head h2 span {
+  display: inline-block;
+}
+.agent-head p {
+  margin-top: 22px;
+  max-width: 40em;
+  font-size: clamp(15px, 1.1vw, 18px);
+  line-height: 1.9;
+  color: var(--cv-ink-2);
+}
+
+/* 运行阶段：一条线串起八站，「验证 → 方案规划」之间有一条回路；光点沿线走，在回路里绕一次 */
+.agent-track {
+  position: relative;
+  margin-top: clamp(56px, 8vh, 96px);
+  padding-bottom: 96px;
+}
+.agent-track ol {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.stop i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #0b1630;
+  border: 1.5px solid rgba(140, 200, 255, 0.75);
+}
+.stop.in-loop i {
+  border-color: rgba(255, 200, 130, 0.85);
+}
+.stop b {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e3eaf9;
+}
+.track-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.track-svg path {
+  fill: none;
+}
+.track-svg .base {
+  stroke: rgba(140, 190, 255, 0.3);
+  stroke-width: 1;
+}
+.track-svg .loop {
+  stroke: rgba(255, 196, 120, 0.6);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+.track-svg .runner {
+  fill: #a6e8ff;
+  filter: drop-shadow(0 0 6px #46d6ff);
+}
+.loop-note {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: rgba(255, 214, 160, 0.85);
+}
+
+/* 三个角色：并排三栏，细线分隔 */
+.agent-roles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--cv-line);
+}
+.agent-roles article {
+  padding: 30px 30px 6px 0;
+}
+.agent-roles article + article {
+  padding-left: 30px;
+  border-left: 1px solid var(--cv-line);
+}
+.agent-roles h3 {
+  font-size: 20px;
+  font-weight: 500;
+}
+.agent-roles p {
+  margin-top: 12px;
+  font-size: 14.5px;
+  line-height: 1.85;
+  color: var(--cv-ink-2);
+}
+.agent-roles .never {
+  font-size: 13px;
+  color: rgba(255, 214, 160, 0.82);
+}
+.agent-roles .tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-roles code {
+  display: inline-block;
+  padding: 3px 8px;
+  font-family: var(--cv-mono);
+  font-size: 12px;
+  color: #a9dcff;
+  background: rgba(70, 150, 255, 0.08);
+  border: 1px solid rgba(110, 170, 255, 0.18);
+}
+
+.agent-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 40px 64px;
+  margin-top: 52px;
+  padding-top: 30px;
+  border-top: 1px solid var(--cv-line);
+}
+.agent-state {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+.agent-state dt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #f3f6ff;
+}
+.agent-state dd {
+  margin: 8px 0 0 15px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--cv-ink-2);
+}
+.agent-example h3 {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--cv-muted);
+}
+.agent-example p {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #e3eaf9;
+}
+.agent-example .note {
+  font-size: 13px;
+  color: var(--cv-muted);
+}
+.agent-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 0;
+  font-size: 14px;
+  color: #9fd8ff;
+  transition: color 0.3s var(--ease-out);
+}
+.agent-link:hover {
+  color: #ffffff;
+}
+.agent-cta {
+  margin-top: 56px;
+}
+
+/* 首页的全局页头：透明叠在深色背景上 */
+.app.on-cover .global-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+}
+.app.on-cover .global-header :is(.brand strong, .brand small, .brand-mark) {
+  color: #eef3ff;
+}
+.app.on-cover .global-header nav button {
+  color: #9aa4bd;
+}
+.app.on-cover .global-header nav button.active {
+  color: #ffffff;
+}
+.app.on-cover .global-header .nav-indicator {
+  background: var(--cv-cyan, #46d6ff);
+  box-shadow: 0 0 12px #46d6ff;
+}
+.app.on-cover .global-header .icon-button {
+  color: #c9d1e3;
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(16px) brightness(0.5);
+  }
+}
+@keyframes hero-ch {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.5em, 0);
+    filter: blur(12px);
+  }
+}
+@keyframes hero-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+}
+@keyframes hero-develop {
+  from {
+    --k: 0;
+  }
+  to {
+    --k: 1;
+  }
+}
+@keyframes drip {
+  0% {
+    transform: scaleY(0);
+    opacity: 1;
+  }
+  70% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .agent-track ol {
+    font-size: 13px;
+  }
+  .agent-foot {
+    grid-template-columns: 1fr;
+  }
+}
+/* 窄屏：闸阀在上半屏，文字压在下半屏的深色渐变上；拆装时不标零件名，说明挪到顶部 */
+@media (max-width: 760px) {
+  .cover {
+    --cv-pad: 18px;
+  }
+  .cv-hero {
+    height: 220vh;
+  }
+  .hero-stage {
+    height: 80vh;
+    height: 80svh;
+  }
+  .hero-copy {
+    align-self: end;
+    max-width: none;
+    padding: 0 0 24px;
+  }
+  .hero-copy::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: calc(-1 * var(--cv-pad));
+    right: calc(-1 * var(--cv-pad));
+    bottom: -40px;
+    height: calc(100% + 36vh);
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgba(3, 7, 18, 0.9) 42%,
+      #030817
+    );
+  }
+  .hero-lead {
+    max-width: none;
+    margin-top: 18px;
+  }
+  .hero-actions {
+    margin-top: 26px;
+  }
+  .hero-parts {
+    display: none;
+  }
+  .hero-caption {
+    left: var(--cv-pad);
+    right: var(--cv-pad);
+    top: 24px;
+    bottom: auto;
+    max-width: none;
+  }
+  .hero-caption p {
+    display: none;
+  }
+  .hero-foot {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .hero-scroll {
+    display: none;
+  }
+  .sys-tabs button {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .sys-screen {
+    border-radius: 10px;
+  }
+  .agent-track {
+    padding-bottom: 0;
+  }
+  .agent-track ol {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding-left: 72px;
+  }
+  .stop {
+    flex-direction: row;
+    gap: 16px;
+    text-align: left;
+  }
+  .loop-note {
+    position: static;
+    transform: none;
+    margin-top: 18px;
+    padding-left: 72px;
+    white-space: normal;
+  }
+  .agent-roles {
+    grid-template-columns: 1fr;
+    margin-top: 36px;
+  }
+  .agent-roles article,
+  .agent-roles article + article {
+    padding: 26px 0 4px;
+    border-left: 0;
+  }
+  .agent-roles article + article {
+    border-top: 1px solid var(--cv-line);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-stage,
+  .hero-enter,
+  .cv-hero h1 .ch,
+  .hero-lead,
+  .hero-actions,
+  .hero-foot > *,
+  .hero-scroll::before {
+    animation: none;
+  }
+  .hero-stage {
+    --k: 1;
+  }
+  .hero-parts li {
+    transition: none;
+  }
+}

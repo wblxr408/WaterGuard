@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import tempfile
 import uuid
 import re
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +55,7 @@ class RunStore:
         self.database, self.artifacts = Path(database), Path(artifacts)
         self.database.parent.mkdir(parents=True, exist_ok=True)
         self.artifacts.mkdir(parents=True, exist_ok=True)
+        self._event_lock = threading.Lock()
         self._init()
 
     def _connect(self):
@@ -106,13 +107,9 @@ class RunStore:
             """)
 
     def _write_json(self, relative: str, value: Any) -> str:
+        from services.hydraulics.storage import write
         target = self.artifacts / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target.parent, delete=False) as f:
-            f.write(canonical(value))
-            f.write("\n")
-            temporary = f.name
-        os.replace(temporary, target)
+        write(target, value)
         return "artifact:" + relative.replace("\\", "/")
 
     def _run_directory(self, run_id: str) -> Path:
@@ -125,8 +122,8 @@ class RunStore:
 
     @staticmethod
     def _read_json(path: Path) -> dict:
-        with path.open("r", encoding="utf-8") as source:
-            value = json.load(source)
+        from waterguard_contracts.core import load
+        value = load(path)
         if not isinstance(value, dict):
             raise ValueError("Artifact JSON must contain an object")
         return value
@@ -167,6 +164,16 @@ class RunStore:
             raise NotFoundError("Unknown task revision")
         return json.loads(row["payload"])
 
+    def recent_runs(self, limit: int = 20) -> list[dict]:
+        with self._db() as db:
+            rows = db.execute("SELECT payload FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+    def active_benchmarks(self) -> list[dict]:
+        with self._db() as db:
+            rows = db.execute("SELECT payload FROM runs WHERE mode='benchmark' AND status IN ('QUEUED','RUNNING')").fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
     def create_run(self, task: dict, mode: str, idempotency_key: str | None = None) -> dict:
         if mode not in {"fixture", "benchmark", "replay"}:
             raise ConflictError("Live runs require the AGH host and cannot be created through this development store")
@@ -181,7 +188,7 @@ class RunStore:
                        status="QUEUED", phase="INTAKE", agh_session_ref=None, model_config_ref=None,
                        budget_usage={"simulations": 0, "model_calls": None, "wall_time_s": 0.0},
                        conclusion="INCOMPLETE", selected_candidate_id=None,
-                       missing_items=["native_agh_trace", "agh_host_not_configured"])
+                       missing_items=["native_agh_trace", "agh_host_not_configured", "required_stress_tests"])
             validate("RunRecord", run)
             timestamp = now()
             db.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (run_id, task["task_id"], task["revision"], run["status"], run["phase"], mode, canonical(run), timestamp, timestamp))
@@ -198,7 +205,7 @@ class RunStore:
             raise NotFoundError("Unknown run")
         return json.loads(row["payload"])
 
-    def transition(self, run_id: str, status: str, phase: str | None = None) -> dict:
+    def transition(self, run_id: str, status: str, phase: str | None = None, *, wall_time_s: float | None = None) -> dict:
         if status not in RUN_STATUS or (phase is not None and phase not in RUN_PHASE):
             raise ValueError("Invalid status or phase")
         with self._db() as db:
@@ -211,13 +218,22 @@ class RunStore:
             run["status"] = status
             if phase is not None:
                 run["phase"] = phase
+            if wall_time_s is not None:
+                run["budget_usage"]["wall_time_s"] = wall_time_s
+            validate("RunRecord", run)
             db.execute("UPDATE runs SET status=?, phase=?, payload=?, updated_at=? WHERE run_id=?", (run["status"], run["phase"], canonical(run), now(), run_id))
         ref = self._write_json(f"{run_id}/run.json", run)
         self.emit(run, "user", "run.completed" if status in TERMINAL else "run.started", ref)
         return run
 
     def emit(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None) -> dict:
+        with self._event_lock:
+            return self._emit_serial(run, origin, event_type, payload_ref, candidate_id=candidate_id,
+                                     simulation_id=simulation_id, correlation_id=correlation_id)
+
+    def _emit_serial(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None) -> dict:
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
             sequence = db.execute("SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM events WHERE run_id=?", (run["run_id"],)).fetchone()["sequence"]
             event = dict(schema_version=run["schema_version"], event_id="evt-" + uuid.uuid4().hex, sequence=sequence,
                          run_id=run["run_id"], task_revision=run["task_ref"]["revision"], constraint_hash=run["task_ref"]["constraint_hash"],

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import uuid
 import re
@@ -45,9 +44,10 @@ def build_evidence(artifacts_root: Path, run: dict) -> dict:
     native_ref = "artifact:agh/native" if native.is_dir() and any(native.rglob("*")) else None
     association = run_dir / "agh" / "association.json"
     association_ref = "artifact:agh/association.json" if association.is_file() else None
-    missing = []
+    missing = list(run.get("missing_items", []))
     if native_ref is None:
-        missing.append("native_agh_trace")
+        if "native_agh_trace" not in missing:
+            missing.append("native_agh_trace")
     if association_ref is None:
         missing.append("agh_event_association")
     entries = []
@@ -66,5 +66,6 @@ def build_evidence(artifacts_root: Path, run: dict) -> dict:
     }
     validate("EvidenceManifest", evidence)
     output = run_dir / "evidence-manifest.json"
-    output.write_text(json.dumps(evidence, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    from services.hydraulics.storage import write
+    write(output, evidence)
     return evidence
