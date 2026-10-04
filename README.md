@@ -30,6 +30,7 @@ C:\ProgramData\anaconda3\envs\waterguard-backend\python.exe -m uvicorn services.
 | [后端设计](docs/后端设计.md) | API、会话宿主、工具网关、水力仿真、契约、治理和证据存储 |
 | [Agent 设计](docs/Agent设计.md) | AGH 核心执行、Agnes 三角色、工具权限、反馈修正与评测 |
 | [AGH 验收清单](docs/AGH验收清单.md) | 配置模型 Key 后的真实工具闭环、异常与证据核验步骤 |
+| [Agent 设计审查](docs/Agent设计审查-2026-10-04.md) | 当前环境实测、Agent 工具链缺口、优先级与设计优化 |
 
 三份文档是当前实施依据。已冻结的公共字段与状态以 [可执行 Schema](packages/contracts/schema/waterguard.schema.json) 和 [契约说明](packages/contracts/README.md) 为准；后端设计保留架构依据，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
 
