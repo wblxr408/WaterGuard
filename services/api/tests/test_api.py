@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -49,7 +50,8 @@ class ApiTests(unittest.TestCase):
 
     def test_live_run_is_rejected_without_agh_host(self):
         self.client.post("/api/tasks", json=self.task)
-        response = self.client.post(f"/api/tasks/{self.task['task_id']}/runs", json={"mode": "live"})
+        with patch('services.api.agh.bridge', side_effect=RuntimeError('AGH daemon unavailable')):
+            response = self.client.post(f"/api/tasks/{self.task['task_id']}/runs", json={"mode": "live"})
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"]["code"], "AGH_UNAVAILABLE")
 

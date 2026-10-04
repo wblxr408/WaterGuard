@@ -36,6 +36,7 @@
 <button class="primary fullbutton" id="startbutton" type="submit" disabled>创建任务并运行</button><button class="fullbutton" id="cancelbutton" type="button" disabled>取消当前运行</button>
 <p id="tasksummary" class="run-meta" style="margin-top:12px">尚未创建任务</p><p id="error" class="error" role="alert" hidden></p>
 </div></form>
+<div class="section"><h3>AGH 模型账号</h3><p id="aghstatus" class="sub">正在读取 AGH 配置</p><details><summary>配置 Agnes / DeepSeek / GLM</summary><form id="modelform"><div class="field"><label for="modelprovider">提供商</label><select id="modelprovider"><option value="agnes-ai">赛事 Agnes</option><option value="deepseek">DeepSeek</option><option value="zai">GLM</option></select></div><div class="field"><label for="modelbase">API 地址</label><select id="modelbase"></select></div><div class="field"><label for="modelkey">API Key</label><input id="modelkey" type="password" autocomplete="off" placeholder="已配置时可留空"></div><div class="field"><label for="modelid">模型 ID</label><input id="modelid" list="modelcatalog" placeholder="测试连接后选择模型"><datalist id="modelcatalog"></datalist></div><button class="fullbutton" id="modeltest" type="button">测试连接并读取模型</button><button class="fullbutton" type="submit">保存为新任务默认模型</button><p id="modelmessage" class="sub" role="status"></p></form></details></div>
 <div class="section"><h3>已有运行</h3><label for="history" class="sub">从服务端读取最近 20 条记录</label><select id="history"><option value="">选择历史运行</option></select><button id="refreshbutton" class="fullbutton">刷新连接与记录</button></div>
 </aside>
 <div>

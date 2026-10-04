@@ -4,18 +4,19 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+import copy
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from .runtime import ConflictError, NotFoundError, RunStore, TERMINAL
-from waterguard_contracts.core import check_task, plan_hash, task_hash, task_ref, validate
+from waterguard_contracts.core import FIXTURES, FixtureAdapter, load, check_task, plan_hash, task_hash, task_ref, validate
 
 
 class TaskProposal(BaseModel):
     network_id: Literal["epa-net1", "epa-net3"] = "epa-net1"
-    fault_kind: Literal["normal", "closure", "leak", "rupture"] = "closure"
+    fault_kind: Literal["normal", "closure", "leak", "rupture", "isolation"] = "closure"
     link_id: str | None = None
     min_pressure_m: float = Field(default=20, ge=0, le=100, allow_inf_nan=False)
     min_supply_ratio: float = Field(default=.95, ge=0, le=1, allow_inf_nan=False)
@@ -41,6 +42,8 @@ def propose_task(proposal: TaskProposal) -> dict:
     task, _ = physical_case(proposal.network_id, proposal.fault_kind)
     task["task_id"] = "web-" + uuid.uuid4().hex
     if task["fault"]:
+        if proposal.fault_kind == "isolation" and proposal.link_id is not None:
+            raise ValueError("Isolation uses the declared topology cut; custom link_id is not supported")
         link = proposal.link_id or task["fault"]["link_id"]
         if link not in details["fault_link_ids"]:
             raise ValueError("Fault must target an initially open pipe without a native control conflict")
@@ -99,6 +102,7 @@ class BenchmarkExecutor:
         self.store = store
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="waterguard-benchmark")
         self.lock = threading.Lock()
+        self.evidence_lock = threading.RLock()
         self.cancellations: dict[str, threading.Event] = {}
         self.closed = False
 
@@ -132,13 +136,16 @@ class BenchmarkExecutor:
             result = self.store.transition(run_id, "CANCELLED")
             if run_id in self.cancellations:
                 self.cancellations[run_id].set()
+            else:
+                self.package(run_id)
             return result
 
     def package(self, run_id: str) -> None:
         from services.evidence.service import build_evidence
-        run = self.store.get_run(run_id)
-        self.store._write_json(f"{run_id}/run.json", run)
-        build_evidence(self.store.artifacts, run)
+        with self.evidence_lock:
+            run = self.store.get_run(run_id)
+            self.store._write_json(f"{run_id}/run.json", run)
+            build_evidence(self.store.artifacts, run)
 
     def execute(self, run_id: str, cancel: threading.Event) -> None:
         started = time.monotonic()
@@ -151,11 +158,32 @@ class BenchmarkExecutor:
                     return
                 run = self.store.transition(run_id, "RUNNING", "BASELINE")
             task = self.store.get_task(run["task_ref"]["task_id"], run["task_ref"]["revision"])
-            if task["schema_version"] != "0.4.0":
+            if run["mode"] != "fixture" and task["schema_version"] != "0.4.0":
                 raise ValueError("Web benchmarks require a physical TaskSpec 0.4.0")
-            _, _, scene, catalog = assets(task["network_ref"]["network_id"])
-            plans = benchmark_plans(task, catalog)
+            source_root = None
+            if run["mode"] == "fixture":
+                scene, catalog = load(FIXTURES / "scene.json"), load(FIXTURES / "action-catalog.json")
+                plans = [load(FIXTURES / f"candidate-{name}.json") for name in ("a", "b")]
+            else:
+                _, _, scene, catalog = assets(task["network_ref"]["network_id"])
+                plans = benchmark_plans(task, catalog)
+                if run["mode"] == "replay":
+                    from services.hydraulics.replay import verify_evidence
+                    from services.hydraulics.runtime import engine_identity
+                    source_id = load(self.store._run_directory(run_id) / "replay-source.json")["source_run_id"]
+                    source_root = self.store._run_directory(source_id)
+                    plans = self.store.list_candidates(source_id)
+                    if not plans:
+                        raise ValueError("Replay source contains no candidates")
+                    for source_plan in plans:
+                        original = load(source_root / "candidates" / source_plan["candidate_id"] / "result.json")
+                        previous = verify_evidence(source_root / "simulations" / original["artifact"]["simulation_id"])
+                        if previous["artifact"]["engine_version"] != engine_identity(task):
+                            raise ValueError("Replay engine changed; create a new benchmark")
             root = self.store._run_directory(run_id)
+            submitted = root / "submitted-plan.json"
+            if submitted.is_file():
+                plans = [load(submitted)]
             adapter = PhysicalAdapter(root / "simulations")
             self.store._write_json(f"{run_id}/task.json", task)
             for plan in plans:
@@ -177,7 +205,16 @@ class BenchmarkExecutor:
                         return
                     self.store.transition(run_id, "RUNNING", "SIMULATING")
                 try:
-                    result = adapter.simulate(task, plan, timeout_s=remaining, cancel_event=cancel)
+                    if run["mode"] == "fixture":
+                        result = copy.deepcopy(FixtureAdapter().simulate(task, plan))
+                        # Each API run owns its stored fixture copy; no shared simulation IDs.
+                        sid = "sim-" + uuid.uuid4().hex
+                        for item in (result["artifact"], result["series"], result["diagnostics"]):
+                            item["simulation_id"] = sid
+                        for filename, value in (("series.json", result["series"]), ("diagnostics.json", result["diagnostics"]), ("result.json", result)):
+                            self.store._write_json(f"{run_id}/simulations/{sid}/{filename}", value)
+                    else:
+                        result = adapter.simulate(task, plan, timeout_s=remaining, cancel_event=cancel)
                 finally:
                     self.store.settle_simulation(reservation["reservation_id"])
                 sid = result["artifact"]["simulation_id"]
@@ -185,8 +222,17 @@ class BenchmarkExecutor:
                 self.store.emit(run, "worker", "simulation.completed", ref, candidate_id=cid, simulation_id=sid)
                 if cancel.is_set():
                     return
+                if result["diagnostics"].get("error_code") == "TOOL_TIMEOUT":
+                    self.store._write_json(f"{run_id}/error.json", dict(code="BUDGET_EXHAUSTED", message="Simulation exceeded the remaining wall-time budget"))
+                    with self.lock:
+                        if not cancel.is_set():
+                            self.store.transition(run_id, "BUDGET_EXHAUSTED", wall_time_s=time.monotonic()-started)
+                    return
                 if result["artifact"]["status"] != "SUCCEEDED":
                     raise ValueError(str(result["diagnostics"].get("errors", ["Simulation failed"])))
+                if submitted.is_file():
+                    # AGH receives the simulation first, then chooses to call independent verification.
+                    continue
                 with self.lock:
                     if cancel.is_set():
                         return
@@ -194,6 +240,15 @@ class BenchmarkExecutor:
                 report = verify(task, plan, result, catalog, scene)
                 ref = self.store._write_json(f"{run_id}/candidates/{cid}/verification.json", report)
                 self.store.emit(run, "verifier", "verification.completed", ref, candidate_id=cid, simulation_id=sid)
+                if source_root is not None:
+                    from services.hydraulics.replay import compare_frames
+                    original = load(source_root / "candidates" / cid / "result.json")
+                    comparison = dict(source_simulation_id=original["artifact"]["simulation_id"], simulation_id=sid,
+                                      recomputed=True, input_hash_identical=result["artifact"]["input_hash"] == original["artifact"]["input_hash"],
+                                      **compare_frames(result["series"]["frames"], original["series"]["frames"]))
+                    self.store._write_json(f"{run_id}/candidates/{cid}/replay-comparison.json", comparison)
+                    if not comparison["input_hash_identical"] or not comparison["numerically_equivalent"]:
+                        raise ValueError("Replay differs from the frozen source")
             with self.lock:
                 if not cancel.is_set():
                     # Nominal comparisons cannot certify pending stress tests / AGH provenance.
@@ -206,12 +261,15 @@ class BenchmarkExecutor:
                     current = self.store.transition(run_id, "ERROR", wall_time_s=time.monotonic()-started)
                 self.store.emit(current, "user", "run.completed", ref)
         finally:
+            self.store.settle_live_child(run_id)
             with self.lock:
                 if self.store.get_run(run_id)["status"] == "CANCELLED":
                     self.store.transition(run_id, "CANCELLED", wall_time_s=time.monotonic()-started)
-            self.package(run_id)
-            with self.lock:
-                self.cancellations.pop(run_id, None)
+            try:
+                self.package(run_id)
+            finally:
+                with self.lock:
+                    self.cancellations.pop(run_id, None)
 
     def close(self) -> None:
         with self.lock:
@@ -235,5 +293,6 @@ def run_results(store: RunStore, run_id: str) -> list[dict]:
         if report:
             validate("VerificationReport", report)
         results.append(dict(plan=plan, artifact=result["artifact"] if result else None,
-                            diagnostics=result["diagnostics"] if result else None, verification=report))
+                            diagnostics=result["diagnostics"] if result else None, verification=report,
+                            replay_comparison=store._read_json(folder / "replay-comparison.json") if (folder / "replay-comparison.json").is_file() else None))
     return results

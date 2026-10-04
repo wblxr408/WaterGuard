@@ -4,22 +4,34 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
-from starlette.responses import FileResponse, StreamingResponse
+from starlette.responses import FileResponse, StreamingResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 
 from .runtime import ConflictError, NotFoundError, ROOT, RunStore
 from .workbench import BenchmarkExecutor, TaskProposal, network_details, propose_task, run_results
+from waterguard_contracts.core import FIXTURES, load, task_ref
 
 
 class RunRequest(BaseModel):
     mode: Literal["live", "fixture", "benchmark", "replay"] = "live"
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
+    source_run_id: str | None = None
+
+
+class ModelConfigRequest(BaseModel):
+    providerId: Literal['agnes-ai', 'deepseek', 'zai']
+    baseUrl: str | None = Field(default=None, max_length=2048)
+    apiKey: str | None = Field(default=None, max_length=65536)
+    model: str | None = Field(default=None, max_length=256)
+    accountId: str | None = Field(default=None, pattern=r'^[a-z0-9][a-z0-9-]{0,47}$', max_length=48)
 
 
 def app_store(artifacts: Path | None = None, database: Path | None = None) -> RunStore:
@@ -31,16 +43,42 @@ def app_store(artifacts: Path | None = None, database: Path | None = None) -> Ru
 def create_app(store: RunStore | None = None) -> FastAPI:
     store = store or app_store()
     executor = BenchmarkExecutor(store)
+    from .agh import LiveExecutor
+    live = LiveExecutor(store, executor)
 
     @asynccontextmanager
     async def lifespan(_app):
         executor.recover()
+        live.recover()
         yield
+        live.close()
         executor.close()
 
     app = FastAPI(title="WaterGuard API", version="0.1.0", lifespan=lifespan)
     app.state.benchmark_executor = executor
     app.mount("/assets", StaticFiles(directory=ROOT / "design"), name="assets")
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request, error):
+        # Model settings may contain credentials even when another field is invalid.
+        fields = [{key: item[key] for key in ('loc', 'msg', 'type')} for item in error.errors()]
+        return JSONResponse(status_code=422, content={'detail': fields})
+
+    @app.get('/api/agh/status')
+    def agh_status():
+        from .agh import bridge
+        try:
+            return bridge({'action': 'status'})
+        except Exception:
+            return {'available': False, 'code': 'AGH_UNAVAILABLE', 'message': '启动本项目 AGH daemon 后刷新连接。'}
+
+    @app.post('/api/agh/models/{action}')
+    def configure_model(action: Literal['test', 'save'], request: ModelConfigRequest):
+        from .agh import bridge
+        try:
+            return bridge({'action': action, 'config': request.model_dump(exclude_none=True)})
+        except Exception as error:
+            raise HTTPException(422, {'code': 'AGH_MODEL_CONFIG_FAILED', 'message': str(error)})
 
     @app.get("/", include_in_schema=False)
     def workbench():
@@ -60,6 +98,11 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             payload = json.loads(path.read_text(encoding="utf-8"))
             manifests.append({key: payload[key] for key in ("network_id", "revision", "sha256", "source_url", "license", "description")})
         return manifests
+
+    @app.get("/api/fixtures")
+    def fixture_inputs():
+        return {"task": load(FIXTURES / "task.json"),
+                "candidates": [load(FIXTURES / f"candidate-{name}.json") for name in ("a", "b")]}
 
     @app.get("/api/networks/{network_id}")
     def network(network_id: str):
@@ -84,9 +127,85 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             fail(error)
 
     @app.get("/api/tasks/{task_id}")
-    def get_task(task_id: str, revision: int | None = None):
+    def get_task(task_id: str, revision: int | None = None, x_wg_agh_session: str | None = Header(default=None)):
         try:
+            parent = store.live_parent(x_wg_agh_session, task_id)
+            if parent:
+                revision = parent['task_ref']['revision']
             return store.get_task(task_id, revision)
+        except Exception as error:
+            fail(error)
+
+    @app.get("/api/tasks/{task_id}/candidate-plans")
+    def candidate_plans(task_id: str, x_wg_agh_session: str | None = Header(default=None)):
+        try:
+            from .workbench import benchmark_plans
+            parent = store.live_parent(x_wg_agh_session, task_id)
+            task = store.get_task(task_id, parent['task_ref']['revision'] if parent else None)
+            return benchmark_plans(task, network_details(task["network_ref"]["network_id"])["catalog"])
+        except Exception as error:
+            fail(error)
+
+    @app.post("/api/tasks/{task_id}/candidate-runs", status_code=201)
+    def candidate_run(task_id: str, plan: dict[str, Any], x_wg_agh_session: str | None = Header(default=None)):
+        """Preflight an Agent-selected plan against a task already frozen by the user."""
+        try:
+            from services.hydraulics.compiler import compile_task
+            from waterguard_contracts.core import plan_hash, validate
+            parent = store.live_parent(x_wg_agh_session, task_id)
+            task = store.get_task(task_id, parent['task_ref']['revision'] if parent else None)
+            validate("ActionPlan", plan)
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", plan["candidate_id"]):
+                raise ValueError("Invalid candidate identifier")
+            if plan_hash(plan) != plan["plan_hash"]:
+                raise ValueError("Candidate hash mismatch")
+            compile_task(task, plan)
+            run = store.create_run(task, "benchmark")
+            if parent:
+                store.link_live_child(parent['run_id'], run['run_id'])
+            store._write_json(f"{run['run_id']}/submitted-plan.json", plan)
+            store._write_json(f"{run['run_id']}/task.json", task)
+            ref = store._write_json(f"{run['run_id']}/candidates/{plan['candidate_id']}/plan.json", plan)
+            store.emit(run, "gateway", "candidate.submitted", ref, candidate_id=plan["candidate_id"])
+            return run
+        except Exception as error:
+            fail(error)
+
+    @app.post("/api/runs/{run_id}/simulate", status_code=202)
+    def simulate_submitted(run_id: str):
+        try:
+            run = store.get_run(run_id)
+            if not (store._run_directory(run_id) / "submitted-plan.json").is_file():
+                raise ConflictError("Run has no explicitly submitted candidate")
+            if run["status"] == "CANCELLED":
+                raise ConflictError("Cancelled run cannot be dispatched")
+            if run['status'] == 'QUEUED':
+                store.reserve_live_child(run_id)
+            executor.dispatch(run)
+            return store.get_run(run_id)
+        except Exception as error:
+            fail(error)
+
+    @app.post("/api/runs/{run_id}/verify")
+    def verify_submitted(run_id: str):
+        try:
+            from services.verifier.service import verify
+            run = store.get_run(run_id)
+            if run["status"] != "COMPLETED" or not (store._run_directory(run_id) / "submitted-plan.json").is_file():
+                raise ConflictError("Verification requires a completed submitted-candidate simulation")
+            task = store.get_task(run["task_ref"]["task_id"], run["task_ref"]["revision"])
+            details = network_details(task["network_ref"]["network_id"])
+            # Serialize report/event changes with background packaging and ZIP export.
+            with executor.evidence_lock:
+                reports = []
+                for plan in store.list_candidates(run_id):
+                    root = store._run_directory(run_id) / "candidates" / plan["candidate_id"]
+                    report = verify(task, plan, store._read_json(root / "result.json"), details["catalog"], details["scene"])
+                    ref = store._write_json(f"{run_id}/candidates/{plan['candidate_id']}/verification.json", report)
+                    store.emit(run, "verifier", "verification.completed", ref, candidate_id=plan["candidate_id"], simulation_id=report["simulation_id"])
+                    reports.append(report)
+                executor.package(run_id)
+            return reports
         except Exception as error:
             fail(error)
 
@@ -112,16 +231,42 @@ def create_app(store: RunStore | None = None) -> FastAPI:
 
     @app.post("/api/tasks/{task_id}/runs", status_code=202)
     def start_run(task_id: str, request: RunRequest, revision: int | None = None):
-        if request.mode == "live":
-            raise HTTPException(503, {"code": "AGH_UNAVAILABLE", "message": "AGH host is not configured; live runs cannot fall back to a hidden agent loop."})
         try:
             task = store.get_task(task_id, revision)
+            if request.mode == 'live':
+                from .agh import bridge
+                try:
+                    status = bridge({'action': 'status'})
+                except Exception:
+                    raise HTTPException(503, {'code': 'AGH_UNAVAILABLE', 'message': 'AGH daemon is unavailable'})
+                model = status['snapshot'].get('provider')
+                if not model or not model['credentialConfigured']:
+                    raise HTTPException(503, {'code': 'MODEL_NOT_CONFIGURED', 'message': '请在工作台配置并验证 Agnes、DeepSeek 或 GLM 账号。'})
+                if model['id'] not in {'agnes-ai', 'deepseek', 'zai'}:
+                    raise HTTPException(422, {'code': 'MODEL_NOT_ALLOWED', 'message': '请选择 Agnes、DeepSeek 或 GLM 账号。'})
+                if request.source_run_id:
+                    raise ValueError('source_run_id is only valid in replay mode')
+                run = store.create_run(task, 'live', request.idempotency_key)
+                live.dispatch(run, model)
+                return run
             if request.mode == "benchmark" and task["schema_version"] != "0.4.0":
                 raise ValueError("Web benchmarks require a physical TaskSpec 0.4.0")
-            run = store.create_run(task, request.mode, request.idempotency_key)
-            if request.mode == "benchmark":
-                executor.dispatch(store.get_run(run["run_id"]))
+            if request.mode == "fixture" and task != load(FIXTURES / "task.json"):
+                raise ValueError("Fixture mode accepts only the exact frozen /api/fixtures task")
+            if request.mode == "replay":
+                if not request.source_run_id:
+                    raise ValueError("Replay requires source_run_id")
+                source = store.get_run(request.source_run_id)
+                if source["status"] != "COMPLETED" or source["mode"] != "benchmark" or source["task_ref"] != task_ref(task):
+                    raise ConflictError("Replay requires a completed benchmark with the same frozen task")
+                store.get_evidence(request.source_run_id)
+            elif request.source_run_id is not None:
+                raise ValueError("source_run_id is only valid in replay mode")
+            run = store.create_run(task, request.mode, request.idempotency_key, request.source_run_id)
+            executor.dispatch(run)
             return run
+        except HTTPException:
+            raise
         except Exception as error:
             fail(error)
 
@@ -171,6 +316,20 @@ def create_app(store: RunStore | None = None) -> FastAPI:
         except Exception as error:
             fail(error)
 
+    @app.get("/api/runs/{run_id}/evidence/download")
+    def download_evidence(run_id: str):
+        try:
+            from services.evidence.service import export_evidence
+            run = store.get_run(run_id)
+            if run["status"] not in {"COMPLETED", "ERROR", "CANCELLED", "BUDGET_EXHAUSTED"}:
+                raise ConflictError("Evidence download requires a terminal run")
+            with executor.evidence_lock:
+                store.get_evidence(run_id)
+                archive = export_evidence(store.artifacts, run_id)
+            return FileResponse(archive, media_type="application/zip", filename=f"{run_id}-evidence.zip")
+        except Exception as error:
+            fail(error)
+
     @app.post("/api/runs/{run_id}/answers")
     def answer(run_id: str, _answer: dict[str, Any]):
         try:
@@ -191,7 +350,7 @@ def create_app(store: RunStore | None = None) -> FastAPI:
                 return run
             if run["status"] in {"COMPLETED", "BUDGET_EXHAUSTED", "ERROR"}:
                 raise ConflictError("Terminal run cannot be cancelled")
-            return executor.cancel(run_id)
+            return live.cancel(run_id) if run['mode'] == 'live' else executor.cancel(run_id)
         except Exception as error:
             fail(error)
 

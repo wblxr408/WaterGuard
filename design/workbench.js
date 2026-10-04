@@ -82,6 +82,7 @@ async function history() {
 async function connect() {
   try {
     await api("/healthz");
+    await loadModelStatus();
     const networks = await api("/api/networks");
     const previous = $("networkselect").value;
     $("networkselect").replaceChildren(...networks.map(n => {const o=element("option", n.network_id); o.value=n.network_id; return o;}));
@@ -90,6 +91,45 @@ async function connect() {
     if(state.run) await refreshRun(state.epoch); else await loadNetwork();
   } catch(e) { error("无法连接后端：" + e.message); $("connection").textContent = "后端连接失败"; $("connection").className = "pill red"; }
 }
+const modelEndpoints = {
+  'agnes-ai': ['https://api.agnes-ai.cn/v1'],
+  'deepseek': ['https://api.deepseek.com'],
+  'zai': ['https://open.bigmodel.cn/api/paas/v4', 'https://open.bigmodel.cn/api/coding/paas/v4', 'https://api.z.ai/api/coding/paas/v4', 'https://api.z.ai/api/paas/v4']
+};
+function modelProviderChanged() {
+  $('modelbase').replaceChildren(...modelEndpoints[$('modelprovider').value].map(url => {
+    const option=element('option',url); option.value=url; return option;
+  }));
+  $('modelkey').value=''; $('modelid').value=''; $('modelcatalog').replaceChildren();
+  $('modelmessage').textContent='使用该提供商自己的 Key；GLM 地址按普通 API、Coding Plan 或国际账号选择。';
+}
+async function loadModelStatus() {
+  const status=await api('/api/agh/status');
+  const provider=status.snapshot?.provider;
+  $('aghstatus').textContent=!status.available ? 'AGH 未连接 · 请启动项目服务' :
+    provider?.credentialConfigured ? `AGH 已连接 · ${provider.id} / ${provider.model}` : 'AGH 已连接 · 尚未配置可用模型';
+}
+async function configureModel(action) {
+  const config={providerId:$('modelprovider').value,baseUrl:$('modelbase').value};
+  if($('modelkey').value.trim())config.apiKey=$('modelkey').value.trim();
+  if($('modelid').value.trim())config.model=$('modelid').value.trim();
+  $('modelmessage').textContent=action==='test' ? 'AGH 正在测试账号…' : 'AGH 正在验证并保存…';
+  try {
+    const result=await api(`/api/agh/models/${action}`,{method:'POST',body:JSON.stringify(config)});
+    if(action==='test') {
+      $('modelcatalog').replaceChildren(...result.models.map(model=>{const option=element('option',model.name);option.value=model.id;return option;}));
+      if(!$('modelid').value && result.models.length)$('modelid').value=result.models[0].id;
+      $('modelmessage').textContent=result.verified ? '账号验证通过。选择模型后保存。' : '账号未验证通过，请核对 Key 与接口。模型目录不代表账号鉴权成功。';
+    } else {
+      $('modelkey').value=''; $('modelmessage').textContent='已由 AGH 保存。新任务使用此模型；已有任务保留原选择。';
+      await loadModelStatus();
+    }
+  } catch(e) { $('modelmessage').textContent=e.message; }
+}
+$('modelprovider').addEventListener('change',modelProviderChanged);
+$('modeltest').addEventListener('click',()=>configureModel('test'));
+$('modelform').addEventListener('submit',event=>{event.preventDefault();configureModel('save');});
+modelProviderChanged();
 async function start(event) {
   event.preventDefault(); if(state.busy) return;
   state.busy = true; controls(); error(); clearTimeout(state.timer); const epoch = ++state.epoch;

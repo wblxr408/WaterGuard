@@ -79,6 +79,7 @@ class RunStore:
 
     def _init(self):
         with self._db() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS live_links (parent_id TEXT, child_id TEXT PRIMARY KEY, reservation_id TEXT)')
             db.executescript("""
             CREATE TABLE IF NOT EXISTS tasks (
               task_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL,
@@ -108,7 +109,8 @@ class RunStore:
 
     def _write_json(self, relative: str, value: Any) -> str:
         from services.hydraulics.storage import write
-        target = self.artifacts / relative
+        target = (self.artifacts / relative).resolve()
+        require(target.is_relative_to(self.artifacts.resolve()), "Artifact path escapes configured storage")
         write(target, value)
         return "artifact:" + relative.replace("\\", "/")
 
@@ -138,8 +140,10 @@ class RunStore:
 
     def save_task(self, task: dict) -> dict:
         validate("TaskSpec", task)
+        require(bool(re.fullmatch(r"[A-Za-z0-9_-]{1,128}", task["task_id"])), "Invalid task identifier")
         require(task_hash(task) == task["constraint_hash"], "Task hash mismatch")
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
             existing = db.execute("SELECT payload FROM tasks WHERE task_id=? AND revision=?", (task["task_id"], task["revision"])).fetchone()
             if existing:
                 if existing["payload"] != canonical(task):
@@ -171,18 +175,29 @@ class RunStore:
 
     def active_benchmarks(self) -> list[dict]:
         with self._db() as db:
-            rows = db.execute("SELECT payload FROM runs WHERE mode='benchmark' AND status IN ('QUEUED','RUNNING')").fetchall()
+            rows = db.execute("SELECT payload FROM runs WHERE mode IN ('benchmark','fixture','replay') AND status IN ('QUEUED','RUNNING')").fetchall()
         return [json.loads(row["payload"]) for row in rows]
 
-    def create_run(self, task: dict, mode: str, idempotency_key: str | None = None) -> dict:
-        if mode not in {"fixture", "benchmark", "replay"}:
-            raise ConflictError("Live runs require the AGH host and cannot be created through this development store")
+    def active_lives(self) -> list[dict]:
+        with self._db() as db:
+            rows = db.execute("SELECT payload FROM runs WHERE mode='live' AND status IN ('QUEUED','RUNNING')").fetchall()
+        return [json.loads(row['payload']) for row in rows]
+
+    def create_run(self, task: dict, mode: str, idempotency_key: str | None = None, source_run_id: str | None = None) -> dict:
+        if mode not in {"fixture", "benchmark", "replay", "live"}:
+            raise ConflictError("Unsupported run mode")
         scope = f"run:{task['task_id']}:{task['revision']}"
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
             if idempotency_key:
                 found = db.execute("SELECT response FROM idempotency WHERE scope=? AND key=?", (scope, idempotency_key)).fetchone()
                 if found:
-                    return json.loads(found["response"])
+                    saved = json.loads(found["response"])
+                    run = saved.get("run", saved)
+                    if run["mode"] != mode or saved.get("source_run_id") != source_run_id:
+                        raise ConflictError("Idempotency key already used with different run parameters")
+                    current = db.execute("SELECT payload FROM runs WHERE run_id=?", (run["run_id"],)).fetchone()
+                    return json.loads(current["payload"])
             run_id = "run-" + uuid.uuid4().hex
             run = dict(schema_version=task["schema_version"], run_id=run_id, task_ref=task_ref(task), mode=mode,
                        status="QUEUED", phase="INTAKE", agh_session_ref=None, model_config_ref=None,
@@ -193,7 +208,9 @@ class RunStore:
             timestamp = now()
             db.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (run_id, task["task_id"], task["revision"], run["status"], run["phase"], mode, canonical(run), timestamp, timestamp))
             if idempotency_key:
-                db.execute("INSERT INTO idempotency VALUES (?, ?, ?)", (scope, idempotency_key, canonical(run)))
+                db.execute("INSERT INTO idempotency VALUES (?, ?, ?)", (scope, idempotency_key, canonical(dict(run=run, source_run_id=source_run_id))))
+        if source_run_id is not None:
+            self._write_json(f"{run_id}/replay-source.json", dict(source_run_id=source_run_id))
         ref = self._write_json(f"{run_id}/run.json", run)
         self.emit(run, "user", "run.started", ref)
         return self.get_run(run_id)
@@ -205,10 +222,63 @@ class RunStore:
             raise NotFoundError("Unknown run")
         return json.loads(row["payload"])
 
+    def bind_agh(self, run_id: str, session_id: str, model: dict) -> dict:
+        """Bind identity returned by the SDK, never a model-proposed session reference."""
+        ref = self._write_json(f'{run_id}/agh/model.json', model)
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            run = json.loads(db.execute('SELECT payload FROM runs WHERE run_id=?', (run_id,)).fetchone()['payload'])
+            run['agh_session_ref'] = session_id
+            run['model_config_ref'] = ref
+            run['missing_items'] = [item for item in run['missing_items'] if item != 'agh_host_not_configured']
+            validate('RunRecord', run)
+            db.execute('UPDATE runs SET payload=?, updated_at=? WHERE run_id=?', (canonical(run), now(), run_id))
+        self._write_json(f'{run_id}/run.json', run)
+        return run
+
+    def live_parent(self, session_id: str | None, task_id: str) -> dict | None:
+        if not session_id:
+            return None
+        with self._db() as db:
+            rows = db.execute("SELECT payload FROM runs WHERE mode='live' AND task_id=?", (task_id,)).fetchall()
+        for row in rows:
+            run = json.loads(row['payload'])
+            if run['agh_session_ref'] == session_id:
+                if run['status'] != 'RUNNING':
+                    raise ConflictError('AGH run is no longer active')
+                return run
+        if any(json.loads(row['payload'])['status'] == 'RUNNING' for row in rows):
+            raise ConflictError('AGH session does not match the active frozen task')
+        return None
+
+    def link_live_child(self, parent_id: str, child_id: str):
+        with self._db() as db:
+            db.execute('INSERT INTO live_links VALUES (?, ?, NULL)', (parent_id, child_id))
+
+    def reserve_live_child(self, child_id: str):
+        with self._db() as db:
+            row = db.execute('SELECT * FROM live_links WHERE child_id=?', (child_id,)).fetchone()
+        if row:
+            reservation = self.reserve_simulation(row['parent_id'], child_id)
+            with self._db() as db:
+                db.execute('UPDATE live_links SET reservation_id=? WHERE child_id=?', (reservation['reservation_id'], child_id))
+
+    def settle_live_child(self, child_id: str):
+        with self._db() as db:
+            row = db.execute('SELECT reservation_id FROM live_links WHERE child_id=?', (child_id,)).fetchone()
+        if row and row['reservation_id']:
+            self.settle_simulation(row['reservation_id'])
+
+    def live_children(self, parent_id: str) -> list[dict]:
+        with self._db() as db:
+            rows = db.execute('SELECT runs.payload FROM live_links JOIN runs ON runs.run_id=live_links.child_id WHERE parent_id=?', (parent_id,)).fetchall()
+        return [json.loads(row['payload']) for row in rows]
+
     def transition(self, run_id: str, status: str, phase: str | None = None, *, wall_time_s: float | None = None) -> dict:
         if status not in RUN_STATUS or (phase is not None and phase not in RUN_PHASE):
             raise ValueError("Invalid status or phase")
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
             if not row:
                 raise NotFoundError("Unknown run")
@@ -226,19 +296,19 @@ class RunStore:
         self.emit(run, "user", "run.completed" if status in TERMINAL else "run.started", ref)
         return run
 
-    def emit(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None) -> dict:
+    def emit(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None, native_tool_call_ref: str | None = None) -> dict:
         with self._event_lock:
             return self._emit_serial(run, origin, event_type, payload_ref, candidate_id=candidate_id,
-                                     simulation_id=simulation_id, correlation_id=correlation_id)
+                                     simulation_id=simulation_id, correlation_id=correlation_id, native_tool_call_ref=native_tool_call_ref)
 
-    def _emit_serial(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None) -> dict:
+    def _emit_serial(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None, native_tool_call_ref: str | None = None) -> dict:
         with self._db() as db:
             db.execute("BEGIN IMMEDIATE")
             sequence = db.execute("SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM events WHERE run_id=?", (run["run_id"],)).fetchone()["sequence"]
             event = dict(schema_version=run["schema_version"], event_id="evt-" + uuid.uuid4().hex, sequence=sequence,
                          run_id=run["run_id"], task_revision=run["task_ref"]["revision"], constraint_hash=run["task_ref"]["constraint_hash"],
-                         mode=run["mode"], agh_session_ref=run["agh_session_ref"], native_tool_call_ref=None,
-                         native_reference_missing_reason="AGH host not configured" if run["agh_session_ref"] is None else None,
+                         mode=run["mode"], agh_session_ref=run["agh_session_ref"], native_tool_call_ref=native_tool_call_ref,
+                         native_reference_missing_reason="No native tool call associated with this application event" if native_tool_call_ref is None else None,
                          correlation_id=correlation_id or "corr-" + uuid.uuid4().hex, origin=origin, type=event_type,
                          candidate_id=candidate_id, simulation_id=simulation_id, occurred_at=now(), simulation_time_s=None,
                          payload_ref=payload_ref)
@@ -308,6 +378,7 @@ class RunStore:
         if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", request_key):
             raise ValueError("Invalid simulation idempotency key")
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
             run_row = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
             if not run_row:
                 raise NotFoundError("Unknown run")
@@ -332,6 +403,7 @@ class RunStore:
     def settle_simulation(self, reservation_id: str) -> None:
         """A dispatched attempt stays charged whether its engine succeeded or failed."""
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT run_id, state FROM simulation_reservations WHERE reservation_id=?", (reservation_id,)).fetchone()
             if not row:
                 raise NotFoundError("Unknown simulation reservation")

@@ -4,23 +4,15 @@
 
 ## 当前状态
 
-已完成三人共同前置的 [contracts](packages/contracts/README.md)、[同学 1 的仿真与数据交付](docs/同学1交付与复现.md)，以及后端运行治理基础：EPA Net1/Net3 的真实 WNTR/EPANET、关闭/泄漏/断裂/隔离、独立进程、物理检查、回放和基准证据；任务/运行的 SQLite 状态、JSONL 事件、SSE、有限动作域候选生成、独立验证、预算与证据清单。公共 Schema 已升级至 0.4.0 并兼容旧 Fixture；计算标为 Benchmark。AGH 守护进程与 11 项 WaterGuard MCP 工具已挂载，但真实 Agnes 模型会话、原生轨迹、取消/恢复和 live 反馈修正仍需配置赛事 Key 后实测；二维前端工作台已接入 API、真实水力计算与独立校验。
+已拉取官方 AGH 源码作为 Git 子模块基座，并构建官方 Web 与 daemon。WaterGuard 原生插件提供任务读取、候选提交、水力仿真、独立验证和证据工具；由 AGH 承担模型与工具调度。EPA Net1/Net3 的真实计算、任务存储、取消、Fixture、Replay 与证据导出已接入 FastAPI，公共契约为 0.4.0。Agnes 鉴权当前返回 401，模型驱动的 Live 尚未验证。
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 
-[物理模型与算法评估](docs/物理模型与算法评估.md) 逐项核对现实物理因素，包含局部需求/PDD、背景漏损、能量与储水检查、内部事件采样和 26 组步长/参数敏感性实算；明确水锤、气穴、破口变形和现场校准的缺口。
-
-[工程可靠性审查](docs/仿真工程可靠性审查.md) 记录进程、协议、原子写入、资源边界与回放环境加固，以及进入工业部署前仍需完成的验证。
-
 先按 [三人接入与复现说明](packages/contracts/README.md#从干净仓库跑起来) 安装依赖，再运行 `npm run demo`；`npm run mock` 提供本地开发 API。Windows 无需激活环境的完整命令也在该说明中。
 
-### 最新前端（对外演示以此为准）
+### 最新前端
 
-最新的完整前端在 [apps/web-gpt](apps/web-gpt/README.md)，包括：
-- 首页：闸阀拆装、系统展示；
-- 应急工作台、智能体工作流、方案对照、建模与仿真、证据中心。
-
-启动方法：
+展示前端以 [apps/web-gpt](apps/web-gpt/README.md) 为准：闸阀拆装开场、应急工作台、智能体分支导图与流程总览、方案对照、建模与仿真、证据中心。远程 PR #1 的完整页面与资产均已保留。
 
 ```powershell
 cd apps/web-gpt
@@ -28,22 +20,20 @@ npm ci
 pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 ```
 
-浏览器打开 http://127.0.0.1:5173/ 。
+打开 [展示前端](http://127.0.0.1:5173/)。启动脚本使用 8000–8002 的只读数据服务；水力读数来自真实 Benchmark，智能体运行示例仍按页面标注为 Fixture。其真实任务与 AGH 事件接入应在这套前端上继续完成。
 
-脚本会占用 8000–8002 三个只读数据服务端口，其中 8000 和下面的联调服务默认端口相同。两者同时运行时，联调服务请换端口，例如 `npm start -- 8010`。
+展示服务与联调 API 同时运行时，API 请使用独立端口，例如在仓库根目录运行 `npm run start:api -- --port 8010`。AGH 启动器可用 `npm start -- --api-port 8010`；原生插件配置的 API 地址需与所选端口一致，参见 [AGH 基座与启动](docs/AGH基座与启动.md)。
 
-### 联调服务
+### AGH 与联调
 
-`design/waterguard-blueprint.html` 是初期二维蓝图，由联调服务在 `/` 提供。
-
-前后端统一启动（优先使用项目已有 `.venv`，无需激活环境）：
+基于官方 AGH 启动（首次构建与插件安装见 [AGH 基座与启动](docs/AGH基座与启动.md)）：
 
 ```powershell
 cd D:\WaterGuard
 npm start
 ```
 
-打开 [工作台](http://127.0.0.1:8000/) 即可选择管网、创建故障任务、运行 Benchmark、比较候选和查看证据；完整步骤见 [前后端启动与接入](docs/前后端启动与接入.md)。支持 Net1/Net3 的正常、关闭、泄漏和断裂工况，默认固定零动作/单动作枚举。它默认将本地运行数据写入未提交的 `artifacts/`。`POST /api/tasks/{id}/runs` 的 `mode=live` 在 AGH 宿主完成前会明确返回 `AGH_UNAVAILABLE`，不会暗中替换为其他 Agent 循环。
+打开 [官方 AGH 工作台](http://127.0.0.1:4180/) 使用原生会话与业务工具。[水力工作台](http://127.0.0.1:8000/) 用于冻结任务、运行 Benchmark、比较候选和查看证据；单独启动用 `npm run start:api`，步骤见 [前后端启动与接入](docs/前后端启动与接入.md)。支持 Net1/Net3 的正常、关闭、泄漏、断裂与隔离工况。本地运行数据写入未提交的 `artifacts/`；原生记录与会话关联完成前，API 的 `mode=live` 明确返回 `AGH_UNAVAILABLE`。
 
 现有 0.2 实施设计：
 
@@ -52,8 +42,6 @@ npm start
 | [前端设计](docs/前端设计.md) | 数据驱动三维管网、Blender 资产、二维分析、AGH 事件和证据界面 |
 | [后端设计](docs/后端设计.md) | API、会话宿主、工具网关、水力仿真、契约、治理和证据存储 |
 | [Agent 设计](docs/Agent设计.md) | AGH 核心执行、Agnes 三角色、工具权限、反馈修正与评测 |
-| [AGH 验收清单](docs/AGH验收清单.md) | 配置模型 Key 后的真实工具闭环、异常与证据核验步骤 |
-| [Agent 设计审查](docs/Agent设计审查-2026-10-04.md) | 当前环境实测、Agent 工具链缺口、优先级与设计优化 |
 
 三份文档是当前实施依据。已冻结的公共字段与状态以 [可执行 Schema](packages/contracts/schema/waterguard.schema.json) 和 [契约说明](packages/contracts/README.md) 为准；后端设计保留架构依据，角色与工具权限以 Agent 设计为准，界面和视觉以前端设计为准。
 
@@ -65,12 +53,12 @@ npm start
 
 ## 建议架构
 
-AGH 是核心任务的执行环境。Agnes 在其中承担任务建模、方案规划和反例审查，发起工具调用、读取反馈并决定修正。后端管理权限、预算、版本和作业生命周期，提供确定性计算与程序校验，不能另行包办核心智能流程。
+AGH 是核心任务的执行基座。选定的模型在其中承担任务建模、方案规划和反例审查，读取工具反馈并决定修正。默认采用赛事 Agnes，同时支持 DeepSeek 和 GLM。WaterGuard 自有界面通过官方 SDK 接入 AGH 会话，成果展示使用自己的工作台。后端提供确定性计算、程序校验和作业治理。
 
 - 前端：React、TypeScript、Three.js，三维/二维管网、指标与证据联动；Blender 提供少量复用设备资产。
 - 后端：Python、FastAPI、AGH 会话宿主、受限工具网关、持久队列和独立计算进程。
 - 水力仿真：WNTR / EPANET；使用公开网络模型。
-- 运行底座：指定 AGH 和 Agnes；MCP/官方工具扩展、角色委派、会话与日志接口需先验证，不能假定 Agnes Code 文档等于赛事版能力。
+- 运行底座：官方 AGH；默认赛事 Agnes 模型，兼容 DeepSeek、GLM。模型配置与凭据保存使用 AGH 官方服务，接入说明见 [模型接入](docs/模型接入.md)。
 
 仿真模块与公共契约已实现；其余产品架构仍按设计逐步接入。
 
@@ -85,7 +73,7 @@ AGH 是核心任务的执行环境。Agnes 在其中承担任务建模、方案�
 
 ## 实施顺序
 
-1. 首先核验指定 AGH 的真实工具调用、Agnes 核心决策、原生日志导出与模型配置。
+1. 首先核验指定 AGH 的真实工具调用、所选模型的核心决策、原生日志导出与模型配置。
 2. 建立公开网络基线、合法动作映射、指标计算和独立验证，作为 AGH 可调用的专业工具。
 3. 在 AGH 中完成失败、修正、复验闭环，并接入真实前端。
 4. 增加任务建模和反例审查，以相同预算对比固定搜索、单 Agent 与多 Agent。

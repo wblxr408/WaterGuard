@@ -1,0 +1,3 @@
+[submodule "vendor/agnes-harness"]
+	path = vendor/agnes-harness
+	url = https://github.com/AgnesAI-Labs/agnes-harness.git
