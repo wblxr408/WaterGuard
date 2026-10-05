@@ -205,6 +205,31 @@ class RunStore:
             raise NotFoundError("Unknown run")
         return json.loads(row["payload"])
 
+    def bind_agh_session(self, run_id: str, agh_session_ref: str, model_config_ref: str) -> dict:
+        """Record host-verified AGH provenance before a strict gateway starts.
+
+        This is intentionally a store operation, not an MCP tool: only the
+        local AGH host owns the native session identity and model reference.
+        """
+        require(isinstance(agh_session_ref, str) and agh_session_ref, "AGH session reference is required")
+        require(isinstance(model_config_ref, str) and model_config_ref, "Model configuration reference is required")
+        with self._db() as db:
+            row = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            if not row:
+                raise NotFoundError("Unknown run")
+            run = json.loads(row["payload"])
+            if run["status"] in TERMINAL:
+                raise ConflictError("Cannot bind AGH session to a terminal run")
+            if run["agh_session_ref"] not in {None, agh_session_ref}:
+                raise ConflictError("Run is already bound to a different AGH session")
+            run["agh_session_ref"] = agh_session_ref
+            run["model_config_ref"] = model_config_ref
+            run["missing_items"] = [item for item in run["missing_items"] if item not in {"agh_host_not_configured", "native_agh_trace"}]
+            validate("RunRecord", run)
+            db.execute("UPDATE runs SET payload=?, updated_at=? WHERE run_id=?", (canonical(run), now(), run_id))
+        self._write_json(f"{run_id}/run.json", run)
+        return run
+
     def transition(self, run_id: str, status: str, phase: str | None = None, *, wall_time_s: float | None = None) -> dict:
         if status not in RUN_STATUS or (phase is not None and phase not in RUN_PHASE):
             raise ValueError("Invalid status or phase")

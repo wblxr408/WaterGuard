@@ -22,8 +22,15 @@ def _simulate_worker(queue, task: dict, plan: dict, mode: str, output_root: str)
             from waterguard_contracts.core import FixtureAdapter
             result = FixtureAdapter().simulate(task, plan)
         elif mode == "benchmark":
-            from services.hydraulics.adapter import EpanetAdapter
-            result = EpanetAdapter(Path(output_root)).simulate(task, plan)
+            # Physical 0.3/0.4 tasks use the same sealed worker boundary as
+            # the web benchmark.  Keep the legacy adapter only for its
+            # explicitly versioned 0.2 fixture catalogue.
+            if task.get("schema_version") in {"0.3.0", "0.4.0"}:
+                from services.hydraulics.runtime import PhysicalAdapter
+                result = PhysicalAdapter(Path(output_root)).simulate(task, plan)
+            else:
+                from services.hydraulics.adapter import EpanetAdapter
+                result = EpanetAdapter(Path(output_root)).simulate(task, plan)
         else:
             raise ValueError("Simulation jobs only support fixture or benchmark mode")
         queue.put({"status": "SUCCEEDED", "result": result})
