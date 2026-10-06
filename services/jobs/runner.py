@@ -15,15 +15,22 @@ if str(CONTRACTS) not in sys.path:
     sys.path.insert(0, str(CONTRACTS))
 
 
-def _simulate_worker(queue, task: dict, plan: dict, mode: str, output_root: str) -> None:
+def _simulate_worker(queue, task: dict, plan: dict, mode: str, output_root: str, perturbation: dict | None = None) -> None:
     """Child process boundary: no AGH/model code is imported here."""
     try:
         if mode == "fixture":
             from waterguard_contracts.core import FixtureAdapter
             result = FixtureAdapter().simulate(task, plan)
         elif mode == "benchmark":
-            from services.hydraulics.adapter import EpanetAdapter
-            result = EpanetAdapter(Path(output_root)).simulate(task, plan)
+            # Physical 0.3/0.4 tasks use the same sealed worker boundary as
+            # the web benchmark.  Keep the legacy adapter only for its
+            # explicitly versioned 0.2 fixture catalogue.
+            if task.get("schema_version") in {"0.3.0", "0.4.0"}:
+                from services.hydraulics.runtime import PhysicalAdapter
+                result = PhysicalAdapter(Path(output_root)).simulate(task, plan, perturbation=perturbation)
+            else:
+                from services.hydraulics.adapter import EpanetAdapter
+                result = EpanetAdapter(Path(output_root)).simulate(task, plan)
         else:
             raise ValueError("Simulation jobs only support fixture or benchmark mode")
         queue.put({"status": "SUCCEEDED", "result": result})
@@ -50,13 +57,15 @@ class SimulationJobManager:
         self.jobs: dict[str, Job] = {}
         self.context = mp.get_context("spawn")
 
-    def submit(self, task: dict, plan: dict, mode: str) -> dict:
+    def submit(self, task: dict, plan: dict, mode: str, *, job_id: str | None = None, perturbation: dict | None = None) -> dict:
         active = sum(job.status in {"QUEUED", "RUNNING"} for job in self.jobs.values())
         if active >= self.max_concurrent:
             return {"status": "rejected", "code": "BUDGET_EXHAUSTED", "summary": "Simulation concurrency slots are exhausted.", "retryable": True}
         queue = self.context.Queue()
-        process = self.context.Process(target=_simulate_worker, args=(queue, task, plan, mode, str(self.output_root)))
-        job_id = "job-" + uuid.uuid4().hex
+        process = self.context.Process(target=_simulate_worker, args=(queue, task, plan, mode, str(self.output_root), perturbation))
+        job_id = job_id or "job-" + uuid.uuid4().hex
+        if not isinstance(job_id, str) or not job_id.startswith("job-") or job_id in self.jobs:
+            raise ValueError("Invalid or duplicate simulation job identifier")
         job = Job(job_id, process, queue, time.monotonic())
         self.jobs[job_id] = job
         process.start()

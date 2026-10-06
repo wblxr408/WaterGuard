@@ -29,6 +29,17 @@ def bridge(request):
     return result
 
 
+def _write_association(store, run_id, children):
+    """Join recorded SDK tool results to application events for evidence checks."""
+    run = store.get_run(run_id)
+    events = [dict(application_event_id=event['event_id'], native_tool_call_ref=event['native_tool_call_ref'])
+              for event in store.events_after(run_id)
+              if event['agh_session_ref'] == run['agh_session_ref'] and event['native_tool_call_ref']]
+    return store._write_json(f'{run_id}/agh/association.json',
+                             dict(session_id=run['agh_session_ref'], agh_session_ref=run['agh_session_ref'],
+                                  children=children, events=events))
+
+
 class LiveExecutor:
     """Lifecycle supervisor only. AGH performs all model and tool decisions."""
     def __init__(self, store, benchmark):
@@ -175,7 +186,7 @@ class LiveExecutor:
                 with self.benchmark.evidence_lock:
                     shutil.copytree(self.store._run_directory(child_id), self.store._run_directory(run_id) / 'agh' / 'children' / child_id,
                                     dirs_exist_ok=True)
-            self.store._write_json(f'{run_id}/agh/association.json', dict(session_id=run['agh_session_ref'], children=associations))
+            _write_association(self.store, run_id, associations)
             if not associations:
                 raise RuntimeError('AGH completed without a recorded WaterGuard candidate')
             if not any((self.store._run_directory(run_id) / 'candidates' / plan['candidate_id'] / 'verification.json').is_file()

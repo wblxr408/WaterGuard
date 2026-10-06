@@ -13,10 +13,10 @@ if str(CONTRACTS) not in sys.path:
 from waterguard_contracts.core import verify_benchmark, verify_fixture
 
 
-def verify(task: dict, plan: dict, result: dict, catalog: dict, scene: dict) -> dict:
+def verify(task: dict, plan: dict, result: dict, catalog: dict, scene: dict, perturbation: dict | None = None) -> dict:
     """Recompute constraints and metrics from stored series in its declared mode."""
     if result.get("mode") == "benchmark":
-        return verify_benchmark(task, plan, result, catalog, scene)
+        return verify_benchmark(task, plan, result, catalog, scene, perturbation)
     if result.get("mode") == "fixture":
-        return verify_fixture(task, plan, result, catalog, scene)
+        return verify_fixture(task, plan, result, catalog, scene, perturbation)
     raise ValueError("Verifier accepts only benchmark or fixture simulation artifacts")

@@ -40,3 +40,22 @@ class PolicyTests(unittest.TestCase):
             store.settle_simulation(second["reservation_id"])
             with self.assertRaisesRegex(ConflictError, "budget"):
                 store.reserve_simulation(run["run_id"], "request-3")
+
+    def test_gateway_job_is_persisted_and_restart_settles_reservation(self):
+        parent = ROOT / ".test-artifacts"; parent.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=parent) as root:
+            store = RunStore(Path(root) / "db.sqlite3", Path(root) / "artifacts")
+            task = copy.deepcopy(load(FIXTURES / "task.json"))
+            task["budget"]["max_simulations"] = 1
+            task["constraint_hash"] = task_hash(task)
+            run = store.create_run(store.save_task(task), "fixture")
+            reservation = store.reserve_simulation(run["run_id"], "gateway:plan-1")
+            created = store.create_simulation_job(run["run_id"], "job-restart-test", "candidate-a", reservation["reservation_id"])
+            self.assertEqual(created["status"], "QUEUED")
+            store.update_simulation_job("job-restart-test", "RUNNING")
+
+            recovered = store.recover_simulation_jobs()
+
+            self.assertEqual(len(recovered), 1)
+            self.assertEqual(store.get_simulation_job("job-restart-test")["status"], "ERROR")
+            self.assertEqual(store.get_run(run["run_id"])["budget_usage"]["simulations"], 1)

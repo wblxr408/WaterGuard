@@ -109,6 +109,13 @@ class RunStore:
               state TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(run_id, request_key),
               FOREIGN KEY (run_id) REFERENCES runs(run_id)
             );
+            CREATE TABLE IF NOT EXISTS simulation_jobs (
+              job_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, candidate_id TEXT NOT NULL,
+              reservation_id TEXT, status TEXT NOT NULL, payload TEXT NOT NULL,
+              created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+              FOREIGN KEY (run_id) REFERENCES runs(run_id),
+              FOREIGN KEY (reservation_id) REFERENCES simulation_reservations(reservation_id)
+            );
             """)
 
     def _write_json(self, relative: str, value: Any) -> str:
@@ -277,6 +284,31 @@ class RunStore:
         with self._db() as db:
             rows = db.execute('SELECT runs.payload FROM live_links JOIN runs ON runs.run_id=live_links.child_id WHERE parent_id=?', (parent_id,)).fetchall()
         return [json.loads(row['payload']) for row in rows]
+
+    def bind_agh_session(self, run_id: str, agh_session_ref: str, model_config_ref: str) -> dict:
+        """Record host-verified AGH provenance before a strict gateway starts.
+
+        This is intentionally a store operation, not an MCP tool: only the
+        local AGH host owns the native session identity and model reference.
+        """
+        require(isinstance(agh_session_ref, str) and agh_session_ref, "AGH session reference is required")
+        require(isinstance(model_config_ref, str) and model_config_ref, "Model configuration reference is required")
+        with self._db() as db:
+            row = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            if not row:
+                raise NotFoundError("Unknown run")
+            run = json.loads(row["payload"])
+            if run["status"] in TERMINAL:
+                raise ConflictError("Cannot bind AGH session to a terminal run")
+            if run["agh_session_ref"] not in {None, agh_session_ref}:
+                raise ConflictError("Run is already bound to a different AGH session")
+            run["agh_session_ref"] = agh_session_ref
+            run["model_config_ref"] = model_config_ref
+            run["missing_items"] = [item for item in run["missing_items"] if item not in {"agh_host_not_configured", "native_agh_trace"}]
+            validate("RunRecord", run)
+            db.execute("UPDATE runs SET payload=?, updated_at=? WHERE run_id=?", (canonical(run), now(), run_id))
+        self._write_json(f"{run_id}/run.json", run)
+        return run
 
     def transition(self, run_id: str, status: str, phase: str | None = None, *, wall_time_s: float | None = None) -> dict:
         if status not in RUN_STATUS or (phase is not None and phase not in RUN_PHASE):
@@ -502,3 +534,64 @@ class RunStore:
             run = json.loads(run_row["payload"])
             run["budget_usage"]["simulations"] = count
             db.execute("UPDATE runs SET payload=?, updated_at=? WHERE run_id=?", (canonical(run), now(), row["run_id"]))
+
+    def create_simulation_job(self, run_id: str, job_id: str, candidate_id: str, reservation_id: str | None) -> dict:
+        """Persist a gateway job intent before any child process is spawned."""
+        require(re.fullmatch(r"job-[A-Za-z0-9_-]+", job_id) is not None, "Invalid job identifier")
+        require(isinstance(candidate_id, str) and candidate_id, "Candidate identifier is required")
+        with self._db() as db:
+            run = db.execute("SELECT 1 FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            if not run:
+                raise NotFoundError("Unknown run")
+            if reservation_id is not None:
+                reservation = db.execute("SELECT run_id FROM simulation_reservations WHERE reservation_id=?", (reservation_id,)).fetchone()
+                if not reservation or reservation["run_id"] != run_id:
+                    raise ConflictError("Simulation reservation does not belong to run")
+            existing = db.execute("SELECT payload FROM simulation_jobs WHERE job_id=?", (job_id,)).fetchone()
+            if existing:
+                return json.loads(existing["payload"])
+            record = dict(job_id=job_id, run_id=run_id, candidate_id=candidate_id, reservation_id=reservation_id,
+                          status="QUEUED", result_ref=None, error=None, created_at=now(), updated_at=now())
+            db.execute("INSERT INTO simulation_jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                       (job_id, run_id, candidate_id, reservation_id, record["status"], canonical(record), record["created_at"], record["updated_at"]))
+        self._write_json(f"{run_id}/jobs/{job_id}.json", record)
+        return record
+
+    def get_simulation_job(self, job_id: str) -> dict:
+        with self._db() as db:
+            row = db.execute("SELECT payload FROM simulation_jobs WHERE job_id=?", (job_id,)).fetchone()
+        if not row:
+            raise NotFoundError("Unknown simulation job")
+        return json.loads(row["payload"])
+
+    def update_simulation_job(self, job_id: str, status: str, *, result: dict | None = None, error: dict | None = None) -> dict:
+        require(status in {"QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "ERROR"}, "Invalid simulation job status")
+        with self._db() as db:
+            row = db.execute("SELECT payload FROM simulation_jobs WHERE job_id=?", (job_id,)).fetchone()
+            if not row:
+                raise NotFoundError("Unknown simulation job")
+            record = json.loads(row["payload"])
+            if record["status"] in {"SUCCEEDED", "FAILED", "CANCELLED", "ERROR"} and status != record["status"]:
+                return record
+            record["status"], record["updated_at"] = status, now()
+            if result is not None:
+                result_ref = self._write_json(f"{record['run_id']}/jobs/{job_id}-result.json", result)
+                record["result_ref"] = result_ref
+            if error is not None:
+                record["error"] = error
+            db.execute("UPDATE simulation_jobs SET status=?, payload=?, updated_at=? WHERE job_id=?",
+                       (status, canonical(record), record["updated_at"], job_id))
+        self._write_json(f"{record['run_id']}/jobs/{job_id}.json", record)
+        return record
+
+    def recover_simulation_jobs(self) -> list[dict]:
+        """Mark child jobs from a previous gateway process as unrecoverable."""
+        with self._db() as db:
+            rows = db.execute("SELECT payload FROM simulation_jobs WHERE status IN ('QUEUED','RUNNING')").fetchall()
+        recovered = []
+        for row in rows:
+            record = json.loads(row["payload"])
+            recovered.append(self.update_simulation_job(record["job_id"], "ERROR", error={"code": "GATEWAY_RESTARTED", "message": "Gateway process restarted; child simulation cannot be resumed."}))
+            if record.get("reservation_id"):
+                self.settle_simulation(record["reservation_id"])
+        return recovered

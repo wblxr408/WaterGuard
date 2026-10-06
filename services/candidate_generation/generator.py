@@ -31,6 +31,13 @@ def generate_candidates(task: dict, catalog: dict, *, limit: int = 64) -> list[d
     limits = task["action_limits"]
     times = range(limits["earliest_s"], limits["latest_s"] + 1, task["time_window"]["step_s"])
     candidates = [_plan(task, "enum-baseline", [], "Deterministic no-action baseline.")]
+    # The baseline is itself a candidate and therefore consumes one of the
+    # caller's bounded simulation slots.  Returning early also avoids doing
+    # unnecessary catalogue work for a one-run diagnostic budget.
+    if limit == 1:
+        validate("ActionPlan", candidates[0])
+        check_plan(task, candidates[0], catalog)
+        return candidates
     forced_link = task["fault"]["link_id"] if task["fault"] else None
     for link_id in sorted(limits["allowed_link_ids"]):
         if link_id == forced_link:

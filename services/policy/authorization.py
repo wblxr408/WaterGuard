@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 ROLE_CAPABILITIES = {
     "task_modeler": {"wg_inspect_network", "wg_propose_task"},
-    "planner": {"wg_inspect_network", "wg_generate_candidates", "wg_submit_plan", "wg_simulate_candidate", "wg_get_simulation", "wg_verify_candidate", "wg_compare_candidates", "wg_build_evidence"},
+    "planner": {"wg_inspect_network", "wg_generate_candidates", "wg_submit_plan", "wg_simulate_candidate", "wg_get_simulation", "wg_cancel_simulation", "wg_verify_candidate", "wg_compare_candidates", "wg_build_evidence"},
     "reviewer": {"wg_inspect_network", "wg_get_simulation", "wg_verify_candidate", "wg_create_perturbation", "wg_compare_candidates"},
 }
 

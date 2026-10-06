@@ -69,6 +69,23 @@ class AghBoundaryTests(unittest.TestCase):
         self.assertIsNone(plain['native_tool_call_ref'])
         self.assertTrue(plain['native_reference_missing_reason'])
 
+    def test_sdk_association_matches_merged_evidence_format(self):
+        # Isolated simulated SDK data tests the interchange, not a real Live run.
+        from services.api.agh import _write_association
+        from services.evidence.service import build_evidence
+        parent = self.parent()
+        native_ref = 'agh:isolated-sdk-test-session:tool:actual-sdk-field'
+        event = self.store.emit(parent, 'agh', 'candidate.submitted', 'artifact:isolated-test', native_tool_call_ref=native_ref)
+        self.store.emit(parent, 'user', 'run.started', 'artifact:isolated-test')
+        self.store._write_json(f"{parent['run_id']}/agh/native/isolated.json", {'isolated_sdk_tool': 'actual-sdk-field'})
+        _write_association(self.store, parent['run_id'], [{'child_run_id': 'run-isolated'}])
+        association = self.store._read_json(self.store._run_directory(parent['run_id']) / 'agh/association.json')
+        self.assertEqual(association['agh_session_ref'], parent['agh_session_ref'])
+        self.assertEqual(association['events'], [{'application_event_id': event['event_id'], 'native_tool_call_ref': native_ref}])
+        evidence = build_evidence(self.store.artifacts, parent)
+        self.assertEqual(evidence['association_ref'], 'artifact:agh/association.json')
+        self.assertTrue(evidence['live_export_allowed'])
+
     def test_restart_revokes_old_session_even_if_native_cancel_fails(self):
         from services.api.agh import LiveExecutor
         parent = self.parent()

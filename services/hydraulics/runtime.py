@@ -177,15 +177,15 @@ def execute_worker(folder,timeout,cancel_event,limits):
 def finish(folder, *, series=None, errors=None, warnings=None, raw_converged=None, error_code=None, status=None):
     folder = Path(folder)
     request = load(folder/'request.json')
-    task, plan, sid, engine = request['task'],request['plan'],folder.name,request['engine_version']
+    task, plan, sid, engine, perturbation = request['task'],request['plan'],folder.name,request['engine_version'],request.get('perturbation')
     errors = errors or []
     version=task['schema_version']
     diag = dict(schema_version=version,simulation_id=sid,mode='benchmark',converged=raw_converged,
                 raw_converged=raw_converged,errors=errors,warnings=warnings or [],error_code=error_code,
                 provenance='Actual isolated engine process; inspect raw CSV and physical-checks.json. No AGH decision is asserted.')
     success = not errors and series is not None
-    artifact = dict(schema_version=version,simulation_id=sid,candidate_id=plan['candidate_id'],task_ref=task_ref(task),perturbation_id=None,
-        mode='benchmark',engine_version=engine,input_hash=input_hash(task,plan,engine),status=status or ('SUCCEEDED' if success else 'FAILED'),
+    artifact = dict(schema_version=version,simulation_id=sid,candidate_id=plan['candidate_id'],task_ref=task_ref(task),perturbation_id=None if perturbation is None else perturbation['perturbation_id'],
+        mode='benchmark',engine_version=engine,input_hash=input_hash(task,plan,engine,perturbation),status=status or ('SUCCEEDED' if success else 'FAILED'),
         series_ref='series.json' if success else None,diagnostics_ref='diagnostics.json',time_axis=task['time_window'],
         entity_map_ref='entity-map.json',physical_checks_ref='physical-checks.json',input_manifest_ref='input-manifest.json')
     result = dict(schema_version=version,mode='benchmark',artifact=artifact,series=series if success else None,diagnostics=diag)
@@ -216,7 +216,7 @@ class PhysicalAdapter:
         self.output_root = Path(output_root).resolve()
         self.limits = limits or ExecutionLimits()
 
-    def simulate(self, task, plan, *, timeout_s=None, cancel_event=None):
+    def simulate(self, task, plan, *, perturbation=None, timeout_s=None, cancel_event=None):
         # Serialize a snapshot before starting a worker; never keep caller-owned objects.
         task,plan = json.loads(json.dumps([task,plan],allow_nan=False))
         validate('TaskSpec',task)
@@ -224,6 +224,10 @@ class PhysicalAdapter:
         require(task['schema_version']==plan['schema_version'] and task['schema_version'] in ('0.3.0','0.4.0'),'PhysicalAdapter requires matching 0.3/0.4')
         require(task_hash(task)==task['constraint_hash'] and plan_hash(plan)==plan['plan_hash'],'Input hash mismatch')
         require(plan['task_ref']==task_ref(task),'Plan/task binding mismatch')
+        # Compiler performs the complete domain and task/plan binding check;
+        # the immutable request below then carries the exact stress parameters.
+        from .compiler import compile_task
+        compile_task(task, plan, perturbation)
         source = manifest(task['network_ref']['network_id'])
         maximum = task['budget']['max_wall_time_s']
         require(timeout_s is None or (isinstance(timeout_s,(int,float)) and not isinstance(timeout_s,bool) and math.isfinite(timeout_s) and timeout_s>0),'Timeout must be finite and positive')
@@ -231,7 +235,7 @@ class PhysicalAdapter:
         folder = self.output_root/('sim-'+uuid4().hex)
         folder.mkdir(parents=True,exist_ok=False)
         engine = engine_identity(task)
-        write(folder/'request.json',dict(task=task,plan=plan,engine_version=engine,execution_limits=asdict(self.limits)))
+        write(folder/'request.json',dict(task=task,plan=plan,perturbation=perturbation,engine_version=engine,execution_limits=asdict(self.limits)))
         write(folder/'task.json',task)
         write(folder/'plan.json',plan)
         write(folder/'network-manifest.json',source)
@@ -239,10 +243,10 @@ class PhysicalAdapter:
         write_bytes(folder/'LICENSE-WNTR.md',(DATA/'LICENSE.md').read_bytes())
         write_bytes(folder/'runtime-overlay.json',(ROOT/source['overlays'][0]['ref']).read_bytes())
         write(folder/'environment.json',runtime_environment())
-        write(folder/'input-manifest.json',dict(input_hash=input_hash(task,plan,engine),engine_version=engine,
+        write(folder/'input-manifest.json',dict(input_hash=input_hash(task,plan,engine,perturbation),engine_version=engine,
             source_sha256=file_hash(folder/'source.inp'),overlay_sha256=file_hash(folder/'runtime-overlay.json'),
             task_sha256=file_hash(folder/'task.json'),plan_sha256=file_hash(folder/'plan.json'),environment_sha256=file_hash(folder/'environment.json'),
-            failure_model=task['fault'],hydraulic_options=task['hydraulic_options'],control_policy=task['control_policy']))
+            failure_model=task['fault'],hydraulic_options=task['hydraulic_options'],control_policy=task['control_policy'],perturbation=perturbation))
         # Explicit placeholders remain meaningful for cancellation before compilation.
         write(folder/'entity-map.json',dict(status='not_compiled'))
         write(folder/'physical-checks.json',dict(passed=False,status='not_evaluated'))

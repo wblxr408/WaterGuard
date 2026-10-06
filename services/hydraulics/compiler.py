@@ -47,7 +47,7 @@ def assets(network_id):
     return wn, source, scene, catalog
 
 
-def compile_task(task, plan):
+def compile_task(task, plan, perturbation=None):
     wn, source, scene, catalog = assets(task['network_ref']['network_id'])
     check_task(task, catalog, scene)
     check_plan(task, plan, catalog)
@@ -62,6 +62,13 @@ def compile_task(task, plan):
     require(options['minimum_pressure_m'] < options['required_pressure_m'] and options['required_pressure_m'] >= 0.07, 'Invalid PDD pressure range')
     require(0 < options['pressure_exponent'] <= 1, 'PDD exponent outside supported (0,1]')
     require(options['demand_multiplier'] in task['perturbation_domain']['demand_multipliers'], 'Demand multiplier outside declared domain')
+    if perturbation is not None:
+        require(isinstance(perturbation, dict) and set(perturbation) == {'perturbation_id', 'candidate_id', 'parameters', 'required_labels'}, 'Invalid perturbation record')
+        require(perturbation['candidate_id'] == plan['candidate_id'], 'Perturbation candidate mismatch')
+        require(isinstance(perturbation['perturbation_id'], str) and perturbation['perturbation_id'], 'Invalid perturbation identifier')
+        require(isinstance(perturbation['parameters'], dict) and set(perturbation['parameters']) == {'demand_multiplier'}, 'Unsupported perturbation parameters')
+        require(perturbation['parameters']['demand_multiplier'] in task['perturbation_domain']['demand_multipliers'], 'Perturbation demand multiplier outside declared domain')
+        require(perturbation['required_labels'] == task['perturbation_domain']['required'], 'Perturbation labels do not match task domain')
     fault = task['fault']
     if fault:
         extra=set(fault)-{'kind','link_id','start_s','end_s','mapping'}
@@ -100,7 +107,7 @@ def compile_task(task, plan):
     wn.options.hydraulic.required_pressure = options['required_pressure_m']
     wn.options.hydraulic.pressure_exponent = options['pressure_exponent']
     # A multiplier is a complete scenario parameter, not an extra hidden mutation.
-    wn.options.hydraulic.demand_multiplier *= options['demand_multiplier']
+    wn.options.hydraulic.demand_multiplier *= options['demand_multiplier'] if perturbation is None else perturbation['parameters']['demand_multiplier']
     physics=task.get('physical_parameters')
     if physics is not None:
         require(task['schema_version']=='0.4.0','Physical parameters require contracts 0.4.0')
@@ -206,6 +213,7 @@ def compile_task(task, plan):
             mapping['leaks'].append(dict(node_id=name,source_link_id='node:'+name,area_m2=spec['area_m2'],discharge_coefficient=spec['discharge_coefficient']))
             mapping['leak_windows'][name]=[0,w['end_s']]
     mapping['physical_parameters']=physics
+    mapping['perturbation']=perturbation
     for i,action in enumerate(sorted(plan['actions'],key=lambda a:(a['simulation_time_s'],a['link_id']))):
         link=wn.get_link(action['link_id'])
         require((action['kind'].startswith('pump_')) == (link.link_type=='Pump'), 'Action/physical facility kind mismatch')
