@@ -21,6 +21,7 @@ jobs:
       - run: python -m services.hydraulics.demo --export artifacts/public-hydraulics.zip
       - run: python -m services.hydraulics.acceptance --export artifacts/student1.zip
       - run: python -m services.hydraulics.pair --export artifacts/feedback-pair.zip
+      - run: python -m services.hydraulics.china_demo --export artifacts/china-zhijiang.zip
       - run: python -m services.hydraulics.physics_study --output artifacts/physics-study --export artifacts/physics-study.zip
       - uses: actions/upload-artifact@v4
         if: always()

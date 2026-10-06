@@ -73,9 +73,9 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/tasks/from-proposal', json={'candidate_limit':0}).status_code, 422)
 
     def test_real_benchmark_pipeline_and_idempotent_reread(self):
-        for network, fault in [('epa-net1','closure'), ('epa-net3','rupture')]:
+        for network, fault in [('epa-net1','closure'), ('epa-net3','rupture'), ('china-zhijiang','closure')]:
             with self.subTest(network=network):
-                task = self.task(network_id=network, fault_kind=fault, candidate_limit=1)
+                task = self.task(network_id=network, fault_kind=fault, candidate_limit=1, threshold_mode='manual', min_pressure_m=20, min_supply_ratio=.95)
                 run_id = self.start(task)
                 run = self.wait(run_id)
                 error = self.client.get(f'/api/runs/{run_id}/error')
@@ -92,7 +92,7 @@ class WorkbenchTests(unittest.TestCase):
                 # Close the executor to wait for final atomic evidence publication.
         self.app.state.benchmark_executor.close()
         runs = self.client.get('/api/runs').json()
-        self.assertEqual(len(runs), 2)
+        self.assertEqual(len(runs), 3)
         for run in runs:
             evidence = self.client.get(f"/api/runs/{run['run_id']}/evidence").json()
             self.assertGreater(len(evidence['artifacts']), 20)
@@ -110,7 +110,7 @@ class WorkbenchTests(unittest.TestCase):
             stopped.set()
             raise RuntimeError('cancelled worker test')
         with patch('services.hydraulics.runtime.PhysicalAdapter.simulate', simulate):
-            task = self.task(candidate_limit=1)
+            task = self.task(candidate_limit=1, threshold_mode='manual', min_pressure_m=20, min_supply_ratio=.95)
             run_id = self.start(task)
             self.assertTrue(entered.wait(5))
             self.assertEqual(self.client.post(f'/api/runs/{run_id}/cancel').json()['status'], 'CANCELLED')
@@ -125,7 +125,7 @@ class WorkbenchTests(unittest.TestCase):
 
     def test_worker_error_is_visible_and_restart_is_explicit(self):
         with patch('services.hydraulics.runtime.PhysicalAdapter.simulate', side_effect=RuntimeError('engine unavailable')):
-            run_id = self.start(self.task(candidate_limit=1))
+            run_id = self.start(self.task(candidate_limit=1, threshold_mode='manual', min_pressure_m=20, min_supply_ratio=.95))
             self.assertEqual(self.wait(run_id)['status'], 'ERROR')
             self.assertIn('engine unavailable', self.client.get(f'/api/runs/{run_id}/error').json()['message'])
         pending = self.store.create_run(self.store.save_task(propose_task(TaskProposal(candidate_limit=1))), 'benchmark')
@@ -140,3 +140,36 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(len(plans), limit)
             self.assertEqual(plans[0]['actions'], [])
             self.assertTrue(all(a['link_id'] != task['fault']['link_id'] for p in plans for a in p['actions']))
+
+    def test_adaptive_and_manual_thresholds_freeze_and_drive_visual_workspace(self):
+        details = self.client.get('/api/networks/china-zhijiang').json()
+        recommendation = details['threshold_recommendation']
+        self.assertTrue(recommendation['available'])
+        automatic = self.task(network_id='china-zhijiang', fault_kind='normal', candidate_limit=1)
+        self.assertEqual(automatic['hard_constraints']['min_pressure_m'], recommendation['min_pressure_m'])
+        manual = self.task(network_id='china-zhijiang', fault_kind='normal', candidate_limit=1,
+                           threshold_mode='manual', min_pressure_m=20, min_supply_ratio=.95)
+        evaluated_frames = []
+        for task, expected in [(automatic, 'pass'), (manual, 'fail')]:
+            run_id = self.start(task)
+            self.assertEqual(self.wait(run_id)['status'], 'COMPLETED')
+            # Packaging follows terminal state publication; wait for the complete view.
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                response = self.client.get(f'/api/runs/{run_id}/workspace')
+                if response.status_code == 200: break
+                time.sleep(.05)
+            self.assertEqual(response.status_code, 200, response.text)
+            workspace = response.json()
+            candidate = workspace['candidates'][0]
+            self.assertEqual(candidate['verification']['admission']['nominal_constraints_pass'], expected)
+            self.assertEqual(candidate['task']['constraint_hash'], task['constraint_hash'])
+            self.assertEqual(len(candidate['series']['frames'][0]['nodes']), 113)
+            evaluated_frames.append(candidate['series']['frames'])
+        from services.hydraulics.replay import compare_frames
+        comparison = compare_frames(*evaluated_frames)
+        self.assertTrue(comparison['numerically_equivalent'], comparison)
+        self.assertEqual(self.store.get_task(automatic['task_id']), automatic)
+        for fields in [dict(threshold_mode='manual'), dict(threshold_mode='manual', min_pressure_m=10),
+                       dict(threshold_mode='adaptive', min_pressure_m=10), dict(threshold_mode='manual', min_pressure_m=-1, min_supply_ratio=.8)]:
+            self.assertEqual(self.client.post('/api/tasks/from-proposal', json=fields).status_code, 422)

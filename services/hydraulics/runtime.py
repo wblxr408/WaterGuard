@@ -18,7 +18,7 @@ from uuid import uuid4
 
 from .storage import write, write_bytes
 from .integrity import validate_output, verify_inventory
-from .datasets import ROOT, DATA, NETWORKS, manifest
+from .datasets import ROOT, manifest, network_path, license_files
 from waterguard_contracts.core import digest, file_hash, input_hash, load, plan_hash, require, resolve, task_hash, task_ref, validate
 
 
@@ -239,8 +239,9 @@ class PhysicalAdapter:
         write(folder/'task.json',task)
         write(folder/'plan.json',plan)
         write(folder/'network-manifest.json',source)
-        write_bytes(folder/'source.inp',(DATA/NETWORKS[source['network_id']]).read_bytes())
-        write_bytes(folder/'LICENSE-WNTR.md',(DATA/'LICENSE.md').read_bytes())
+        write_bytes(folder/'source.inp',network_path(source['network_id']).read_bytes())
+        for name, path in license_files(source['network_id']).items():
+            write_bytes(folder/name,path.read_bytes())
         write_bytes(folder/'runtime-overlay.json',(ROOT/source['overlays'][0]['ref']).read_bytes())
         write(folder/'environment.json',runtime_environment())
         write(folder/'input-manifest.json',dict(input_hash=input_hash(task,plan,engine,perturbation),engine_version=engine,

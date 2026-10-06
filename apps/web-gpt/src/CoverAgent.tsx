@@ -72,19 +72,16 @@ const ROLES = [
   {
     name: "任务建模",
     does: "读管网，把事故、保供要求和允许的操作整理成一份冻结的任务。",
-    never: "不改已冻结的条件，不隐去未知项",
     tools: ["wg_inspect_network", "wg_propose_task"],
   },
   {
     name: "方案规划",
     does: "提出关阀、启泵等操作组合，交给仿真和验收；没过就按反馈修改，再算一轮。",
-    never: "不降低阈值，不能自己写「验收通过」",
     tools: ["wg_submit_plan", "wg_simulate_candidate", "wg_verify_candidate"],
   },
   {
     name: "反例审查",
     does: "给有希望的方案加扰动复验，比如需水上浮 10%，看它还撑不撑得住。",
-    never: "不改原方案，也不改任务",
     tools: ["wg_create_perturbation"],
   },
 ];
@@ -222,7 +219,6 @@ export default function CoverAgent({
           <article key={r.name}>
             <h3>{r.name}</h3>
             <p>{r.does}</p>
-            <p className="never">不做：{r.never}</p>
             <ul className="tools" aria-label="可调用的工具">
               {r.tools.map((t) => (
                 <li key={t}>
@@ -245,12 +241,11 @@ export default function CoverAgent({
           </div>
           <div>
             <dt>
-              <i className="pending" />
-              等待接入
+              <i className="ok" />
+              Agnes 实时规划
             </dt>
             <dd>
-              AGH 与 Agnes（同学 2
-              负责）。接上之后，这里换成真实运行记录：每一次工具调用、失败和修改。
+              模型选择工具，执行仿真并根据验证结果继续规划。
             </dd>
           </div>
         </dl>
@@ -267,10 +262,6 @@ export default function CoverAgent({
                 : example.recommended
                   ? "，各层验收通过，可以推荐。"
                   : "，但验收没有全部通过，不推荐。"}
-            </p>
-            <p className="note">
-              方案 B
-              是工程预设，不是智能体提出的。按设计，规划角色拿到这样的验收结果要接着修改。
             </p>
             <button className="agent-link" onClick={() => onOpen("compare")}>
               在方案对照里看

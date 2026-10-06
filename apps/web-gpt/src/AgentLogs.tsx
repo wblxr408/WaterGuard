@@ -50,6 +50,6 @@ export default function AgentLogs({ logs, runId, onInspect, onEvent }: {
           {log.event_sequence != null && <button title="定位工作流事件" aria-label={`定位事件 ${log.event_sequence}`} onClick={() => onEvent(log.event_sequence!)}><Icon name="target" size={14} /></button>}
         </li>)}</ol>}
     </div>
-    <footer>日志来自当前运行的服务端事件；仅保留最近 1000 条。停止跟随后仍持续接收。</footer>
+    <footer>运行事件与工具调用持续更新。</footer>
   </section>;
 }

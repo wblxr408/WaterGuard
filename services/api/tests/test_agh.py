@@ -33,6 +33,55 @@ class AghBoundaryTests(unittest.TestCase):
             self.assertEqual(result.json()['detail']['code'], 'MODEL_NOT_CONFIGURED')
             self.assertFalse(self.store.recent_runs())
 
+    def test_verified_live_workspace_available_while_parent_is_running(self):
+        import time
+        from services.api.agh import LiveExecutor
+        from services.api.workbench import benchmark_plans, network_details
+        with TestClient(create_app(self.store)) as client:
+            parent = self.parent()
+            plan = benchmark_plans(self.task, network_details(self.task['network_ref']['network_id'])['catalog'])[0]
+            result = client.post(f"/api/tasks/{self.task['task_id']}/candidate-runs", json=plan,
+                                 headers={'X-WG-AGH-Session': parent['agh_session_ref']})
+            self.assertEqual(result.status_code, 201, result.text)
+            child_id = result.json()['run_id']
+            self.assertEqual(client.get(f"/api/runs/{parent['run_id']}/workspace").status_code, 409)
+            client.post(f'/api/runs/{child_id}/simulate')
+            deadline = time.monotonic() + 30
+            while self.store.get_run(child_id)['status'] not in {'COMPLETED', 'ERROR'} and time.monotonic() < deadline:
+                time.sleep(.1)
+            self.assertEqual(self.store.get_run(child_id)['status'], 'COMPLETED')
+            client.post(f'/api/runs/{child_id}/verify')
+            result = client.get(f"/api/runs/{parent['run_id']}/workspace")
+            self.assertEqual(result.status_code, 200, result.text)
+            workspace = result.json()
+            self.assertEqual(workspace['run']['status'], 'RUNNING')
+            self.assertEqual(len(workspace['candidates']), 1)
+            self.assertTrue(workspace['candidates'][0]['series']['frames'])
+            live = LiveExecutor(self.store, Mock())
+            try:
+                live.publish_children(parent['run_id'])
+                self.assertEqual(client.get(f"/api/runs/{parent['run_id']}/workspace").status_code, 200)
+            finally:
+                live.close()
+            self.store.transition(parent['run_id'], 'CANCELLED')
+
+    def test_jev_rejects_unbound_sessions_and_does_not_leak_invalid_credentials(self):
+        with TestClient(create_app(self.store)) as client:
+            response = client.post(f"/api/tasks/{self.task['task_id']}/jev-decision")
+            self.assertEqual(response.status_code, 409)
+            response = client.post('/api/jev/config', json={'apiKey': {'value': 'isolated-secret-marker'}})
+            self.assertEqual(response.status_code, 422)
+            self.assertNotIn('isolated-secret-marker', response.text)
+
+    def test_live_progress_stream_does_not_invent_workflow_start_events(self):
+        parent = self.parent()
+        before = self.store.events_after(parent['run_id'])
+        self.store.transition(parent['run_id'], 'RUNNING', 'SIMULATING', model_calls=3, progress_only=True)
+        self.assertEqual(self.store.events_after(parent['run_id']), before)
+        snapshots = [row for row in self.store.stream_after(parent['run_id']) if row['kind'] == 'run']
+        self.assertEqual(snapshots[-1]['data']['phase'], 'SIMULATING')
+        self.assertEqual(snapshots[-1]['data']['budget_usage']['model_calls'], 3)
+
     def test_model_secret_is_submitted_only_and_not_journaled(self):
         with TestClient(create_app(self.store)) as client, patch('services.api.agh.bridge', return_value={'kind': 'test', 'verified': False, 'models': []}) as sdk:
             result = client.post('/api/agh/models/test', json={'providerId': 'deepseek', 'apiKey': 'isolated-secret-marker'})

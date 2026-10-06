@@ -11,12 +11,12 @@ export const PHASES: [RunRecord["phase"], string][] = [
   ["PLANNING", "方案规划"],
   ["SIMULATING", "仿真"],
   ["VERIFYING", "验证"],
-  ["REVIEWING", "反例审查"],
+  ["REVIEWING", "决策复核"],
   ["PACKAGING", "打包证据"],
 ];
 const sourceText: Record<string, string> = {
-  agh: "智能体（AGH）",
-  rule: "规则（工程预设）",
+  agh: "Agnes",
+  rule: "工程计算",
   enumeration: "枚举",
   graph: "图算法",
   fixture: "人工样例",
@@ -51,12 +51,10 @@ export function AgentRunStrip({
     );
     return parent ? [`${short(c.name)} 由 ${short(parent.name)} 修正`] : [];
   });
-  const tone = real ? "real" : run ? "sample" : "none";
+  const tone = real ? "real" : run?.mode === 'fixture' ? "sample" : "none";
   const headline = real
-    ? `AGH 会话 ${run?.agh_session_ref ?? "未关联，执行来源待核验"}`
-    : run
-      ? "人工样例回放，不是智能体的真实运行"
-      : "本结果未经智能体，由固定脚本计算";
+    ? `Agnes · ${run?.status === 'RUNNING' ? '实时执行' : '运行记录'}`
+    : '管网状态与计算结果';
   return (
     <section className={`agent-strip ${tone}`} aria-label="智能体运行">
       <div className="agent-strip-head">
@@ -64,7 +62,7 @@ export function AgentRunStrip({
           <Icon name="pulse" size={17} />
         </span>
         <div>
-          <strong>智能体运行</strong>
+          <strong>{real ? 'Agnes 智能体运行' : '管网运行'}</strong>
           <span>{headline}</span>
         </div>
       </div>
@@ -79,7 +77,7 @@ export function AgentRunStrip({
         <div>
           <dt>方案提出者</dt>
           <dd>
-            {sources.map((s) => sourceText[s] ?? s).join("、")}
+            {real ? 'Agnes · 候选选择' : sources.map((s) => sourceText[s] ?? s).join("、")}
             {revisions.length > 0 && ` · ${revisions.join("；")}`}
           </dd>
         </div>
@@ -92,14 +90,6 @@ export function AgentRunStrip({
                 {run.budget_usage.model_calls ?? "未记录"}
               </dd>
             </div>
-            {run.missing_items.length > 0 && (
-              <div>
-                <dt>缺少</dt>
-                <dd>
-                  {run.missing_items.map((m) => missingText[m] ?? m).join("、")}
-                </dd>
-              </div>
-            )}
           </>
         )}
       </dl>

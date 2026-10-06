@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ActionPlan, RunEvent, RunRecord, SimulationResult, VerificationReport } from "@waterguard/contracts";
 import { describePlan, eventText, loadWorkspace } from "./data";
+import type { ExecutionEvent, ExecutionTrace } from './agent-execution';
 
 export type StreamSource = "runtime" | "fixture";
 export type ConnectionState = "loading" | "streaming" | "reconnecting" | "done" | "error" | "empty";
@@ -32,6 +33,7 @@ export interface InfoLog {
   simulation_id?: string | null;
   native_tool_call_ref?: string | null;
   payload_ref?: string;
+  execution?: ExecutionEvent;
 }
 const terminal = new Set(["COMPLETED", "ERROR", "CANCELLED", "BUDGET_EXHAUSTED"]);
 const phases = new Set(["INTAKE", "MODELING", "BASELINE", "PLANNING", "SIMULATING", "VERIFYING", "REVIEWING", "PACKAGING"]);
@@ -91,6 +93,7 @@ export function useAgentRun() {
   const [workspace, setWorkspace] = useState<AgentWorkspace | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [logs, setLogs] = useState<InfoLog[]>([]);
+  const [execution, setExecution] = useState<ExecutionTrace | null>(null);
   const [state, setState] = useState<ConnectionState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -104,7 +107,7 @@ export function useAgentRun() {
       rows.forEach((row) => validateRun(row, row.run_id));
       if (controller.signal.aborted) return;
       setRuns(rows);
-      setRunId((current) => current || rows.find((row) => !isTerminal(row))?.run_id || rows[0]?.run_id || "");
+      setRunId((current) => current || rows.find((row) => row.mode === 'live' && !isTerminal(row))?.run_id || rows.find((row) => row.mode === 'live')?.run_id || rows[0]?.run_id || "");
       if (!rows.length && !runId) setState("empty");
     }).catch((err) => {
       if (!controller.signal.aborted) { setError(message(err)); setState("error"); }
@@ -113,7 +116,7 @@ export function useAgentRun() {
   }, [source, refreshKey]);
 
   useEffect(() => {
-    setWorkspace(null); setEvents([]); setLogs([]);
+    setWorkspace(null); setEvents([]); setLogs([]); setExecution(null);
     if (!runId) return;
     const controller = new AbortController();
     let stream: EventSource | undefined;
@@ -121,6 +124,7 @@ export function useAgentRun() {
     let refreshTimer = 0;
     let refreshInFlight = false;
     let refreshAgain = false;
+    let archiveChecks = 0;
     const base = source === "runtime" ? "/wg" : "/fx";
     setState("loading"); setError(null);
     const hydrate = async () => {
@@ -134,6 +138,14 @@ export function useAgentRun() {
         validateRun(value.run, runId, snapshot);
         snapshot ??= value.run;
         setWorkspace({ base, mode: value.mode, run: snapshot, candidates: value.candidates });
+        if (source === 'runtime') {
+          const trace = await read<ExecutionTrace>(base, `runs/${encodeURIComponent(runId)}/execution`, controller.signal);
+          if (trace.run_id !== runId || (trace.agh_session_ref && snapshot.agh_session_ref && trace.agh_session_ref !== snapshot.agh_session_ref)) throw new StreamDataError('执行调用与所选运行不一致。');
+          if (controller.signal.aborted) return;
+          setExecution(previous => ({ ...trace, events: [...new Map([...(previous?.events ?? []), ...trace.events].map(e => [e.id, e])).values()].sort((a, b) => a.sequence - b.sequence) }));
+          if (isTerminal(snapshot) && !trace.evidence && archiveChecks++ < 15)
+            refreshTimer = window.setTimeout(() => void hydrate(), 1000);
+        }
       } catch (err) {
         if (!controller.signal.aborted) {
           if (err instanceof StreamDataError) { setWorkspace(null); fail(err); }
@@ -183,6 +195,11 @@ export function useAgentRun() {
                 !Number.isSafeInteger(Number(e.lastEventId)) || Number(e.lastEventId) < 1)
               throw new Error("SSE 日志来源或格式不一致，已停止订阅。");
             appendLog({ ...value, id: Number(e.lastEventId) });
+            if (value.execution) {
+              const item = value.execution;
+              setExecution(previous => ({ run_id: runId, agh_session_ref: snapshot!.agh_session_ref, evidence: previous?.evidence ?? null,
+                events: [...new Map([...(previous?.events ?? []), item].map(row => [row.id, row])).values()].sort((a, b) => a.sequence - b.sequence) }));
+            } else if (value.event_type === 'tool.started' || value.event_type === 'tool.completed') scheduleRefresh();
           } catch (err) { fail(err); }
         });
         stream.addEventListener("stream.complete", (event) => {
@@ -196,7 +213,7 @@ export function useAgentRun() {
     return () => { controller.abort(); stream?.close(); clearTimeout(refreshTimer); };
   }, [source, runId, connectKey]);
 
-  return { w: workspace, events, logs, state, error, source, runs, runId,
+  return { w: workspace, events, logs, execution, state, error, source, runs, runId,
     selectSource: (next: StreamSource) => { if (next !== source) { setRunId(""); setSource(next); setState("loading"); } },
     selectRun: (next: string) => {
       setRunId(next);

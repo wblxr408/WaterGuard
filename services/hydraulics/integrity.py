@@ -64,8 +64,10 @@ def validate_raw(folder,task,plan,series,perturbation=None):
     from .compiler import compile_task
     from .physical import assess,engineering_summary
     wn,source,_,_,mapping=compile_task(task,plan,perturbation)
-    from .datasets import SOURCES
-    require(load(folder/'network-manifest.json')==source and file_hash(folder/'LICENSE-WNTR.md')==SOURCES['LICENSE.md'][1],'Frozen source/license manifest mismatch')
+    from .datasets import license_files
+    require(load(folder/'network-manifest.json')==source, 'Frozen source manifest mismatch')
+    for name, path in license_files(source['network_id']).items():
+        require(file_hash(folder/name)==file_hash(path), 'Frozen license mismatch: '+name)
     detailed=task['schema_version']=='0.4.0';engine=task['hydraulic_options']['engine']
     if engine=='epanet':
         require(all((folder/name).is_file() and (folder/name).stat().st_size>0 for name in ('engine.inp','engine.rpt','engine.bin')),'Missing native EPANET evidence')

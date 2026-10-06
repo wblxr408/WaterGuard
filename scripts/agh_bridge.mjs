@@ -57,10 +57,10 @@ try {
     if (!/^run-[A-Za-z0-9_-]+$/.test(input.run_id)) throw new Error('Invalid run identity')
     const directory = join(process.env.WG_ARTIFACT_ROOT || join(root, 'artifacts'), input.run_id, 'agh', 'native')
     mkdirSync(directory, { recursive: true })
-    const session = await client.session.new({ cwd: root })
+    const session = await client.session.new({ cwd: root, sessionKey: `waterguard:${input.run_id}` })
     session.onPermissionRequest(async () => ({ verdict: 'rejected' }))
     const model = input.model
-    await session.setModel({ slot: 'main', route: model.route, model: model.model })
+    await session.setModel({ slot: 'primary', route: model.route, model: model.model })
     send({ kind: 'session', session_id: session.id, model })
     // The API must freeze the native session binding before any model tool executes.
     const acknowledgement = JSON.parse((await inputLines.next()).value || '{}')
@@ -80,8 +80,9 @@ try {
     const timer = setTimeout(() => controller.abort(), input.max_wall_time_s * 1000)
     process.on('SIGTERM', () => controller.abort())
     let result
+    const jevInstruction = `管网 ID 为 ${input.network_id}。读取任务与网络并生成候选后，必须调用 wg_jev_decide。若 configured=true，结合 Jev 的候选路由、置信度与风险值选择候选，低置信度时通过真实计算比较。若 configured=false，继续 Agnes 规划。每次独立验证后再次调用 wg_jev_decide 决定继续还是完成；不要将建议当作验收。`
     try {
-      result = await session.prompt(`你是 WaterGuard 方案规划助手。用户已冻结任务 ${input.task_id}。只使用 wg_ 业务工具，不使用 shell、代码编辑、其他文件或网络工具。先读取任务和网络，生成有限候选，再选择和提交方案，仿真后独立验证。根据工具实际反馈选择后续候选或修正方案，仿真总次数最多 ${input.max_simulations} 次。不得修改冻结约束或自报验证通过。完成后读取证据并用中文引用实际候选 ID 和结果说明结论、未完成项及适用范围。没有达标候选时如实说明。`, { signal: controller.signal, titleLocale: 'zh-CN' })
+      result = await session.prompt(`你是 WaterGuard 方案规划助手。用户已冻结任务 ${input.task_id}。只使用 wg_ 业务工具。先读取任务和网络，生成候选。${jevInstruction}选择和提交方案，仿真后独立验证。根据实际反馈修正，仿真总次数最多 ${input.max_simulations} 次。不得修改冻结约束或自报验证通过。完成后读取证据并引用实际候选 ID 和结果说明结论。`, { signal: controller.signal, titleLocale: 'zh-CN' })
     } finally {
       clearTimeout(timer)
       await client.close()

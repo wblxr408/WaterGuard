@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import wntr
 
-from .datasets import DATA, NETWORKS, ROOT, manifest
+from .datasets import ROOT, manifest, network_path, license_files
 from waterguard_contracts.core import (check_plan, check_task, file_hash, input_hash,
     load, require, task_ref, validate)
 
@@ -26,7 +26,7 @@ def write(path, value):
 def network_assets(network_id):
     """Topology and read-only catalog; layout coordinates never assert ground distance."""
     source = manifest(network_id)
-    wn = wntr.network.WaterNetworkModel(str(DATA/NETWORKS[network_id]))
+    wn = wntr.network.WaterNetworkModel(str(network_path(network_id)))
     nodes = []
     for name, node in wn.nodes():
         x, y = node.coordinates
@@ -105,8 +105,9 @@ class EpanetAdapter:
         write(output/'runtime-overlay.json',settings)
         write(output/'scene.json',scene)
         write(output/'action-catalog.json',catalog)
-        (output/'source.inp').write_bytes((DATA/NETWORKS[source['network_id']]).read_bytes())
-        (output/'LICENSE-WNTR.md').write_bytes((DATA/'LICENSE.md').read_bytes())
+        (output/'source.inp').write_bytes(network_path(source['network_id']).read_bytes())
+        for name, path in license_files(source['network_id']).items():
+            (output/name).write_bytes(path.read_bytes())
         write(output/'environment.json',dict(python=platform.python_version(),platform=platform.platform(),
               packages={name:importlib.metadata.version(name) for name in ('wntr','numpy','scipy','pandas','networkx')},
               engine=ENGINE,source_sha256=file_hash(output/'source.inp')))

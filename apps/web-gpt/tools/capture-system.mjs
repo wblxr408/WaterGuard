@@ -1,13 +1,13 @@
 // 首页「我们的系统」展示用的四张界面截图：应急工作台、方案对照、建模与仿真、证据中心。
-// 用无头 Edge 打开正在运行的前端（需要三个后端都在），依次点顶部导航切页，等数据读完后截图，存成 webp。
-// 用法（apps/web-gpt 目录）：node tools/capture-system.mjs [http://localhost:5175]
+// 用无头 Edge 打开正在运行的前端，依次点顶部导航切页，等默认中国管网数据读完后截图，存成 webp。
+// 用法（apps/web-gpt 目录）：node tools/capture-system.mjs [http://127.0.0.1:5173]
 // 输出：public/cover/system-{overview,compare,model,evidence}.webp（1600×1000 视口，1.25 倍像素）
 import { spawn } from 'node:child_process'
 import { writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-const base = process.argv[2] ?? 'http://localhost:5175'
+const base = process.argv[2] ?? 'http://127.0.0.1:5173'
 const out = new URL('../public/cover/', import.meta.url)
 const PAGES = [
   ['overview', '应急工作台'],

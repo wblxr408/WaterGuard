@@ -310,7 +310,7 @@ class RunStore:
         self._write_json(f"{run_id}/run.json", run)
         return run
 
-    def transition(self, run_id: str, status: str, phase: str | None = None, *, wall_time_s: float | None = None) -> dict:
+    def transition(self, run_id: str, status: str, phase: str | None = None, *, wall_time_s: float | None = None, model_calls: int | None = None, progress_only: bool = False) -> dict:
         if status not in RUN_STATUS or (phase is not None and phase not in RUN_PHASE):
             raise ValueError("Invalid status or phase")
         with self._db() as db:
@@ -326,10 +326,16 @@ class RunStore:
                 run["phase"] = phase
             if wall_time_s is not None:
                 run["budget_usage"]["wall_time_s"] = wall_time_s
+            if model_calls is not None:
+                run['budget_usage']['model_calls'] = model_calls
             validate("RunRecord", run)
             db.execute("UPDATE runs SET status=?, phase=?, payload=?, updated_at=? WHERE run_id=?", (run["status"], run["phase"], canonical(run), now(), run_id))
+            if progress_only:
+                self._backfill_stream(db, run_id)
+                self._insert_stream(db, run_id, 'run', run)
         ref = self._write_json(f"{run_id}/run.json", run)
-        self.emit(run, "user", "run.completed" if status in TERMINAL else "run.started", ref)
+        if not progress_only:
+            self.emit(run, "user", "run.completed" if status in TERMINAL else "run.started", ref)
         return run
 
     def emit(self, run: dict, origin: str, event_type: str, payload_ref: str, *, candidate_id: str | None = None, simulation_id: str | None = None, correlation_id: str | None = None, native_tool_call_ref: str | None = None) -> dict:
@@ -392,13 +398,16 @@ class RunStore:
                 self._insert_stream(db, run_id, "run", snapshot)
 
     def log(self, run_id: str, message: str, *, level: str = "INFO", origin: str = "agh",
-            tool_name: str | None = None, event_type: str | None = None, native_tool_call_ref: str | None = None):
+            tool_name: str | None = None, event_type: str | None = None, native_tool_call_ref: str | None = None,
+            execution: dict | None = None):
         """Persist operational summaries, never model text, credentials or tool arguments."""
         if level not in {"INFO", "WARN", "ERROR"}:
             raise ValueError("Unsupported log level")
         self.get_run(run_id)
         payload = dict(run_id=run_id, occurred_at=now(), level=level, origin=origin, message=message,
                        tool_name=tool_name, event_type=event_type, native_tool_call_ref=native_tool_call_ref)
+        if execution is not None:
+            payload['execution'] = execution
         with self._event_lock, self._db() as db:
             db.execute("BEGIN IMMEDIATE")
             self._backfill_stream(db, run_id)

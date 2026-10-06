@@ -1,0 +1,28 @@
+.network-view-bar { display: flex; align-items: center; gap: 12px; padding: 2px 20px 10px; flex-wrap: wrap; }
+.network-view-switch { display: inline-flex; gap: 2px; border: 1px solid #d9dfef; background: #e9edf7; padding: 3px; border-radius: 8px; }
+.network-view-switch button { border-radius: 5px; padding: 5px 12px; font-size: 11px; color: #68748d; }
+.network-view-switch button[aria-pressed="true"] { background: #fff; color: #5266bb; box-shadow: 0 1px 4px #7488b922; }
+.three-top-button { color: #64728e; font-size: 11px; display: inline-flex; align-items: center; gap: 5px; }
+.three-top-button:hover { color: #5266bb; }
+.three-material-note { font-size: 10px; color: #8490a6; margin-left: auto; }
+.network-three { position: relative; width: 100%; height: clamp(420px, calc(100vh - 430px), 660px); background: radial-gradient(ellipse at 45% 25%, #f9fbff 0%, #edf1fb 78%); isolation: isolate; }
+.network-three canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.network-three canvas:focus-visible { outline: 2px solid #8297ee; outline-offset: -4px; }
+.network-canvas:has(.network-three) .map-status { pointer-events: none; }
+.three-annotation, .three-id { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1; white-space: nowrap; }
+.three-annotation > span { display: block; transform: translate(10px, -32px); border: 1px solid #a7b6ed; background: #fffffff0; color: #435278; border-radius: 7px; padding: 6px 9px; box-shadow: 0 3px 12px #344c7020; font-size: 11px; }
+.three-annotation.is-hover > span { border-color: #54b7aa; }
+.three-id { font-size: 9px; color: #4d6383; text-shadow: 0 1px 2px white; padding: 1px 3px; }
+.three-link-id { color: #838fac; font-size: 8px; margin-top: 5px; }
+.three-source { color: #445db4; font-weight: 600; background: #f5f8ffe8; border: 1px solid #c8d3ee; border-radius: 5px; margin: -20px 0 0 10px; padding: 3px 6px; }
+.three-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #677791; font-size: 12px; }
+.three-fallback { font-size: 11px; color: #7a6880; }
+.network-panel.is-full .network-canvas:has(.network-three) { min-height: 0; }
+.network-panel.is-full .network-three { height: 100%; align-self: stretch; }
+.network-panel .network-view-bar button:focus-visible { outline: 2px solid #8297ee; outline-offset: 3px; }
+@media (max-width: 600px) {
+  .network-view-bar { padding: 3px 12px 8px; gap: 10px; }
+  .three-material-note { width: 100%; margin-left: 0; }
+  .network-three { height: 460px; }
+  .network-canvas:has(.network-three) .map-legend-help { font-size: 10px; }
+}

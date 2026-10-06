@@ -79,6 +79,8 @@ def build_evidence(artifacts_root: Path, run: dict) -> dict:
     association = run_dir / "agh" / "association.json"
     association_ref = "artifact:agh/association.json" if _validated_agh_association(association, run) else None
     missing = list(run.get("missing_items", []))
+    if native_ref and association_ref:
+        missing = [item for item in missing if item not in {'native_agh_trace', 'agh_host_not_configured', 'agh_event_association'}]
     if native_ref is None:
         if "native_agh_trace" not in missing:
             missing.append("native_agh_trace")

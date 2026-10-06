@@ -59,7 +59,7 @@ try {
   report.checks.push('Native WaterGuard Cordis plugin installed, trusted and enabled')
   const staged = join(root, '.cache/agh-bootstrap-key')
   const key = process.env.AGNES_API_KEY || (existsSync(staged) ? readFileSync(staged, 'utf8').trim() : undefined)
-  if (key) {
+  if (key && !process.argv.includes('--tools-only')) {
     const tested = await client.config.test({ providerId: 'agnes-ai', apiKey: key })
     report.model_test = { verified: tested.verified, models: tested.models.map(m => m.id) }
     if (tested.verified) {

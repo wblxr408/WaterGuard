@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 
 const proxy = Object.fromEntries(
   [
+    ["/cn", 8003],
     ["/ab", 8002],
     ["/bm", 8001],
     ["/fx", 8000],

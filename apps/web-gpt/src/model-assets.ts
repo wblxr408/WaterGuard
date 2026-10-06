@@ -21,7 +21,7 @@ export const modelAssets: ModelAsset[] = [
   {
     id: "pipe",
     title: "管道剖面",
-    subtitle: "球墨铸铁管、承插接口、砂浆内衬与爆管裂口（喷水为示意）",
+    subtitle: "球墨铸铁管、承插接口、砂浆内衬与爆管裂口",
     previewUrl: "/models/blender-pipe-burst.webp",
     sourceUrl: "/models/equipment.glb",
     author: "团队自建 · Blender 5.2 建模 · Cycles 渲染",
@@ -40,5 +40,5 @@ export const studioImage = {
 export const teaserImage = {
   src: "/models/blender-pipe-burst.webp",
   alt: "Blender 建模的球墨铸铁管段：左段剖切露出内衬与水，右段顶部爆管喷水",
-  caption: "Blender 自建模型 · 喷水为示意",
+  caption: "Blender 自建模型",
 };

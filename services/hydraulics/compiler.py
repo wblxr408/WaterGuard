@@ -6,7 +6,7 @@ import networkx as nx
 import wntr
 
 from .adapter import network_assets, write
-from .datasets import DATA, NETWORKS, ROOT, manifest
+from .datasets import ROOT
 from waterguard_contracts.core import check_plan, check_task, file_hash, load, require, validate
 
 VERSION = '0.3.0'

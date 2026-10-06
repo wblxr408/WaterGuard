@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -9,6 +9,9 @@ import type { Candidate, Workspace } from "./data";
 import { num, time } from "./data";
 import Icon from "./Icon";
 import { prefersReducedMotion } from "./motion";
+import type { ThreeView, NodeAppearance, LinkAppearance } from "./NetworkThree";
+import "./network-three.css";
+const NetworkThree = lazy(() => import("./NetworkThree"));
 
 export type Entity = { kind: "node" | "link"; id: string };
 export type Layer = "pressure" | "supply" | "flow";
@@ -105,6 +108,9 @@ export function Network({
 }) {
   const uid = useId().replaceAll(":", "");
   const svgRef = useRef<SVGSVGElement>(null);
+  const threeRef = useRef<ThreeView>(null);
+  const [dimension, setDimension] = useState<"3d" | "2d">("3d");
+  const [threeUnavailable, setThreeUnavailable] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -218,6 +224,25 @@ export function Network({
         : "ok";
   }
 
+  const threeNodes = new Map<string, NodeAppearance>(w.scene.nodes.map(n => {
+    const sample = samples.get(n.id);
+    const ratio = sample && sample.expected_demand_m3s > 0
+      ? sample.delivered_demand_m3s / sample.expected_demand_m3s : null;
+    const label = n.kind === "reservoir" ? `水源 ${n.id}` : n.kind === "tank" ? `水箱 ${n.id}` : `节点 ${n.id}`;
+    const value = sample && valid ? layer === "supply"
+      ? ratio == null ? "无需水" : `供需 ${num(ratio * 100, 1)}%`
+      : `${num(sample.pressure_m, 2)} m` : "";
+    return [n.id, { level: n.kind === "junction" ? level(n.id) : "na", violating: violating.has(n.id), label: `${label}${value ? ` · ${value}` : ""}` }];
+  }));
+  const threeLinks = new Map<string, LinkAppearance>(w.scene.links.map(l => {
+    const sample = valid ? links.get(l.id) : undefined;
+    const state = linkState(sample, l.initial_status);
+    return [l.id, { state, flow: sample?.flow_m3s ?? null,
+      faultFraction: faultActive && fault?.link_id === l.id ? fault.location_fraction ?? 0.5 : null,
+      label: `管段 ${l.id} · ${linkStateText[state]}${sample ? ` · ${lps(sample.flow_m3s)}` : ""}`,
+    }];
+  }));
+
   // 屏幕（视图）坐标：位置按缩放拉开，符号大小不变。
   const T = (p: { x: number; y: number }) => ({
     x: p.x * view.k + view.x,
@@ -258,9 +283,12 @@ export function Network({
       }
     }, dur + 150);
   };
-  const zoomBy = (f: number) =>
-    animateTo(zoomAt(viewRef.current, viewRef.current.k * f, W / 2, H / 2));
+  const zoomBy = (f: number) => {
+    if (dimension === "3d") threeRef.current?.zoom(f);
+    else animateTo(zoomAt(viewRef.current, viewRef.current.k * f, W / 2, H / 2));
+  };
   const focus = (e: Entity | null, minK = 2.6) => {
+    if (dimension === "3d") { if (e) threeRef.current?.focus(e); return; }
     const p = e && worldOf(e);
     if (p) animateTo(centerOn(p.x, p.y, Math.max(viewRef.current.k, minK)));
   };
@@ -338,7 +366,7 @@ export function Network({
       svg.removeEventListener("wheel", onWheel);
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [dimension, w.scene]);
   useEffect(() => {
     const on = () => setFull(document.fullscreenElement === panelRef.current);
     document.addEventListener("fullscreenchange", on);
@@ -612,7 +640,7 @@ export function Network({
         [
           "压力",
           s && valid
-            ? `${num(s.pressure_m)} m（要求 ≥ ${num(c.task.hard_constraints.min_pressure_m, 0)} m）`
+            ? `${num(s.pressure_m)} m（要求 ≥ ${num(c.task.hard_constraints.min_pressure_m, 2)} m）`
             : "—",
           layer === "supply" ? "" : lv,
         ],
@@ -710,7 +738,7 @@ export function Network({
         <div>
           <h2>供水管网</h2>
           <span>
-            {w.scene.network_id.toUpperCase()} <i /> 示意拓扑
+            {w.scene.network_id.toUpperCase()} <i /> 管网拓扑
           </span>
         </div>
         <form className="map-search" role="search" onSubmit={onSearch}>
@@ -767,6 +795,15 @@ export function Network({
             </button>
           ))}
         </div>
+      </div>
+      <div className="network-view-bar">
+        <div className="network-view-switch" role="group" aria-label="管网显示模式">
+          <button aria-pressed={dimension === "3d"} disabled={threeUnavailable} onClick={() => { setDimension("3d"); setHover(null); }}>3D 质感</button>
+          <button aria-pressed={dimension === "2d"} onClick={() => { setDimension("2d"); setHover(null); }}>2D 分析</button>
+        </div>
+        {dimension === "3d" && <button className="three-top-button" onClick={() => threeRef.current?.top()}><Icon name="layers" size={13} />俯视</button>}
+        {threeUnavailable && <span className="three-fallback" role="status">当前设备无法显示三维，已切换二维视图</span>}
+        {dimension === "3d" && <span className="three-material-note">金属管道 · 实时状态</span>}
       </div>
       <div className="network-canvas" ref={canvasRef}>
         <div className="map-status" aria-live="polite">
@@ -832,7 +869,7 @@ export function Network({
           <button
             aria-label="适应全图"
             title="适应全图"
-            onClick={() => animateTo(FIT)}
+            onClick={() => dimension === "3d" ? threeRef.current?.fit() : animateTo(FIT)}
           >
             <Icon name="fit" size={17} />
           </button>
@@ -872,7 +909,11 @@ export function Network({
             <Icon name="expand" size={17} />
           </button>
         </div>
-        <svg
+        {dimension === "3d" ? <Suspense fallback={<div className="network-three"><div className="three-loading">正在加载三维视图…</div></div>}><NetworkThree ref={threeRef}
+          scene={w.scene} nodes={threeNodes} links={threeLinks} entity={entity}
+          labels={labels} flowLayer={layer === "flow"} onSelect={onSelect}
+          onUnavailable={() => { setThreeUnavailable(true); setDimension("2d"); }}
+        /></Suspense> : <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
           className={`network-svg${dragging ? " is-dragging" : hover ? " is-hovering" : ""}`}
@@ -1140,8 +1181,8 @@ export function Network({
                 </g>
               );
             })()}
-        </svg>
-        {hoverInfo && !dragging && (
+        </svg>}
+        {dimension === "2d" && hoverInfo && !dragging && (
           <div
             className="map-tooltip"
             ref={tipRef}
@@ -1159,7 +1200,7 @@ export function Network({
             <p className="map-tooltip-hint">点击查看详情与曲线</p>
           </div>
         )}
-        {hint && (
+        {dimension === "2d" && hint && (
           <div className="map-hint" role="status">
             点击地图后可用滚轮缩放（或按住 Ctrl 滚动）
           </div>
@@ -1188,17 +1229,17 @@ export function Network({
               </span>
               <span>
                 <i className="legend-flow" />
-                流向光带（示意）
+                {dimension === "3d" ? "箭头表示流向" : "流向光带"}
               </span>
               <span>
                 <i className="legend-dash" />
-                关闭／隔离
+                {dimension === "3d" ? "棕色关闭／灰色隔离" : "关闭／隔离"}
               </span>
             </>
           ) : (
             <>
               <span>
-                <i className="dot green" />≥ {num(c.task.hard_constraints.min_pressure_m, 0)} m
+                <i className="dot green" />≥ {num(c.task.hard_constraints.min_pressure_m, 2)} m
               </span>
               <span>
                 <i className="dot amber" />
@@ -1214,9 +1255,8 @@ export function Network({
               </span>
             </>
           )}
-          <span className="map-legend-help">点击后滚轮缩放 · 拖动平移 · 双击放大</span>
+          <span className="map-legend-help">{dimension === "3d" ? "拖动旋转 · 右键平移 · 滚轮缩放 · 点击查看" : "点击后滚轮缩放 · 拖动平移 · 双击放大"}</span>
         </div>
-        <span className="map-note">坐标为示意布局，不代表实际地理位置或距离</span>
       </div>
     </section>
   );

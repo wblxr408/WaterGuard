@@ -1,14 +1,9 @@
 import {
-  useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
 import type { RunEvent } from "@waterguard/contracts";
-import { missingText } from "./AgentRun";
 import {
   M,
   MSTAGE_H,
@@ -35,6 +30,9 @@ import { useAgentRun } from "./agent-stream";
 import type { AgentCandidate as Candidate, AgentWorkspace as Workspace, StreamSource } from "./agent-stream";
 import AgentLogs from "./AgentLogs";
 import RunControls from "./RunControls";
+import ExecutionFlow from "./ExecutionFlow";
+import { usePanZoom, ZoomBar } from "./workflow-panzoom";
+import JevPanel from './JevPanel';
 import {
   actionText,
   conclusionText,
@@ -50,11 +48,8 @@ import {
 import Icon from "./Icon";
 import "./agent-page.css";
 
-/* 智能体页面：两种看法，顶部切换。
-   - 分支导图（默认，agent-mindmap.ts）：思维导图式的一棵树，在判断处分叉，分支名写在连线上，回到前面的步骤在叶子上标「↺」。
-   - 流程总览（agent-flow.ts）：U 形两行的流程画布，含「否 · 修改方案」回路。
-   - 回放：按运行事件逐条点亮节点和连线；节点详情展示本次运行的记录、候选和验收结果。
-   SSE 持续订阅任务服务；人工样例是显式选择的数据源，不补造调用、失败或数值。 */
+/* 本次执行使用原生调用及返回生成节点；标准流程保留两种静态参考布局。
+   SSE 与历史投影共用同一调用编号，不补造角色调用或未来分支。 */
 
 /** 面板里展示的节点：两种看法的节点都满足 */
 type PanelNode = {
@@ -85,7 +80,7 @@ const sourceText: Record<string, string> = {
 };
 const modeText: Record<string, string> = {
   fixture: "人工样例",
-  benchmark: "固定脚本",
+  benchmark: "水力计算",
   replay: "回放",
   live: "实时",
 };
@@ -122,57 +117,29 @@ const stateText: Record<NodeState, string> = {
   ok: "完成",
   fail: "未通过",
   wait: "待完成",
-  off: "无调用记录",
+  off: "待执行",
 };
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString("zh-CN", { hour12: false });
 
 /* ---------------------------------------------------------------- 页面 */
-export default function AgentPage({ inspect }: { inspect: Inspect }) {
-  const { w, events, logs, state, error, source, runs, runId, selectSource, selectRun, refreshRuns, reconnect } = useAgentRun();
+export default function AgentPage({ inspect, onRun }: { inspect: Inspect; onRun: (id: string) => void }) {
+  const { w, events, logs, execution, state, error, source, runs, runId, selectSource, selectRun, refreshRuns, reconnect } = useAgentRun();
+  useEffect(() => { if (source === 'runtime' && runId) onRun(runId); }, [source, runId, onRun]);
   const run = w?.run ?? null;
   const byId = useMemo(
     () => new Map((w?.candidates ?? []).map((c) => [c.id, c])),
     [w],
   );
-  const [step, setStep] = useState<number | null>(null); // 回放时已发生的事件数；null 为全部
-  const [playing, setPlaying] = useState(false);
+  const [scope, setScope] = useState<"execution" | "standard">("execution");
+  const [focus, setFocus] = useState<string | null>(null);
   const [view, setView] = useState<"mind" | "flow">("mind");
   const [selected, setSelected] = useState<string | null>(null);
   const [panel, setPanel] = useState<"node" | "trace">("node");
   const [panelOpen, setPanelOpen] = useState(false);
-  const timer = useRef(0);
-
-  const shown = step == null ? events : events.slice(0, step);
-  const agentLive = events.some((e) => e.origin === "agh" && !!e.native_tool_call_ref) || logs.some((l) => !!l.native_tool_call_ref);
-  const activeTool = [...logs].reverse().find((log) => log.event_type === "tool.started" || log.event_type === "tool.completed");
-  const activePhase = activeTool?.event_type === "tool.started" ? ({
-    wg_get_task: "freeze", wg_inspect_network: "start", wg_generate_candidates: "plan", wg_submit_plan: "plan",
-    wg_simulate_candidate: "sim", wg_verify_candidate: "verify", wg_build_evidence: "pack",
-  } as Record<string, string>)[activeTool.tool_name ?? ""] : ({
-    INTAKE: "start", MODELING: "model", BASELINE: "sim", PLANNING: "plan", SIMULATING: "sim",
-    VERIFYING: "verify", REVIEWING: "review", PACKAGING: "pack",
-  } as Record<string, string>)[run?.phase ?? ""];
-  const following = step == null && (run?.status === "RUNNING" || run?.status === "QUEUED");
-  const flow = useMemo(
-    () => {
-      const value = flowState(shown, run, byId, agentLive);
-      if (following && activePhase && value.nodes[activePhase]?.state !== "off") {
-        value.nodes[activePhase].state = "running"; value.current = activePhase;
-      }
-      return value;
-    },
-    [shown, run, byId, agentLive, following, activePhase],
-  );
-  const mind = useMemo(
-    () => {
-      const value = mindState(shown, run, byId, agentLive);
-      const id = activePhase === "sim" || activePhase === "verify" ? "check" : activePhase;
-      if (following && id && value.nodes[id]?.state !== "off") { value.nodes[id].state = "running"; value.current = id; }
-      return value;
-    },
-    [shown, run, byId, agentLive, following, activePhase],
-  );
+  const shown: RunEvent[] = [];
+  const flow = useMemo(() => flowState([], null, new Map(), false), []);
+  const mind = useMemo(() => mindState([], null, new Map(), false), []);
   /** 一条事件在当前看法里落在哪个节点 */
   const nodeOf = (e: RunEvent) =>
     view === "mind" ? mindNodeOf(e) : nodeOfEvent[e.type];
@@ -187,33 +154,7 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
     setPanelOpen(false);
   };
 
-  // 回放：每 1.1 秒发生一条事件，点亮对应节点，并把右侧面板切到这个节点
-  const replay = () => {
-    clearInterval(timer.current);
-    let n = 0;
-    setStep(0);
-    setPlaying(true);
-    openNode("start");
-    timer.current = window.setInterval(() => {
-      n += 1;
-      const e = events[n - 1];
-      if (e) setSelected(nodeOf(e));
-      if (n >= events.length) {
-        clearInterval(timer.current);
-        setStep(null);
-        setPlaying(false);
-      } else setStep(n);
-    }, 1100);
-  };
-  const stop = () => {
-    clearInterval(timer.current);
-    setStep(null);
-    setPlaying(false);
-  };
-  useEffect(() => () => clearInterval(timer.current), []);
-  useEffect(() => {
-    clearInterval(timer.current); setStep(null); setPlaying(false); setSelected(null); setPanelOpen(false);
-  }, [runId, source]);
+  useEffect(() => { setFocus(null); setSelected(null); setPanelOpen(false); }, [runId, source]);
 
   return (
     <div className="page-enter agent-page">
@@ -239,13 +180,10 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
         {source === "runtime" && <RunControls run={run} created={(value) => { selectRun(value.run_id); refreshRuns(); }} updated={reconnect} />}
         {error && <p className="stream-error" role="alert">{error}</p>}
       </section>
-      <div className="notice agent-honesty" role="note">
-        <Icon name="warning" size={18} />
-        <p>
-          <b>{run ? `${modeText[run.mode]}运行。` : "请选择运行来源。"}</b>
-          {run?.mode === "fixture" ? "当前记录与数值为人工样例。" : run?.mode === "benchmark" ? "当前由固定工程脚本计算。" : "工作流按服务端实际事件更新。"}
-          {agentLive ? "已记录原生 AGH 调用。" : "本次运行无原生 AGH 调用记录。"}
-        </p>
+      {source === 'runtime' && <JevPanel runId={runId || undefined} />}
+      <div className="wf-scope" role="tablist" aria-label="工作流视图">
+        <button role="tab" aria-selected={scope === 'execution'} className={scope === 'execution' ? 'on' : ''} onClick={() => setScope('execution')}>本次执行</button>
+        <button role="tab" aria-selected={scope === 'standard'} className={scope === 'standard' ? 'on' : ''} onClick={() => setScope('standard')}>标准流程</button>
       </div>
 
       {state === "error" && !w ? (
@@ -262,15 +200,17 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
           <span className="loader" />
           <h2>正在读取运行记录</h2>
         </div>
+      ) : scope === 'execution' ? (
+        <ExecutionFlow key={`${source}:${runId}`} trace={execution} events={events} run={run} focus={focus} inspect={inspect} />
       ) : (
-        <section className="wf" aria-label="智能体工作流">
+        <section className="wf wf-standard" aria-label="智能体工作流">
           <header className="wf-bar">
             <div className="wf-title">
               <span className="wf-app">
                 <Icon name="agent" size={18} />
               </span>
               <div>
-                <b>运行工作流</b>
+                <b>标准流程</b>
                 <small>
                   运行 <span className="mono">{run.run_id}</span> ·{" "}
                   {modeText[run.mode] ?? run.mode} · 任务第{" "}
@@ -296,44 +236,7 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
                 </button>
               ))}
             </div>
-            <div className="wf-status">
-              <span className={`wf-pill ${playing || following ? "running" : "done"}`}>
-                <i />
-                {playing
-                  ? `回放中 ${step ?? 0}/${events.length}`
-                  : `${runStatusText[run.status] ?? run.status} · ${conclusionText[run.conclusion] ?? run.conclusion}`}
-              </span>
-              <span className="wf-meta">
-                仿真 {run.budget_usage.simulations} 次 · 模型调用{" "}
-                {run.budget_usage.model_calls ?? "—"} · 修改{" "}
-                {view === "mind" ? mind.nodes.revise.count : flow.loops} 轮
-              </span>
-              <button
-                className="button secondary"
-                onClick={() => {
-                  setPanel("trace");
-                  setPanelOpen(true);
-                }}
-              >
-                <Icon name="layers" size={15} />
-                追踪
-              </button>
-              {playing ? (
-                <button className="button secondary" onClick={stop}>
-                  <Icon name="pause" size={15} />
-                  停止
-                </button>
-              ) : (
-                <button
-                  className="button primary"
-                  onClick={replay}
-                  disabled={!events.length}
-                >
-                  <Icon name="play" size={15} />
-                  回放运行
-                </button>
-              )}
-            </div>
+
           </header>
 
           <div className={`wf-body ${panelOpen ? "open" : ""}`}>
@@ -456,110 +359,17 @@ export default function AgentPage({ inspect }: { inspect: Inspect }) {
               </aside>
             )}
           </div>
-          {run.missing_items.length > 0 && (
-            <p className="wf-missing">
-              <Icon name="warning" size={15} />
-              这次运行还缺：
-              {run.missing_items.map((m) => missingText[m] ?? m).join("、")}
-            </p>
-          )}
         </section>
       )}
 
       <AgentLogs logs={logs} runId={runId || "waterguard"} onInspect={inspect} onEvent={(sequence) => {
         const event = events.find((event) => event.sequence === sequence);
-        if (event) { stop(); openNode(nodeOf(event)); }
+        if (event) {
+          setScope('execution');
+          setFocus(event.native_tool_call_ref ?? (event.type === 'run.started' ? 'execution-start' : event.type === 'run.completed' ? 'execution-end' : null));
+        }
       }} />
 
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- 画布：平移缩放（两种看法共用） */
-function usePanZoom(stageW: number, stageH: number) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState({ x: 0, y: 0, k: 1 });
-  const drag = useRef<{ x: number; y: number; vx: number; vy: number } | null>(
-    null,
-  );
-  // 适应画布：整张图放得下，最大不放大到 1 倍以上；面板展开收起时自动重排
-  const fit = useCallback(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const k = Math.min(
-      1,
-      (el.clientWidth - 24) / stageW,
-      (el.clientHeight - 24) / stageH,
-    );
-    setView({
-      k,
-      x: (el.clientWidth - stageW * k) / 2,
-      y: (el.clientHeight - stageH * k) / 2,
-    });
-  }, [stageW, stageH]);
-  useLayoutEffect(() => {
-    fit();
-    const ro = new ResizeObserver(fit);
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    return () => ro.disconnect();
-  }, [fit]);
-  const zoom = (f: number) => {
-    const el = wrapRef.current;
-    if (!el) return;
-    setView((v) => {
-      const k = Math.max(0.4, Math.min(1.6, v.k * f));
-      const cx = el.clientWidth / 2,
-        cy = el.clientHeight / 2;
-      return {
-        k,
-        x: cx - ((cx - v.x) * k) / v.k,
-        y: cy - ((cy - v.y) * k) / v.k,
-      };
-    });
-  };
-  const handlers = {
-    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => {
-      if ((e.target as HTMLElement).closest(".wf-node, .wf-zoom")) return;
-      drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
-      e.currentTarget.setPointerCapture(e.pointerId);
-    },
-    onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
-      const d = drag.current;
-      if (!d) return;
-      setView((v) => ({
-        ...v,
-        x: d.vx + e.clientX - d.x,
-        y: d.vy + e.clientY - d.y,
-      }));
-    },
-    onPointerUp: () => {
-      drag.current = null;
-    },
-    onPointerCancel: () => {
-      drag.current = null;
-    },
-  };
-  return {
-    wrapRef,
-    fit,
-    zoom,
-    handlers,
-    transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
-  };
-}
-
-function ZoomBar({ pz }: { pz: ReturnType<typeof usePanZoom> }) {
-  return (
-    <div className="wf-zoom">
-      <button onClick={() => pz.zoom(1.2)} aria-label="放大">
-        <Icon name="plus" size={15} />
-      </button>
-      <button onClick={() => pz.zoom(1 / 1.2)} aria-label="缩小">
-        <Icon name="minus" size={15} />
-      </button>
-      <button onClick={pz.fit} aria-label="适应画布">
-        <Icon name="fit" size={15} />
-      </button>
     </div>
   );
 }
@@ -938,7 +748,7 @@ function EventDetail({
             </div>
             <div className="wide">
               <dt>理由</dt>
-              <dd>{c.plan.reason || "—"}</dd>
+              <dd>{c.plan.actions.length ? c.plan.actions.map((action) => `${actionText[action.kind]} ${action.link_id}`).join('；') : '保持设施状态'}</dd>
             </div>
           </dl>
         </>

@@ -1,11 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Violation } from "@waterguard/contracts";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { Violation, RunRecord } from "@waterguard/contracts";
 import {
   actionText,
   caseNames,
   download,
   engineStatus,
   loadWorkspace,
+  networkName,
   num,
   sources,
   statusText,
@@ -13,6 +14,8 @@ import {
 } from "./data";
 import type { Candidate, Source, Workspace } from "./data";
 import AgentPage from "./AgentPage";
+import RunControls, { ThresholdControls } from './RunControls';
+import JevPanel from './JevPanel';
 import { AgentRunStrip } from "./AgentRun";
 import Cover from "./Cover";
 import Icon from "./Icon";
@@ -319,7 +322,6 @@ function Inspector({
                 ? "推荐待验证"
                 : "当前不可推荐"}
           </strong>
-          <p>以服务端五层准入为准</p>
         </div>
       </div>
     </aside>
@@ -509,7 +511,7 @@ function Overview({
           </span>
         </div>
         <div className="task-strip-context">
-          <span>{w.scene.network_id.toUpperCase()}</span>
+          <span>{networkName(w.scene.network_id)}</span>
           <span>
             评估 {time(c.task.time_window.evaluation_start_s)} –{" "}
             {time(c.task.time_window.end_s)}
@@ -584,7 +586,7 @@ function Overview({
                         ? "warn"
                         : "ok"
                 }
-                detail={`工程要求 ≥ ${num(threshold, 0)} m`}
+                detail={`任务阈值 ≥ ${num(threshold, 2)} m`}
               />
             </div>
           </aside>
@@ -722,8 +724,13 @@ function Overview({
 
 export default function App() {
   const [page, setPage] = useState<Page>(() => new URLSearchParams(window.location.search).has("run") ? "agent" : "cover");
-  const [source, setSource] = useState<Source>("pair");
+  const [source, setSource] = useState<Source>("china");
   const [selection, setSelection] = useState("");
+  const [activeRun, setActiveRun] = useState<RunRecord | null>(null);
+  const followRun = useCallback((id: string) => {
+    setSource('runtime'); setSelection(id);
+    const url = new URL(window.location.href); url.searchParams.set('run', id); window.history.replaceState(null, '', url);
+  }, []);
   const [w, setW] = useState<Workspace | null>(null);
   const [candidateId, setCandidateId] = useState("");
   const [entity, setEntity] = useState<Entity>({ kind: "node", id: "" });
@@ -756,7 +763,7 @@ export default function App() {
     return () => ro.disconnect();
   }, [page]);
   useEffect(() => {
-    if (!loadHydraulics) return;
+    if (!loadHydraulics || source === 'runtime') return;
     const controller = new AbortController();
     setW(null);
     setError("");
@@ -786,6 +793,54 @@ export default function App() {
       });
     return () => controller.abort();
   }, [source, selection, retry, loadHydraulics]);
+  useEffect(() => {
+    if (source !== 'runtime' || selection) return;
+    const controller = new AbortController();
+    fetch('/wg/api/runs', { signal: controller.signal }).then((response) => response.json()).then((rows: RunRecord[]) => {
+      const run = rows.find((row) => row.mode === 'live') ?? rows.find((row) => row.status === 'COMPLETED');
+      if (run && !controller.signal.aborted) followRun(run.run_id);
+    }).catch(() => { if (!controller.signal.aborted) setError('任务服务连接失败'); });
+    return () => controller.abort();
+  }, [source, selection, followRun]);
+  useEffect(() => {
+    if (!loadHydraulics || source !== 'runtime' || !selection) return;
+    const controller = new AbortController(); let timer: ReturnType<typeof setTimeout>;
+    let fetching = false, pending = false, first = true, latestStatus = '';
+    setW(null); setError(''); setActiveRun(null);
+    const hydrate = async () => {
+      if (fetching) { pending = true; return; }
+      fetching = true;
+      try {
+        const data = await loadWorkspace('runtime', selection, controller.signal);
+        if (controller.signal.aborted) return;
+        const candidate = data.candidates.at(-1)!;
+        setW(data); setActiveRun(data.run); setError('');
+        setCandidateId(candidate.id);
+        if (first) {
+          first = false; setEntity({ kind: 'node', id: data.scene.nodes.find((node) => node.kind === 'junction')!.id });
+          setFrameIndex(Math.max(0, candidate.series?.frames.findIndex((frame) => frame.time_s >= candidate.task.time_window.evaluation_start_s) ?? 0));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && latestStatus === 'COMPLETED') setError(error instanceof Error ? error.message : '运行结果读取失败');
+      }
+      finally { fetching = false; if (pending && !controller.signal.aborted) { pending = false; void hydrate(); } }
+    };
+    const stream = new EventSource(`/wg/api/runs/${encodeURIComponent(selection)}/stream`);
+    const updateRun = (event: MessageEvent) => {
+      try {
+        const run = JSON.parse(event.data) as RunRecord;
+        if (run.run_id !== selection) return;
+        latestStatus = run.status;
+        setActiveRun(run); setW((previous) => previous?.run?.run_id === selection ? { ...previous, run } : previous);
+        if (['ERROR', 'BUDGET_EXHAUSTED', 'CANCELLED'].includes(run.status)) setError(`运行${run.status === 'CANCELLED' ? '已取消' : '已结束'}，请查看运行日志。`);
+      } catch { setError('运行记录读取失败'); }
+    };
+    stream.addEventListener('run', updateRun as EventListener);
+    stream.addEventListener('workflow', () => { clearTimeout(timer); timer = setTimeout(() => void hydrate(), 120); });
+    stream.addEventListener('stream.complete', (event) => { updateRun(event as MessageEvent); void hydrate(); stream.close(); });
+    void hydrate();
+    return () => { controller.abort(); clearTimeout(timer); stream.close(); };
+  }, [loadHydraulics, source, selection, retry]);
   const c =
     w?.candidates.find((x) => x.id === candidateId) ?? w?.candidates.at(-1);
   const openPage = (p: Page) => {
@@ -863,20 +918,17 @@ export default function App() {
             <button className="icon-button" title="切换专注展示" aria-label="切换专注展示"
               aria-pressed={focus} onClick={() => setFocus(!focus)}><Icon name="expand" size={18} /></button>
           </header>
-          <main id="main-content"><AgentPage inspect={inspect} /></main>
+          <main id="main-content"><AgentPage inspect={inspect} onRun={followRun} /></main>
         </div>
       ) : (
         <div className="app-main">
           <header className="topbar">
             <div className="data-mode-note">
               <Icon name="shield" size={14} />
-              {w?.mode === "fixture"
-                ? "Fixture · 人工设定的开发样例，不代表真实水力计算"
-                : w
-                  ? "Benchmark · 固定脚本驱动的真实计算，非 AI 实时决策"
-                  : "正在核验数据来源与运行模式"}
+              {source === 'runtime' && activeRun?.mode === 'live' ? `Agnes · ${activeRun.status === 'RUNNING' ? '实时执行' : activeRun.status === 'COMPLETED' ? '运行完成' : '任务运行'} · ${activeRun.phase}` : w?.mode === 'fixture' ? '开发样例' : '供水管网 · 水力状态'}
             </div>
             <div className="topbar-actions">
+              <RunControls run={source === 'runtime' ? activeRun : null} created={(run) => { followRun(run.run_id); }} updated={() => setRetry((n) => n + 1)} />
               <label className="source-select">
                 <span className="tiny-dot" />
                 <select
@@ -918,7 +970,9 @@ export default function App() {
             </div>
           </header>
           <main id="main-content">
-            {w && c && source === "bench" && (
+            {source === 'runtime' && <JevPanel runId={selection || undefined} />}
+            {w && c && source !== 'fixture' && <ThresholdControls task={c.task} created={(run) => { followRun(run.run_id); setRetry((n) => n + 1); }} />}
+            {w && c && (source === "bench" || source === "china") && (
               <div className="benchmark-picker">
                 <label htmlFor="benchmark-case">选择真实工况</label>
                 <select
@@ -928,7 +982,7 @@ export default function App() {
                 >
                   {w.index?.cases.map((x) => (
                     <option key={x.simulation_id} value={x.simulation_id}>
-                      {x.network_id.toUpperCase()} / {x.engine.toUpperCase()} /{" "}
+                      {networkName(x.network_id)} / {x.engine.toUpperCase()} /{" "}
                       {caseNames[x.case] ?? x.case}
                     </option>
                   ))}
@@ -953,15 +1007,12 @@ export default function App() {
                   <Icon name="refresh" size={17} />
                   重新连接
                 </button>
-                <p className="muted">
-                  启动对应后端后重试；界面不会用虚构数据替代。
-                </p>
               </div>
             ) : !w || !c ? (
               <div className="loading-state" role="status">
                 <span className="loader" />
-                <h2>正在载入水力计算</h2>
-                <p>读取任务、拓扑、候选方案与验收证据…</p>
+                <h2>{source === 'runtime' && activeRun?.mode === 'live' ? 'Agnes 正在执行任务' : '正在载入水力计算'}</h2>
+                <p>{source === 'runtime' && activeRun ? `${activeRun.phase} · 已仿真 ${activeRun.budget_usage.simulations} 次` : '读取任务、拓扑与候选方案…'}</p>
               </div>
             ) : (
               <>
@@ -1014,9 +1065,8 @@ export default function App() {
                 <footer className="app-footer">
                   <span>WaterGuard / 水脉卫士</span>
                   <span>
-                    {w.scene.network_id.toUpperCase()} · {w.mode.toUpperCase()}
+                    {networkName(w.scene.network_id)} · {w.mode.toUpperCase()}
                   </span>
-                  <span>所有推荐结论来自验收接口</span>
                 </footer>
               </>
             )}

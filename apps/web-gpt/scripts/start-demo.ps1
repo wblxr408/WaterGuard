@@ -16,17 +16,25 @@ function Test-WgService($wgResponse, $wgService) {
         $wgHealth = $wgResponse.Content | ConvertFrom-Json
         return $wgHealth.status -eq 'ok'
     }
-    return $wgResponse.Headers['X-WaterGuard-Mode'] -eq $wgService.Mode
+    if ($wgResponse.Headers['X-WaterGuard-Mode'] -ne $wgService.Mode) { return $false }
+    if ($wgService.Port -eq 8003) {
+        $wgIndex = $wgResponse.Content | ConvertFrom-Json
+        return $wgIndex.run_id -eq 'china-zhijiang-scenarios' -and $wgIndex.cases.Count -eq 7 -and @($wgIndex.cases | Where-Object network_id -ne 'china-zhijiang').Count -eq 0
+    }
+    return $true
 }
 New-Item -ItemType Directory -Force (Join-Path $wgAppRoot '.cache') | Out-Null
 Push-Location $wgRepoRoot
 try {
+    & $wgPython -m services.hydraulics.china_demo --ensure
+    if ($LASTEXITCODE -ne 0) { throw '中国管网计算失败；请查看仿真产物中的诊断。' }
     & $wgPython -c "import zipfile,pathlib; pairs=[('feedback-pair.zip','feedback-pair'),('verified-results.zip','student1')]; [(zipfile.ZipFile('benchmarks/student1/'+src).extractall('artifacts/'+dst)) for src,dst in pairs if not pathlib.Path('artifacts/'+dst+'/index.json').exists()]"
     if ($LASTEXITCODE -ne 0) { throw '计算证据解压失败。' }
     $wgServices = @(
         @{ Port = 8000; Mode = 'fixture'; Path = 'fixture'; Args = @('packages/contracts/scripts/mock_server.py') },
         @{ Port = 8001; Mode = 'benchmark'; Path = 'benchmarks/current'; Args = @('-m','services.hydraulics.server','--output','artifacts/student1','--port','8001') },
         @{ Port = 8002; Mode = 'benchmark'; Path = 'benchmarks/current'; Args = @('-m','services.hydraulics.server','--output','artifacts/feedback-pair','--port','8002') },
+        @{ Port = 8003; Mode = 'benchmark'; Path = 'benchmarks/current'; Args = @('-m','services.hydraulics.server','--output','artifacts/china-zhijiang','--port','8003') },
         @{ Port = 8010; Mode = 'runtime'; Path = 'healthz'; Args = @('-m','uvicorn','services.api.main:app','--host','127.0.0.1','--port','8010','--no-access-log') }
     )
     foreach ($wgService in $wgServices) {
@@ -53,7 +61,7 @@ try {
         if (-not $wgReady) { throw "后端 $($wgService.Port) 未启动；请查看 apps/web-gpt/.cache/backend-$($wgService.Port).err.log。" }
         Write-Host "后端已就绪：$($wgService.Port) / $($wgService.Mode)"
     }
-    if ($CheckOnly) { Write-Host '三个只读数据源与任务 API 检查通过。'; return }
+    if ($CheckOnly) { Write-Host '四个只读数据源与任务 API 检查通过。'; return }
     Set-Location $wgAppRoot
     Write-Host 'WaterGuard 前端：http://127.0.0.1:5173/ （Ctrl+C 结束）'
     & npm.cmd run dev

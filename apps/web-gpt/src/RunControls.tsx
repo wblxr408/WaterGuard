@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import type { RunRecord } from "@waterguard/contracts";
+import type { RunRecord, TaskSpec } from "@waterguard/contracts";
 import Icon from "./Icon";
+import { networkName, num } from "./data";
+import { thresholdLabel, thresholdPolicy } from './thresholds';
+import type { ThresholdRecommendation } from './thresholds';
 import "./run-controls.css";
 
 async function api<T>(path: string, signal: AbortSignal, body?: unknown): Promise<T> {
@@ -26,16 +29,18 @@ function OperationDialog({ title, busy, close, children }: { title: string; busy
 }
 
 type Fault = "normal" | "closure" | "leak" | "rupture" | "isolation";
-function CreateRun({ close, created }: { close: () => void; created: (run: RunRecord) => void }) {
-  const [network, setNetwork] = useState("epa-net1");
+function CreateRun({ close, created, initialTask, waitForResult = false }: { close: () => void; created: (run: RunRecord) => void; initialTask?: TaskSpec; waitForResult?: boolean }) {
+  const [network, setNetwork] = useState(initialTask?.network_ref.network_id ?? "china-zhijiang");
   const [networks, setNetworks] = useState<string[]>([]);
   const [links, setLinks] = useState<string[]>([]);
   const [link, setLink] = useState("");
-  const [fault, setFault] = useState<Fault>("closure");
-  const [pressure, setPressure] = useState(20);
-  const [ratio, setRatio] = useState(95);
-  const [limit, setLimit] = useState(3);
-  const [mode, setMode] = useState("benchmark");
+  const [fault, setFault] = useState<Fault>(initialTask?.fault?.kind ?? (initialTask ? 'normal' : 'closure'));
+  const [thresholdMode, setThresholdMode] = useState<'adaptive' | 'manual'>(initialTask && thresholdPolicy(initialTask)?.mode === 'manual' ? 'manual' : 'adaptive');
+  const [recommendation, setRecommendation] = useState<ThresholdRecommendation | null>(null);
+  const [pressure, setPressure] = useState<number | ''>(initialTask?.hard_constraints.min_pressure_m ?? '');
+  const [ratio, setRatio] = useState<number | ''>(initialTask ? initialTask.hard_constraints.min_supply_ratio * 100 : '');
+  const [limit, setLimit] = useState(waitForResult ? 1 : 3);
+  const [mode, setMode] = useState(waitForResult ? "benchmark" : "live");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -48,43 +53,69 @@ function CreateRun({ close, created }: { close: () => void; created: (run: RunRe
     return () => { controller.abort(); request.current?.abort(); };
   }, []);
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setLinks([]); setLink(""); setError("");
-    api<{ fault_link_ids: string[] }>(`/api/networks/${encodeURIComponent(network)}`, controller.signal).then((details) => {
-      setLinks(details.fault_link_ids); setLink(details.fault_link_ids[0] ?? ""); setLoading(false);
+    const controller = new AbortController(); setLoading(true); setLinks([]); setLink(""); setRecommendation(null); setError("");
+    api<{ fault_link_ids: string[]; threshold_recommendation: ThresholdRecommendation }>(`/api/networks/${encodeURIComponent(network)}`, controller.signal).then((details) => {
+      setLinks(details.fault_link_ids); setLink(initialTask?.network_ref.network_id === network && details.fault_link_ids.includes(initialTask.fault?.link_id ?? '') ? initialTask.fault!.link_id : details.fault_link_ids[0] ?? "");
+      setRecommendation(details.threshold_recommendation); setLoading(false);
     }).catch((error) => { if (!controller.signal.aborted) { setError(errorText(error)); setLoading(false); } });
     return () => controller.abort();
   }, [network]);
+  useEffect(() => {
+    if (thresholdMode === 'adaptive' && recommendation?.available) {
+      setPressure(recommendation.min_pressure_m); setRatio(Number((recommendation.min_supply_ratio * 100).toFixed(2)));
+    }
+  }, [recommendation, thresholdMode]);
   const requiresLink = fault !== "normal" && fault !== "isolation";
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (busy || loading) return;
     setBusy(true); setError(""); const controller = request.current = new AbortController();
     try {
-      const proposal = { network_id: network, fault_kind: fault, ...(requiresLink ? { link_id: link } : {}), min_pressure_m: pressure, min_supply_ratio: ratio / 100, candidate_limit: limit };
+      const proposal = { network_id: network, fault_kind: fault, ...(requiresLink ? { link_id: link } : {}), threshold_mode: thresholdMode, ...(thresholdMode === 'manual' ? { min_pressure_m: pressure, min_supply_ratio: Number(ratio) / 100 } : {}), candidate_limit: limit };
       const signature = JSON.stringify(proposal);
       if (frozen.current?.signature !== signature) {
         const task = await api<{ task_id: string }>("/api/tasks/from-proposal", controller.signal, proposal);
         frozen.current = { signature, taskId: task.task_id, key: crypto.randomUUID() };
       }
       const run = await api<RunRecord>(`/api/tasks/${encodeURIComponent(frozen.current!.taskId)}/runs`, controller.signal, { mode, idempotency_key: frozen.current!.key });
+      if (waitForResult) {
+        const deadline = Date.now() + 150_000;
+        while (Date.now() < deadline) {
+          if (controller.signal.aborted) return;
+          const latest = await api<RunRecord>(`/api/runs/${encodeURIComponent(run.run_id)}`, controller.signal);
+          if (['ERROR', 'CANCELLED', 'BUDGET_EXHAUSTED'].includes(latest.status)) throw new Error(`运行结束：${latest.status}，请在智能体页查看记录。`);
+          if (latest.status === 'COMPLETED') {
+            try { await api(`/api/runs/${encodeURIComponent(run.run_id)}/workspace`, controller.signal); created(latest); return; }
+            catch (error) { if (controller.signal.aborted) throw error; }
+          }
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+        throw new Error('运行仍在处理，请在智能体页查看记录。');
+      }
       created(run);
     } catch (error) { if (!controller.signal.aborted) setError(errorText(error)); }
     finally { if (!controller.signal.aborted) setBusy(false); }
   };
-  return <OperationDialog title="新建任务" busy={busy} close={close}><form onSubmit={submit}>
+  return <OperationDialog title={waitForResult ? '调整阈值并重新计算' : '新建任务'} busy={busy} close={close}><form onSubmit={submit}>
     <fieldset disabled={busy} className="operation-fields">
-      <label>公开管网<select value={network} onChange={(event) => setNetwork(event.target.value)}>{networks.length ? networks.map((id) => <option key={id}>{id}</option>) : <option>{network}</option>}</select></label>
+      <label>公开管网<select value={network} onChange={(event) => setNetwork(event.target.value)}>{networks.length ? networks.map((id) => <option key={id} value={id}>{networkName(id)}</option>) : <option value={network}>{networkName(network)}</option>}</select></label>
       <label>故障类型<select value={fault} onChange={(event) => setFault(event.target.value as Fault)}>
         <option value="normal">正常工况</option><option value="closure">管道关闭</option><option value="leak">管道泄漏</option><option value="rupture">管道断裂</option><option value="isolation">区域隔离</option>
       </select></label>
       <label>故障管段<select value={link} disabled={!requiresLink || loading} onChange={(event) => setLink(event.target.value)}>{links.map((id) => <option key={id}>{id}</option>)}</select></label>
-      <label>用户节点最低压力（m）<input type="number" min="0" max="100" step="any" required value={pressure} onChange={(event) => setPressure(event.target.valueAsNumber)} /></label>
-      <label>用户节点最低供需比（%）<input type="number" min="0" max="100" step="any" required value={ratio} onChange={(event) => setRatio(event.target.valueAsNumber)} /></label>
+      <label className="operation-wide">阈值模式<select value={thresholdMode} onChange={(event) => setThresholdMode(event.target.value as 'adaptive' | 'manual')}><option value="adaptive">自适应 · 依据无故障基线</option><option value="manual">手动设置</option></select></label>
+      <label>用户节点最低压力（m）<input type="number" min="0" max="100" step="any" required disabled={thresholdMode === 'adaptive'} value={pressure} onChange={(event) => setPressure(event.target.value === '' ? '' : event.target.valueAsNumber)} /></label>
+      <label>用户节点最低供需比（%）<input type="number" min="0" max="100" step="any" required disabled={thresholdMode === 'adaptive'} value={ratio} onChange={(event) => setRatio(event.target.value === '' ? '' : event.target.valueAsNumber)} /></label>
       <label>最多仿真次数（含基线）<input type="number" min="1" max="6" step="1" required value={limit} onChange={(event) => setLimit(event.target.valueAsNumber)} /></label>
-      <label className="operation-wide">运行模式<select value={mode} onChange={(event) => setMode(event.target.value)}><option value="benchmark">Benchmark · 固定脚本 / 真实水力计算</option><option value="live">Live · AGH 模型与工具调用</option></select></label>
+      <label className="operation-wide">运行模式<select value={mode} onChange={(event) => setMode(event.target.value)}><option value="benchmark">水力计算</option>{!waitForResult && <option value="live">Agnes 实时规划</option>}</select></label>
     </fieldset>
-    <div className="operation-message"><p>仿真 0–3 小时，故障 1–2 小时，评估 1–3 小时。任务与阈值由服务端冻结。</p>{mode === "live" && <p>使用“模型账号”中已验证的默认模型。</p>}{fault === "isolation" && <p>区域隔离采用管网已定义的边界管段。</p>}{loading && <p role="status">正在读取管网…</p>}{error && <p className="operation-error" role="alert">{error}</p>}</div>
-    <footer><button type="button" className="button secondary" disabled={busy} onClick={close}>关闭</button><button className="button primary" disabled={busy || loading || (requiresLink && !link)}>{busy ? "正在创建运行…" : "创建任务并运行"}</button></footer>
+    <div className="operation-message">{recommendation && !recommendation.available && <p className="operation-error">无法生成自适应阈值：{recommendation.message}。请切换手动模式。</p>}{loading && <p role="status">正在计算无故障基线并读取管网…</p>}{error && <p className="operation-error" role="alert">{error}</p>}</div>
+    <footer><button type="button" className="button secondary" disabled={busy} onClick={close}>关闭</button><button className="button primary" disabled={busy || loading || (thresholdMode === 'adaptive' && !recommendation?.available) || (requiresLink && !link)}>{busy ? "正在计算并验收…" : waitForResult ? '应用阈值并重算' : "创建任务并运行"}</button></footer>
   </form></OperationDialog>;
+}
+
+export function ThresholdControls({ task, created }: { task: TaskSpec; created: (run: RunRecord) => void }) {
+  const [open, setOpen] = useState(false);
+  return <section className="threshold-controls" aria-label="当前验收阈值"><div><strong>{thresholdLabel(task)}</strong><span>压力 ≥ {num(task.hard_constraints.min_pressure_m, 2)} m · 供需比 ≥ {num(task.hard_constraints.min_supply_ratio * 100, 2)}%</span></div><button className="button secondary" onClick={() => setOpen(true)}>调整阈值</button>{open && <CreateRun initialTask={task} waitForResult close={() => setOpen(false)} created={(run) => { setOpen(false); created(run); }} />}</section>;
 }
 
 type Provider = { id: string; label: string; base_urls: string[] };
@@ -137,7 +168,7 @@ function ModelAccount({ close }: { close: () => void }) {
       <label className="operation-wide">API Key<input type="password" autoComplete="off" placeholder="在本机输入；已保存账号可留空" value={key} onChange={(event) => { setKey(event.target.value); invalidate(); }} /></label>
       <label className="operation-wide">模型<select value={model} disabled={!verified} onChange={(event) => setModel(event.target.value)}><option value="">{verified ? "请选择模型" : "测试连接后读取模型目录"}</option>{models.map((id) => <option key={id}>{id}</option>)}</select></label>
     </fieldset>
-    <div className="operation-message"><p>凭据通过 AGH 配置服务保存，仅用于新任务的默认模型。</p>{message && <p role="status">{message}</p>}{error && <p className="operation-error" role="alert">{error}</p>}</div>
+    <div className="operation-message">{message && <p role="status">{message}</p>}{error && <p className="operation-error" role="alert">{error}</p>}</div>
     <footer><button className="button secondary" type="button" disabled={busy || !status?.available || !base} onClick={() => void configure("test")}>{busy ? "正在处理…" : "测试连接"}</button><button className="button primary" disabled={busy || !verified || !model}>保存默认模型</button></footer>
   </form></OperationDialog>;
 }

@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.2.0",
+  "network_id": "china-zhijiang",
+  "revision": 1,
+  "sha256": "sha256:54da00cfe97832f7d94f1cbbe1697d56f95c21053c7fde9cc8afdcac9ecb6563",
+  "source_url": "https://raw.githubusercontent.com/WaterFutures/WaterBenchmarkHub/3a3e7921b2672de46ea5dee4ae3c0ee84695ccad/docs/static/benchmarks/network-zhi-jiang/Zhi%20Jiang.inp",
+  "source_kind": "public",
+  "license": "CC BY-NC 4.0 (Graeme Dandy / University of Kentucky Libraries); separate solver license retained",
+  "units": {
+    "length": "m",
+    "pressure_head": "m",
+    "flow": "m3/s",
+    "time": "s"
+  },
+  "coordinate_system": "upstream_schematic_units_unknown",
+  "overlays": [
+    {
+      "ref": "data/overlays/china-zhijiang.json",
+      "sha256": "sha256:cf190be317289ef58864f6653f0c31928b2b6cbbb0f12c7b07d37368d760fe4c",
+      "provenance": "assumed",
+      "description": "WaterGuard PDD, time-window and fault assumptions; original model bytes unchanged."
+    }
+  ],
+  "original_file": "data/networks/zhijiang/ZhiJiang.inp",
+  "description": "中国 Zhi Jiang（China 1）供水管网研究模型：113 个用水节点、1 个水源、164 条管道，总管长 126.436 km。原始单位 LPS；基于实际中国系统的历史设计优化模型，无实时遥测或经核实的地理坐标。来源：Dandy (2016), University of Kentucky Libraries；Zheng et al. (2011), doi:10.1029/2011WR010394。镜像固定至 WaterBenchmarkHub 3a3e7921b2672de46ea5dee4ae3c0ee84695ccad。"
+}

@@ -13,7 +13,8 @@ import type {
   Metrics,
 } from "@waterguard/contracts";
 
-export type Source = "pair" | "bench" | "fixture";
+export type Source = "china" | "pair" | "bench" | "fixture" | "runtime";
+export const networkName = (id: string) => id === "china-zhijiang" ? "中国 Zhi Jiang" : id.toUpperCase();
 export const recommendationBlockerText: Record<string, string> = {
   benchmark_only: "仅有固定脚本计算结果",
   fixture_only: "仅有人工样例结果",
@@ -21,6 +22,8 @@ export const recommendationBlockerText: Record<string, string> = {
   required_stress_tests_pending: "扰动复验未完成",
 };
 export const sources = {
+  runtime: { base: '/wg', label: '任务运行结果', port: 8010, mode: 'benchmark' },
+  china: { base: "/cn", label: "中国城市管网", port: 8003, mode: "benchmark" },
   pair: { base: "/ab", label: "真实 A/B 对照", port: 8002, mode: "benchmark" },
   bench: { base: "/bm", label: "真实场景库", port: 8001, mode: "benchmark" },
   fixture: { base: "/fx", label: "开发样例", port: 8000, mode: "fixture" },
@@ -129,6 +132,23 @@ export async function loadWorkspace(
   selection: string,
   signal: AbortSignal,
 ): Promise<Workspace> {
+  if (source === 'runtime') {
+    const readRuntime = async <T,>(path: string): Promise<T> => {
+      const response = await fetch(`/wg/api/${path}`, { signal });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.detail?.message ?? '任务结果尚未就绪，请稍后刷新或查看智能体页。');
+      return value as T;
+    };
+    const runs = selection ? [] : await readRuntime<RunRecord[]>('runs');
+    const id = selection || runs.find((run) => run.mode === 'live')?.run_id || runs.find((run) => run.status === 'COMPLETED')?.run_id;
+    if (!id) throw new Error('暂无完成的任务，请先新建任务。');
+    const workspace = await readRuntime<Workspace>(`runs/${encodeURIComponent(id)}/workspace`);
+    if (workspace.run?.run_id !== id || !workspace.candidates.length) throw new Error('运行结果绑定不一致。');
+    for (const c of workspace.candidates) {
+      if (c.task.constraint_hash !== workspace.run.task_ref.constraint_hash || c.plan.task_ref.constraint_hash !== c.task.constraint_hash || c.verification.task_ref.constraint_hash !== c.task.constraint_hash || c.result?.artifact.simulation_id !== c.verification.simulation_id) throw new Error('任务、方案与验收绑定不一致，已停止展示。');
+    }
+    return workspace;
+  }
   const { base, mode } = sources[source];
   const read = <T>(path: string) => get<T>(base, path, mode, signal);
   const manifests = await read<NetworkManifest[]>("networks");
@@ -166,12 +186,12 @@ export async function loadWorkspace(
     index = await read<BenchIndex>("benchmarks/current");
     if (!index.cases.length) throw new Error("场景索引为空。");
     let chosen = index.cases;
-    if (source === "bench") {
+    if (source === "bench" || source === "china") {
       const active =
         index.cases.find((c) => c.simulation_id === selection) ??
         index.cases.find(
           (c) =>
-            c.network_id === "epa-net3" &&
+            c.network_id === (source === "china" ? "china-zhijiang" : "epa-net3") &&
             c.case === "closure" &&
             c.engine === "wntr",
         ) ??

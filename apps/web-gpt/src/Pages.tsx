@@ -9,6 +9,7 @@ import {
   eventText,
   gates,
   num,
+  networkName,
   recommendationBlockerText,
   runStatusText,
   statusText,
@@ -102,7 +103,7 @@ export function Violations({
         <p className="empty-small">
           {c.verification.validity === "invalid"
             ? "仿真数据无效，请查看无效原因。"
-            : "接口未报告此类违规。最终推荐仍以五层准入为准。"}
+            : "当前没有此类违规。"}
         </p>
       ) : (
         <>
@@ -208,9 +209,7 @@ export function Compare({
       <div className="section-intro">
         <h1>候选方案对照</h1>
         <p>
-          {sameTask
-            ? "同一冻结任务、同一约束、独立计算。改善与达标分别呈现。"
-            : "正常与故障来自不同任务，仅作工况对照，不代表同一任务的处置改善。"}
+          {sameTask ? '比较候选方案的压力、供需比与验收结果。' : '正常与故障工况对照。'}
         </p>
       </div>
       <div className="comparison-layout">
@@ -235,10 +234,7 @@ export function Compare({
               </span>
             </div>
             <h2>{c.name}</h2>
-            <p className="reason">
-              <span className="reason-label">方案说明（接口原文）</span>
-              {c.plan.reason}
-            </p>
+            <p className="reason">{c.plan.actions.length ? c.plan.actions.map((action) => `${actionText[action.kind]} ${action.link_id}`).join('；') : '保持设施状态'}</p>
             <div className="comparison-metrics">
               <div>
                 <span>缺供体积</span>
@@ -372,7 +368,7 @@ export function Modeling({
       <div className="model-disclaimer">
         <Icon name="cube" size={17} />
         <p>
-          以上为 Blender 自建模型的渲染图，可下载 GLB 模型；爆管喷水与剖切为示意表达。模型几何只用于展示，不参与水力验收。
+          三维管网与设备模型，可下载 GLB 文件。
         </p>
       </div>
       <section className="model-context">
@@ -382,14 +378,15 @@ export function Modeling({
             公开管网、明确假设、独立物理检查。每次计算保留原始输入与实体映射。
           </p>
           <div className="context-tags">
-            <span>{w.scene.network_id.toUpperCase()}</span>
+            <span>{networkName(w.scene.network_id)}</span>
             <span>{c.result ? "WNTR / EPANET 水力模型" : "人工开发样例"}</span>
             <span>
               {w.manifest.source_kind === "public"
-                ? "公开示例 · 未现场校准"
+                ? w.scene.network_id === "china-zhijiang" ? "中国城市研究模型 · 未现场校准" : "公开示例 · 未现场校准"
                 : "合成网络"}
             </span>
           </div>
+          {w.scene.network_id === "china-zhijiang" && <p>基于实际中国供水系统的历史研究模型。画面使用原始模型布局，压力与流量来自当前仿真。</p>}
           <button
             className="text-button"
             onClick={() => inspect("管网来源与许可", w.manifest)}
@@ -422,7 +419,7 @@ export function Modeling({
             </div>
             <div>
               <dt>压力要求</dt>
-              <dd>≥ {num(c.task.hard_constraints.min_pressure_m, 0)} m</dd>
+              <dd>≥ {num(c.task.hard_constraints.min_pressure_m, 2)} m</dd>
             </div>
             <div>
               <dt>输出步长</dt>
@@ -495,9 +492,6 @@ export function Modeling({
               </dd>
             </div>
           </dl>
-          <p className="subtle-note">
-            物理一致性不等于现场验证，也不替代工程推荐准入。
-          </p>
           <button
             className="text-button"
             disabled={!physics}
@@ -567,7 +561,7 @@ export function Modeling({
           ))}
         </div>
         <p className="subtle-note">
-          延时水力模型，不计算水锤或真实破口演化。故障参数为声明的试验假设。
+          延时水力模型与故障工况。
         </p>
       </section>
     </div>
@@ -752,19 +746,6 @@ export function Evidence({
         </table>
         {!rows.length && <p className="empty-small">没有匹配的证据文件。</p>}
       </div>
-      <div className="evidence-missing">
-        <h3>尚未提供的证据</h3>
-        {c.evidence.missing_items.length ? (
-          c.evidence.missing_items.map((item) => (
-            <span key={item}>
-              <Icon name="clock" size={14} />
-              {item}
-            </span>
-          ))
-        ) : (
-          <span>接口未报告缺失项</span>
-        )}
-      </div>
     </div>
   );
 }
@@ -834,7 +815,7 @@ export function FixtureEvents({
       <div className="panel-heading">
         <div>
           <h2>样例事件回放</h2>
-          <span>固定 SSE 序列 · 不代表 AGH 实时决策</span>
+          <span>样例事件回放</span>
         </div>
         <span className="badge neutral">
           {error ? "读取异常" : ended ? "回放完成" : "读取中"}

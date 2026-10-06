@@ -40,6 +40,10 @@ def app_store(artifacts: Path | None = None, database: Path | None = None) -> Ru
     return RunStore(database, artifacts)
 
 
+class JevConfigRequest(BaseModel):
+    apiKey: str = Field(min_length=1, max_length=4096)
+
+
 def create_app(store: RunStore | None = None) -> FastAPI:
     store = store or app_store()
     executor = BenchmarkExecutor(store)
@@ -70,6 +74,38 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             return bridge({'action': 'status'})
         except Exception:
             return {'available': False, 'code': 'AGH_UNAVAILABLE', 'message': '启动本项目 AGH daemon 后刷新连接。'}
+
+    @app.get('/api/jev/status')
+    def jev_status():
+        from .jev import status
+        return status()
+
+    @app.post('/api/jev/config')
+    def jev_config(request: JevConfigRequest):
+        from .jev import configure
+        try:
+            return configure(request.apiKey)
+        except Exception as error:
+            fail(error)
+
+    @app.get('/api/runs/{run_id}/jev')
+    def jev_decisions(run_id: str):
+        from .jev import decisions, status
+        try:
+            return {**status(), 'decisions': decisions(store, run_id)}
+        except Exception as error:
+            fail(error)
+
+    @app.post('/api/tasks/{task_id}/jev-decision')
+    def jev_decide(task_id: str, x_wg_agh_session: str | None = Header(default=None)):
+        from .jev import decide
+        try:
+            parent = store.live_parent(x_wg_agh_session, task_id)
+            if not parent:
+                raise ConflictError('Jev 决策需要已绑定的 Agnes 运行会话。')
+            return decide(store, parent)
+        except Exception as error:
+            fail(error)
 
     @app.post('/api/agh/models/{action}')
     def configure_model(action: Literal['test', 'save'], request: ModelConfigRequest):
@@ -109,7 +145,7 @@ def create_app(store: RunStore | None = None) -> FastAPI:
     @app.get("/api/networks/{network_id}")
     def network(network_id: str):
         try:
-            return network_details(network_id)
+            return network_details(network_id, include_thresholds=True)
         except Exception as error:
             fail(error)
 
@@ -293,6 +329,45 @@ def create_app(store: RunStore | None = None) -> FastAPI:
         except Exception as error:
             fail(error)
 
+    @app.get('/api/runs/{run_id}/workspace')
+    def run_workspace(run_id: str):
+        """Expose only verified candidates bound to this immutable task."""
+        try:
+            run = store.get_run(run_id)
+            task = store.get_task(run['task_ref']['task_id'], run['task_ref']['revision'])
+            details = network_details(task['network_ref']['network_id'])
+            root = store._run_directory(run_id)
+            rows = run_results(store, run_id)
+            candidates = []
+            for row in rows:
+                if row['artifact'] is None or row['verification'] is None:
+                    continue
+                if row['plan']['task_ref'] != run['task_ref']:
+                    raise ConflictError('Candidate belongs to a different frozen task')
+                sid = row['artifact']['simulation_id']
+                candidate_root = root
+                if not (root / 'candidates' / row['plan']['candidate_id'] / 'result.json').is_file():
+                    candidate_root = next((store._run_directory(child['run_id']) for child in store.live_children(run_id)
+                        if (store._run_directory(child['run_id']) / 'candidates' / row['plan']['candidate_id'] / 'result.json').is_file()), root)
+                result = store._read_json(candidate_root / 'candidates' / row['plan']['candidate_id'] / 'result.json')
+                simulation_root = next((store._run_directory(child['run_id']) for child in store.live_children(run_id)
+                    if (store._run_directory(child['run_id']) / 'simulations' / sid / 'physical-checks.json').is_file()), root)
+                if result['artifact']['task_ref'] != run['task_ref'] or row['verification']['task_ref'] != run['task_ref'] or row['verification']['simulation_id'] != sid:
+                    raise ConflictError('Simulation or verification belongs to a different frozen task')
+                candidates.append(dict(id=row['plan']['candidate_id'],
+                    name='基线' if not row['plan']['actions'] else row['plan']['candidate_id'],
+                    simulationId=sid, task=task, plan=row['plan'], verification=row['verification'],
+                    series=store.get_series(sid), result=result,
+                    evidence=store.get_evidence(run_id) if (root / 'evidence-manifest.json').is_file() else store.get_evidence(simulation_root.name),
+                    physics=store._read_json(simulation_root / 'simulations' / sid / 'physical-checks.json'),
+                    mapping=store._read_json(simulation_root / 'simulations' / sid / 'entity-map.json')))
+            if not candidates:
+                raise ConflictError('Run has no verified results yet')
+            return dict(source='runtime', mode=run['mode'], base='/wg', run=run,
+                        scene=details['scene'], manifest=details['manifest'], candidates=candidates, index=None)
+        except Exception as error:
+            fail(error)
+
     @app.get("/api/runs/{run_id}/error")
     def run_error(run_id: str):
         try:
@@ -308,6 +383,14 @@ def create_app(store: RunStore | None = None) -> FastAPI:
     def series(simulation_id: str, node_id: str | None = None, start_s: int | None = None, end_s: int | None = None):
         try:
             return store.get_series(simulation_id, node_id, start_s, end_s)
+        except Exception as error:
+            fail(error)
+
+    @app.get('/api/runs/{run_id}/execution')
+    def execution(run_id: str):
+        from .execution import execution_trace
+        try:
+            return execution_trace(store, run_id)
         except Exception as error:
             fail(error)
 

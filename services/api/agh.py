@@ -48,6 +48,23 @@ class LiveExecutor:
         self.lock = threading.Lock()
         self.active = {}
 
+    def publish_children(self, run_id):
+        """Publish only server-bound, independently verified child candidates."""
+        parent = self.store.get_run(run_id)
+        for child in self.store.live_children(run_id):
+            if child['task_ref'] != parent['task_ref']:
+                raise RuntimeError('AGH child task binding mismatch')
+            for plan in self.store.list_candidates(child['run_id']):
+                folder = self.store._run_directory(child['run_id']) / 'candidates' / plan['candidate_id']
+                if not (folder / 'verification.json').is_file() or not (folder / 'result.json').is_file():
+                    continue
+                result = self.store._read_json(folder / 'result.json')
+                report = self.store._read_json(folder / 'verification.json')
+                if result['artifact']['task_ref'] != parent['task_ref'] or report['task_ref'] != parent['task_ref'] or report['simulation_id'] != result['artifact']['simulation_id']:
+                    raise RuntimeError('Verified child identity mismatch')
+                for filename in ('plan.json', 'result.json', 'verification.json'):
+                    self.store._write_json(f"{run_id}/candidates/{plan['candidate_id']}/{filename}", self.store._read_json(folder / filename))
+
     def dispatch(self, run, model):
         with self.lock:
             if run['status'] in TERMINAL or run['run_id'] in self.active:
@@ -80,6 +97,7 @@ class LiveExecutor:
                                        text=True, encoding='utf-8', cwd=ROOT,
                                        env={**os.environ, 'WG_ARTIFACT_ROOT': str(self.store.artifacts.resolve())})
             request = dict(action='run', run_id=run_id, task_id=task['task_id'], model=model,
+                           network_id=task['network_ref']['network_id'],
                            max_wall_time_s=task['budget']['max_wall_time_s'], max_simulations=task['budget']['max_simulations'])
             process.stdin.write(json.dumps(request) + '\n')
             process.stdin.flush()
@@ -92,7 +110,9 @@ class LiveExecutor:
                     output.put(line)
                 output.put(None)
             threading.Thread(target=drain, daemon=True).start()
-            outcome, index, calls = None, 0, {}
+            outcome, index, calls, model_calls = None, 0, {}, 0
+            from .execution import project_tool_event
+            execution_calls = {}
             while True:
                 if cancel.is_set() or time.monotonic() > deadline:
                     current = self.store.get_run(run_id)
@@ -128,6 +148,9 @@ class LiveExecutor:
                     index += 1
                     event = row['event']
                     ref = self.store._write_json(f'{run_id}/agh/projection/{index}.json', event)
+                    if event['type'] == 'request/sent' and isinstance(event.get('data', {}).get('model'), dict):
+                        model_calls += 1
+                        self.store.transition(run_id, 'RUNNING', wall_time_s=time.monotonic()-started, model_calls=model_calls, progress_only=True)
                     native_id = event.get('data', {}).get('toolUseId') if isinstance(event.get('data'), dict) else None
                     native_ref = f"agh:{run['agh_session_ref']}:tool:{native_id}" if native_id else None
                     if event['type'] == 'tool/call':
@@ -138,7 +161,15 @@ class LiveExecutor:
                         self.store.log(run_id, f"{'开始调用' if event['type'] == 'tool/call' else '调用返回'} {tool_name}",
                                        level='ERROR' if failed else 'INFO', tool_name=tool_name,
                                        event_type='tool.started' if event['type'] == 'tool/call' else 'tool.completed',
-                                       native_tool_call_ref=native_ref)
+                                       native_tool_call_ref=native_ref,
+                                       execution=project_tool_event(event, index, run['agh_session_ref'], execution_calls))
+                        if event['type'] == 'tool/call':
+                            phase = {'wg_get_task': 'INTAKE', 'wg_inspect_network': 'MODELING',
+                                     'wg_generate_candidates': 'PLANNING', 'wg_jev_decide': 'REVIEWING',
+                                     'wg_submit_plan': 'PLANNING', 'wg_simulate_candidate': 'SIMULATING',
+                                     'wg_verify_candidate': 'VERIFYING', 'wg_build_evidence': 'PACKAGING'}.get(tool_name)
+                            if phase:
+                                self.store.transition(run_id, 'RUNNING', phase, wall_time_s=time.monotonic()-started, progress_only=True)
                     event_type = {'wg_submit_plan': 'candidate.submitted', 'wg_simulate_candidate': 'simulation.completed',
                                   'wg_verify_candidate': 'verification.completed'}.get(calls.get(native_id))
                     # Other raw native events stay in the projection files, without invented business labels.
@@ -155,6 +186,7 @@ class LiveExecutor:
                                 simulation_id = (results[0].get('artifact') or {}).get('simulation_id')
                         elif tool_name == 'wg_verify_candidate' and isinstance(structured, list) and structured:
                             candidate_id, simulation_id = structured[0]['candidate_id'], structured[0]['simulation_id']
+                            self.publish_children(run_id)
                         self.store.emit(self.store.get_run(run_id), 'agh', event_type, ref,
                                         correlation_id=str(event['id']), native_tool_call_ref=native_ref,
                                         candidate_id=candidate_id, simulation_id=simulation_id)
@@ -192,6 +224,11 @@ class LiveExecutor:
             if not any((self.store._run_directory(run_id) / 'candidates' / plan['candidate_id'] / 'verification.json').is_file()
                        for plan in self.store.list_candidates(run_id)):
                 raise RuntimeError('AGH finished without independent candidate verification')
+            from services.evidence.service import _validated_agh_association
+            current = self.store.get_run(run_id)
+            if not _validated_agh_association(self.store._run_directory(run_id) / 'agh' / 'association.json', current):
+                raise RuntimeError('AGH native event association is invalid')
+            self.store.bind_agh_session(run_id, current['agh_session_ref'], current['model_config_ref'])
             self.store.transition(run_id, 'COMPLETED', 'PACKAGING', wall_time_s=time.monotonic()-started)
         except Exception as error:
             self.store._write_json(f'{run_id}/error.json', dict(code='AGH_FAILED', message=str(error)))

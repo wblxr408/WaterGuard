@@ -38,7 +38,7 @@ def run(output_root=ROOT/'artifacts/hydraulics', networks=None):
     adapter=EpanetAdapter(output_root)
     run_id='benchmark-'+uuid4().hex
     cases=[]
-    faults={'epa-net1':'12','epa-net3':'123'}
+    faults={'epa-net1':'12','epa-net3':'123','china-zhijiang':'1'}
     for network_id in networks or NETWORKS:
         for fault_link in (None,faults[network_id]):
             task,plan,scene,catalog=make_case(network_id,fault_link)

@@ -15,6 +15,7 @@
     "mock": "python packages/contracts/scripts/mock_server.py",
     "hydraulics:check": "python -m services.hydraulics.datasets",
     "hydraulics:demo": "python -m services.hydraulics.demo",
+    "hydraulics:china": "python -m services.hydraulics.china_demo --ensure",
     "hydraulics:serve": "python -m services.hydraulics.server",
     "hydraulics:test": "python -m unittest discover -s services/hydraulics/tests -v"
   }

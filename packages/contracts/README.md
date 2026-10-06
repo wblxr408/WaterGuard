@@ -140,6 +140,8 @@ validate('SimulationResult', result)
 
 ## 冻结与一致性规则
 
+工作台任务支持 `threshold_mode: adaptive | manual`。默认 adaptive 从已验证的无故障模型基线生成压力/供需比下限；manual 必须提供两项数值。最终采用的阈值和依据保存在既有 `hard_constraints.source` 字段并纳入任务哈希，不新增公共 Schema 字段。旧调用若显式传入两项阈值而不指定模式，按手动处理。修改阈值必须创建新任务；图层、曲线和独立验收均读取该任务冻结值。固定 Fixture 和 EPA 验收的原有阈值保持其原始用途。
+
 - 单位固定为 m、m³/s、s。INP 原生使用 LPS、管径 mm，真实 Adapter 必须转换；展示转换不改变内部字段。
 - 时序采用区间起点值保持到下一边界，区间为 `[time_s,time_s+duration_s)`；末端 10800 不额外计一帧。泄漏流量不计入用户供水。
 - 五层状态采用 `pass/fail/pending`。`pending` 不得当作 false 或 true；数值无效时名义约束是 pending。零总需求的供需比为 null。

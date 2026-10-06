@@ -41,6 +41,8 @@ export const waterguardTools = {
       { task_id: string() }, ({ task_id }) => api(`/api/tasks/${segment(task_id)}`))
     register('wg_generate_candidates', 'Return bounded zero/one-action proposals for a frozen task. AGH chooses what to submit.',
       { task_id: string() }, ({ task_id }) => api(`/api/tasks/${segment(task_id)}/candidate-plans`))
+    register('wg_jev_decide', 'Ask TypeSafe Jev for next-candidate routing probabilities and hydraulic risk from frozen server state. Call before selecting a candidate and after independent verification. If configured=false, continue Agnes planning.',
+      { task_id: string() }, ({ task_id }) => api(`/api/tasks/${segment(task_id)}/jev-decision`, 'POST', {}), false)
     register('wg_submit_plan', 'Preflight one ActionPlan JSON against the server-frozen task; creates a queued calculation record without dispatch.',
       { task_id: string(), plan_json: string(32768) }, ({ task_id, plan_json }) => api(`/api/tasks/${segment(task_id)}/candidate-runs`, 'POST', JSON.parse(plan_json)), false)
     register('wg_simulate_candidate', 'Dispatch only the submitted candidate. Returns actual hydraulic output; independent verification is a separate tool.',

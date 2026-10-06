@@ -3,7 +3,7 @@ import copy
 from .compiler import VERSION, assets
 from .datasets import ROOT, NETWORKS
 from .adapter import write
-from waterguard_contracts.core import file_hash, task_hash, plan_hash, task_ref
+from waterguard_contracts.core import file_hash, task_hash, plan_hash, task_ref, load
 
 
 def refresh_catalogs():
@@ -13,7 +13,8 @@ def refresh_catalogs():
 
 def case(network_id='epa-net1', kind='normal', engine='wntr'):
     wn,source,scene,catalog=assets(network_id)
-    link='12' if network_id=='epa-net1' else '123'
+    assumptions=load(ROOT/source['overlays'][0]['ref'])['assumptions']
+    link={'epa-net1':'12','epa-net3':'123','china-zhijiang':'1'}[network_id]
     fault=None
     if kind in ('closure','leak','rupture','isolation'):
         fault=dict(kind=kind,link_id=link,start_s=3600,end_s=7200,mapping='See entity-map.json for the actual physical compilation.')
@@ -35,12 +36,14 @@ def case(network_id='epa-net1', kind='normal', engine='wntr'):
         objectives=['minimize_shortage','minimize_action_cost'],hard_constraints=dict(min_pressure_m=20,min_supply_ratio=0.95,node_ids=wn.junction_name_list,pressure_tolerance_m=1e-6,ratio_tolerance=1e-6,source='Engineering acceptance thresholds, not field calibration.'),
         soft_preferences=[],action_catalog_ref=f'data/catalogs/{network_id}-v3.json',action_catalog_hash=file_hash(ROOT/f'data/catalogs/{network_id}-v3.json'),
         action_limits=dict(max_actions=8,allowed_link_ids=[f['link_id'] for f in catalog['facilities']],allowed_kinds=['link_open','link_close','pump_on','pump_off'],earliest_s=3600,latest_s=9900,min_switch_interval_s=900),
-        perturbation_domain=dict(required=['demand-plus-10pct'],demand_multipliers=[1,1.1]),assumptions=['Public example model; no field calibration.','Original source controls retained unless exactly acknowledged in control_policy.','Fault and manual-control parameters are declared scenario assumptions.'],
+        perturbation_domain=dict(required=['demand-plus-10pct'],demand_multipliers=[1,1.1]),assumptions=assumptions+['Original source controls retained unless exactly acknowledged in control_policy.','Fault and manual-control parameters are declared scenario assumptions.'],
         budget=dict(max_simulations=40,max_parallel=2,max_wall_time_s=120,max_revisions=4),
         hydraulic_options=dict(engine=engine,minimum_pressure_m=0,required_pressure_m=20,pressure_exponent=0.5,hydraulic_timestep_s=300,demand_multiplier=1),
         control_policy=dict(overrides=[]))
     actions=[]
     if kind=='pump-cycle':
+        if not wn.pump_name_list:
+            raise ValueError('This network has no pump; pump-cycle is not available')
         pump='9' if network_id=='epa-net1' else '335'
         facility=next(f for f in catalog['facilities'] if f['link_id']==pump)
         task['control_policy']['overrides']=[dict(link_id=pump,control_names=facility['native_control_names'],reason='Explicit manual pump-cycle acceptance scenario, applies to the whole task timeline.')]

@@ -8,7 +8,7 @@ import zipfile
 
 from .adapter import write
 from .compiler import assets
-from .datasets import ROOT, NETWORKS
+from .datasets import ROOT, EPA_NETWORKS
 from .runtime import PhysicalAdapter, seal
 from .scenarios import case
 from waterguard_contracts.core import file_hash, load, require, verify_benchmark
@@ -20,7 +20,7 @@ def run(output=ROOT/'artifacts/student1'):
     output=Path(output)
     adapter=PhysicalAdapter(output)
     cases=[]
-    for network in NETWORKS:
+    for network in EPA_NETWORKS:
         for engine,kinds in [('wntr',KINDS),('epanet',('normal','closure','pump-cycle','link-cycle'))]:
             for kind in kinds:
                 task,plan=case(network,kind,engine)

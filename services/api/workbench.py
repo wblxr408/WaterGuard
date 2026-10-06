@@ -15,15 +15,16 @@ from waterguard_contracts.core import FIXTURES, FixtureAdapter, load, check_task
 
 
 class TaskProposal(BaseModel):
-    network_id: Literal["epa-net1", "epa-net3"] = "epa-net1"
+    network_id: Literal["epa-net1", "epa-net3", "china-zhijiang"] = "epa-net1"
     fault_kind: Literal["normal", "closure", "leak", "rupture", "isolation"] = "closure"
     link_id: str | None = None
-    min_pressure_m: float = Field(default=20, ge=0, le=100, allow_inf_nan=False)
-    min_supply_ratio: float = Field(default=.95, ge=0, le=1, allow_inf_nan=False)
+    threshold_mode: Literal['adaptive', 'manual'] | None = None
+    min_pressure_m: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    min_supply_ratio: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     candidate_limit: int = Field(default=3, ge=1, le=6)
 
 
-def network_details(network_id: str) -> dict:
+def network_details(network_id: str, include_thresholds: bool = False) -> dict:
     from services.hydraulics.compiler import assets
     from services.hydraulics.datasets import NETWORKS
     if network_id not in NETWORKS:
@@ -32,8 +33,15 @@ def network_details(network_id: str) -> dict:
     fault_links = [f["link_id"] for f in catalog["facilities"]
                    if f["kind"] == "pipe" and f["initial_status"] == "open"
                    and not f["requires_explicit_override"]]
-    return dict(manifest=source, scene=scene, catalog=catalog,
-                fault_link_ids=fault_links, junction_ids=wn.junction_name_list)
+    details = dict(manifest=source, scene=scene, catalog=catalog,
+                   fault_link_ids=fault_links, junction_ids=wn.junction_name_list)
+    if include_thresholds:
+        from services.hydraulics.thresholds import recommend
+        try:
+            details['threshold_recommendation'] = dict(available=True, **recommend(network_id))
+        except ValueError as error:
+            details['threshold_recommendation'] = dict(available=False, message=str(error))
+    return details
 
 
 def propose_task(proposal: TaskProposal) -> dict:
@@ -48,10 +56,20 @@ def propose_task(proposal: TaskProposal) -> dict:
         if link not in details["fault_link_ids"]:
             raise ValueError("Fault must target an initially open pipe without a native control conflict")
         task["fault"]["link_id"] = link
-    task["hard_constraints"].update(
-        min_pressure_m=proposal.min_pressure_m, min_supply_ratio=proposal.min_supply_ratio,
-        node_ids=details["junction_ids"],
-        source="User-entered workbench scenario thresholds; not field calibration.")
+    from services.hydraulics.thresholds import apply, recommend
+    mode = proposal.threshold_mode or ('manual' if proposal.min_pressure_m is not None or proposal.min_supply_ratio is not None else 'adaptive')
+    if mode == 'adaptive':
+        if proposal.min_pressure_m is not None or proposal.min_supply_ratio is not None:
+            raise ValueError('Adaptive thresholds are computed by the server; select manual mode to enter values')
+        policy = recommend(proposal.network_id)
+    else:
+        if proposal.min_pressure_m is None or proposal.min_supply_ratio is None:
+            raise ValueError('Manual mode requires both pressure and supply thresholds')
+        policy = dict(mode='manual', min_pressure_m=proposal.min_pressure_m,
+                      min_supply_ratio=proposal.min_supply_ratio,
+                      interpretation='User-entered workbench acceptance thresholds.')
+    apply(task, policy)
+    task['hard_constraints']['node_ids'] = details['junction_ids']
     task["budget"]["max_simulations"] = proposal.candidate_limit
     # Restrict the comparison to manually operable facilities and one action.
     task["action_limits"].update(max_actions=1, latest_s=3600,

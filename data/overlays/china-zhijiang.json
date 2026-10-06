@@ -1,0 +1,15 @@
+{
+  "network_id": "china-zhijiang",
+  "provenance": "assumed",
+  "pdd": {"minimum_pressure_m": 0, "required_pressure_m": 20, "pressure_exponent": 0.5},
+  "time_window": {"start_s": 0, "end_s": 10800, "step_s": 900, "warmup_end_s": 3600, "evaluation_start_s": 3600},
+  "critical_nodes": [],
+  "display_coordinates": "Original EPANET drawing coordinates; no verified geographic CRS or pipe burial depths. Do not infer pipe length from display coordinates.",
+  "assumptions": [
+    "Source INP is a historical design-optimization research model based on a real Chinese system, not live telemetry or a field-calibrated current city model.",
+    "Native LPS hydraulic values are converted to SI by WNTR; original pipe lengths and elevations remain physical model inputs.",
+    "PDD threshold 20 m, supply ratio 0.95, fault parameters and three-hour window are WaterGuard scenario assumptions.",
+    "The source has no pumps or tanks. No new facilities or critical-user labels are invented.",
+    "The exact Chinese place name and geographic coordinate system have not been verified; the source name Zhi Jiang is retained."
+  ]
+}

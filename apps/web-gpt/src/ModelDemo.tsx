@@ -161,7 +161,7 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
       <div className="model-demo-head">
         <span className="eyebrow">{asset.id === "pump" ? "设备" : "管道"}</span>
         <span className={`badge ${asset.previewUrl ? "pass" : "neutral"}`}>
-          {asset.previewUrl ? "Blender 渲染成果" : "几何示意"}
+          {asset.previewUrl ? "Blender 渲染成果" : "三维模型"}
         </span>
       </div>
       <div className="model-render">
@@ -171,7 +171,7 @@ export default function ModelDemo({ asset }: { asset: ModelAsset }) {
           <svg
             viewBox="0 0 520 330"
             role="img"
-            aria-label={`${asset.title}三维几何示意`}
+            aria-label={`${asset.title}三维模型`}
           >
             <ellipse
               cx="260"
