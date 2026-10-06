@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from pathlib import Path
 
 from jsonschema.exceptions import ValidationError
@@ -86,6 +87,15 @@ def _task_for_call(run_id: str | None, task_json: str | None, tool_name: str) ->
         raise ValueError("task_json is required outside a strict AGH gateway")
     task, _ = _objects(task_json)
     return task, None, None
+
+
+def recover_gateway_jobs_from_store() -> list[dict]:
+    """Run once during a strict gateway process start before accepting calls."""
+    if not _strict_gateway():
+        return []
+    artifacts = Path(os.environ.get("WG_ARTIFACT_ROOT", ROOT / "artifacts"))
+    database = Path(os.environ.get("WG_DATABASE", artifacts / "waterguard.sqlite3"))
+    return RunStore(database, artifacts).recover_simulation_jobs()
 
 
 def _load_json(path: Path) -> dict:
@@ -260,27 +270,49 @@ def wg_simulate_candidate(plan_json: str, mode: str = "benchmark", run_id: str |
             if reservation["idempotent"]:
                 return _response("rejected", "IDEMPOTENT_REPLAY", "This frozen candidate has already been dispatched for the run.", retryable=False,
                                  reservation_id=reservation["reservation_id"], reservation_state=reservation["state"])
-        accepted = JOBS.submit(task, plan, mode)
+        persisted_job_id = "job-" + uuid.uuid4().hex if store is not None and run is not None else None
+        if persisted_job_id is not None:
+            store.create_simulation_job(run["run_id"], persisted_job_id, plan["candidate_id"], reservation["reservation_id"] if reservation else None)
+        accepted = JOBS.submit(task, plan, mode, job_id=persisted_job_id)
         if accepted["status"] == "accepted":
             JOB_CONTEXT[accepted["job_id"]] = {"task": task, "plan": plan, "store": store,
                                                 "run_id": run["run_id"] if run is not None else None,
                                                 "reservation": reservation, "report": None}
+            if store is not None:
+                store.update_simulation_job(accepted["job_id"], "RUNNING")
             return _response("accepted", accepted["code"], "Isolated simulation job submitted.", job_id=accepted["job_id"])
         if store is not None and reservation is not None:
             store.settle_simulation(reservation["reservation_id"])
+            if persisted_job_id is not None:
+                store.update_simulation_job(persisted_job_id, "ERROR", error={"code": accepted["code"], "message": accepted["summary"]})
         return _response("rejected", accepted["code"], accepted["summary"], retryable=True)
     except Exception as exc:
         return _response("rejected", "INVALID_ACTION", "Simulation dispatch rejected.", retryable=True, violations=[{"message": str(exc)}])
 
 
 @mcp.tool()
-def wg_get_simulation(job_id: str) -> dict:
+def wg_get_simulation(job_id: str, run_id: str | None = None) -> dict:
     """Read the status or result of an isolated simulation job."""
     try:
-        result = JOBS.get(job_id)
+        strict_store = strict_run = None
+        if _strict_gateway():
+            strict_store, strict_run, _task = _bound_run(run_id or "", "wg_get_simulation")
+            stored = strict_store.get_simulation_job(job_id)
+            if stored["run_id"] != strict_run["run_id"]:
+                raise ValueError("Simulation job belongs to another run")
+        try:
+            result = JOBS.get(job_id)
+        except ValueError:
+            if strict_store is None:
+                raise
+            persisted = strict_store.get_simulation_job(job_id)
+            return _response(persisted["status"].lower(), "SIMULATION_" + persisted["status"],
+                             "Persisted simulation job status loaded after gateway restart.", retryable=False, job=persisted)
         context = JOB_CONTEXT.get(job_id)
         if context and context["store"] is not None and context["reservation"] is not None and result["status"] in {"SUCCEEDED", "FAILED", "CANCELLED"}:
             context["store"].settle_simulation(context["reservation"]["reservation_id"])
+            error = None if result["status"] == "SUCCEEDED" else {"code": result.get("code", result["status"]), "message": result.get("message", "Simulation did not complete")}
+            context["store"].update_simulation_job(job_id, result["status"], result=result.get("result"), error=error)
         code = "SIMULATION_" + result["status"]
         return _response("ok" if result["status"] == "SUCCEEDED" else result["status"].lower(), code,
                          "Simulation job status loaded.", retryable=result["status"] == "RUNNING", job=result)
@@ -289,9 +321,40 @@ def wg_get_simulation(job_id: str) -> dict:
 
 
 @mcp.tool()
-def wg_verify_candidate(job_id: str) -> dict:
+def wg_cancel_simulation(job_id: str, run_id: str | None = None) -> dict:
+    """Cancel one run-bound simulation and persist the terminal outcome."""
+    try:
+        strict_store = strict_run = None
+        if _strict_gateway():
+            strict_store, strict_run, _task = _bound_run(run_id or "", "wg_cancel_simulation")
+            stored = strict_store.get_simulation_job(job_id)
+            if stored["run_id"] != strict_run["run_id"]:
+                raise ValueError("Simulation job belongs to another run")
+        result = JOBS.cancel(job_id)
+        context = JOB_CONTEXT.get(job_id)
+        store = context.get("store") if context else strict_store
+        reservation = context.get("reservation") if context else None
+        if store is not None:
+            if reservation is not None:
+                store.settle_simulation(reservation["reservation_id"])
+            stored = store.get_simulation_job(job_id)
+            if stored.get("reservation_id"):
+                store.settle_simulation(stored["reservation_id"])
+            store.update_simulation_job(job_id, "CANCELLED", error={"code": "CANCELLED", "message": "Cancelled by the host-bound run."})
+        return _response("cancelled", "CANCELLED", "Simulation cancellation recorded.", job=result)
+    except Exception as exc:
+        return _response("rejected", "NOT_FOUND", "Simulation job is unavailable.", violations=[{"message": str(exc)}])
+
+
+@mcp.tool()
+def wg_verify_candidate(job_id: str, run_id: str | None = None) -> dict:
     """Recompute metrics and hard constraints from a completed simulation result."""
     try:
+        if _strict_gateway():
+            store, run, _task = _bound_run(run_id or "", "wg_verify_candidate")
+            persisted = store.get_simulation_job(job_id)
+            if persisted["run_id"] != run["run_id"]:
+                raise ValueError("Simulation job belongs to another run")
         state = JOBS.get(job_id)
         if state["status"] != "SUCCEEDED":
             return _response("rejected", "ARTIFACT_INVALID", "Simulation has not completed successfully.", retryable=state["status"] == "RUNNING")
@@ -448,4 +511,5 @@ def wg_validate_action_plan(task_json: str, plan_json: str) -> dict:
 
 
 if __name__ == "__main__":
+    recover_gateway_jobs_from_store()
     mcp.run()
