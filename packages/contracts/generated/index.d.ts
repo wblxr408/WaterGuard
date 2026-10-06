@@ -133,7 +133,8 @@ export type Diagnostics = {
   error_code?: string | null;
   raw_converged?: boolean | null;
 };
-export type RunStatus = "QUEUED" | "RUNNING" | "NEEDS_INPUT" | "COMPLETED" | "BUDGET_EXHAUSTED" | "ERROR" | "CANCELLED";
+export type RunStatus =
+  "QUEUED" | "RUNNING" | "NEEDS_INPUT" | "COMPLETED" | "BUDGET_EXHAUSTED" | "ERROR" | "CANCELLED" | "SUPERSEDED";
 export type RunPhase =
   "INTAKE" | "MODELING" | "BASELINE" | "PLANNING" | "SIMULATING" | "VERIFYING" | "REVIEWING" | "PACKAGING";
 
@@ -462,6 +463,9 @@ export interface RunRecord {
   };
   conclusion: "FEASIBLE_FOUND" | "NO_FEASIBLE_FOUND" | "INCOMPLETE" | "INVALID";
   selected_candidate_id: string | null;
+  successor_run_id?: string | null;
+  resumed_from_run_id?: string | null;
+  acceptance_scenario?: "repair_demo" | null;
   /**
    * @minItems 0
    */
@@ -479,8 +483,14 @@ export interface RunEvent {
   native_tool_call_ref: string | null;
   native_reference_missing_reason: string | null;
   correlation_id: string;
-  origin: "agh" | "gateway" | "worker" | "verifier" | "user";
-  type: "run.started" | "candidate.submitted" | "simulation.completed" | "verification.completed" | "run.completed";
+  origin: "agh" | "gateway" | "worker" | "verifier" | "user" | "host";
+  type:
+    | "run.started"
+    | "candidate.submitted"
+    | "simulation.completed"
+    | "verification.completed"
+    | "run.completed"
+    | "clarification.requested";
   candidate_id: string | null;
   simulation_id: string | null;
   occurred_at: string;

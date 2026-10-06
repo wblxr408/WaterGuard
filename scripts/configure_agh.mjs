@@ -10,15 +10,17 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const source = process.env.WG_AGH_SOURCE || join(root, 'vendor/agnes-harness')
 const entry = join(source, 'packages/cli/dist/local/agnes.mjs')
 const require = createRequire(join(source, 'packages/cli/package.json'))
-const { createClient } = await import(pathToFileURL(require.resolve('@agnes/sdk')).href)
-const env = { ...process.env, AGH_HOME: join(root, '.cache/agh-waterguard'), AGNES_PROFILE: 'local-dev' }
+const { createClient, memoryJournal } = await import(pathToFileURL(require.resolve('@agnes/sdk')).href)
+const aghHome = resolve(process.env.WG_AGH_HOME || join(root, '.cache/agh-waterguard'))
+const env = { ...process.env, AGH_HOME: aghHome, AGNES_PROFILE: 'local-dev' }
 process.env.AGH_HOME = env.AGH_HOME
 process.env.AGNES_PROFILE = env.AGNES_PROFILE
-const status = JSON.parse(execFileSync(process.execPath, [entry, 'daemon', 'status', '--profile', 'local-dev',
-  '--data-dir', join(env.AGH_HOME, 'data')], { env, encoding: 'utf8' }))
+const status = JSON.parse(execFileSync(process.execPath, [entry, 'daemon', 'status', '--profile', 'local-dev'],
+  { env, encoding: 'utf8' }))
 if (!status.running || !status.socketReachable) throw new Error('Start the WaterGuard AGH daemon first')
 const client = createClient({ transport: { kind: 'unix', path: status.owner.socketPath,
-  serverIdentity: { pid: status.owner.pid, processStartId: status.owner.processStartId } }, locale: 'zh-CN' })
+  serverIdentity: { pid: status.owner.pid, processStartId: status.owner.processStartId } },
+auth: { kind: 'local' }, journal: memoryJournal(), locale: 'zh-CN' })
 const report = { source_sha: execFileSync('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   node: process.version, profile: 'local-dev', checks: [] }
 const output = join(root, 'artifacts/agh-integration')
@@ -70,7 +72,15 @@ try {
       report.checks.push('Agnes account validated and saved through official configuration service')
     }
   }
-  report.status = report.model_test?.verified ? 'READY_FOR_MODEL_SMOKE' : 'PLUGIN_READY_MODEL_AUTH_PENDING'
+  // Credentials may already be stored by the official local backend.  Do not
+  // report a false "pending" state merely because this invocation did not
+  // receive a key environment variable.
+  const configured = await client.config.get()
+  const provider = configured?.provider
+  report.saved_provider = provider ? { id: provider.id, model: provider.model,
+    credentialConfigured: Boolean(provider.credentialConfigured) } : null
+  report.status = report.model_test?.verified || provider?.credentialConfigured
+    ? 'READY_FOR_MODEL_SMOKE' : 'PLUGIN_READY_MODEL_AUTH_PENDING'
 } catch (error) {
   report.status = 'FAILED'
   report.error = error instanceof Error ? error.message : String(error)

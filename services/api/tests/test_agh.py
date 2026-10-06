@@ -109,6 +109,27 @@ class AghBoundaryTests(unittest.TestCase):
         with self.assertRaises(ConflictError):
             self.store.live_parent('isolated-sdk-test-session', self.task['task_id'])
 
+    def test_active_agh_session_can_create_a_bound_stress_review_run(self):
+        from services.api.workbench import benchmark_plans, network_details
+        with TestClient(create_app(self.store)) as client:
+            parent = self.parent()
+            plan = benchmark_plans(self.task, network_details(self.task['network_ref']['network_id'])['catalog'])[0]
+            created = client.post(f"/api/tasks/{self.task['task_id']}/candidate-runs/{plan['candidate_id']}",
+                                  headers={'X-WG-AGH-Session': 'isolated-sdk-test-session'})
+            self.assertEqual(created.status_code, 201, created.text)
+            nominal = created.json()
+            self.store.transition(nominal['run_id'], 'RUNNING', 'SIMULATING')
+            self.store.transition(nominal['run_id'], 'COMPLETED', 'PACKAGING')
+            response = client.post(f"/api/runs/{nominal['run_id']}/perturbations",
+                                   headers={'X-WG-AGH-Session': 'isolated-sdk-test-session'},
+                                   json={'demand_multiplier': 1.1})
+        self.assertEqual(response.status_code, 201, response.text)
+        body = response.json()
+        self.assertEqual(body['perturbation']['parameters'], {'demand_multiplier': 1.1})
+        stress = body['run']
+        self.assertEqual(self.store.live_parent_for_child(stress['run_id'])['run_id'], parent['run_id'])
+        self.assertEqual(self.store._read_json(self.store._run_directory(stress['run_id']) / 'perturbation.json'), body['perturbation'])
+
     def test_native_event_identity_is_preserved_without_forging_application_events(self):
         parent = self.parent()
         event = self.store.emit(parent, 'agh', 'candidate.submitted', 'artifact:isolated-test', native_tool_call_ref='agh:isolated-sdk-test-session:tool:actual-sdk-field', correlation_id='sdk-event-id')
@@ -117,6 +138,12 @@ class AghBoundaryTests(unittest.TestCase):
         plain = self.store.emit(parent, 'user', 'run.started', 'artifact:isolated-test')
         self.assertIsNone(plain['native_tool_call_ref'])
         self.assertTrue(plain['native_reference_missing_reason'])
+
+    def test_host_can_persist_a_derived_final_outcome(self):
+        parent = self.parent()
+        updated = self.store.set_outcome(parent['run_id'], 'FEASIBLE_FOUND', 'candidate-host-derived')
+        self.assertEqual(updated['conclusion'], 'FEASIBLE_FOUND')
+        self.assertEqual(updated['selected_candidate_id'], 'candidate-host-derived')
 
     def test_sdk_association_matches_merged_evidence_format(self):
         # Isolated simulated SDK data tests the interchange, not a real Live run.
@@ -133,6 +160,8 @@ class AghBoundaryTests(unittest.TestCase):
         self.assertEqual(association['events'], [{'application_event_id': event['event_id'], 'native_tool_call_ref': native_ref}])
         evidence = build_evidence(self.store.artifacts, parent)
         self.assertEqual(evidence['association_ref'], 'artifact:agh/association.json')
+        self.assertNotIn('native_agh_trace', evidence['missing_items'])
+        self.assertNotIn('agh_host_not_configured', evidence['missing_items'])
         self.assertTrue(evidence['live_export_allowed'])
 
     def test_restart_revokes_old_session_even_if_native_cancel_fails(self):
@@ -149,6 +178,77 @@ class AghBoundaryTests(unittest.TestCase):
             self.assertEqual(warning['code'], 'AGH_CANCEL_NOT_CONFIRMED')
         finally:
             executor.close()
+
+    def test_clarification_answer_creates_an_idempotent_linked_successor(self):
+        from services.api.agh import LiveExecutor
+        with TestClient(create_app(self.store)) as client, \
+             patch('services.api.agh.bridge', return_value={'snapshot': {'provider': {'id': 'agnes-ai', 'model': 'test', 'credentialConfigured': True}}}), \
+             patch.object(LiveExecutor, 'dispatch') as dispatch:
+            parent = self.store.create_run(self.task, 'live')
+            self.store.transition(parent['run_id'], 'RUNNING', 'MODELING')
+            self.store.transition(parent['run_id'], 'NEEDS_INPUT', 'MODELING')
+            response = client.post(f"/api/runs/{parent['run_id']}/answers", json={'answer': '优先保证医院节点供水', 'idempotency_key': 'clarify-1'})
+            self.assertEqual(response.status_code, 200, response.text)
+            successor = response.json()
+            self.assertEqual(successor['resumed_from_run_id'], parent['run_id'])
+            self.assertEqual(self.store.get_run(parent['run_id'])['status'], 'SUPERSEDED')
+            self.assertEqual(self.store.get_run(parent['run_id'])['successor_run_id'], successor['run_id'])
+            continuity = self.store._read_json(self.store._run_directory(successor['run_id']) / 'continuity.json')
+            self.assertEqual(continuity['answer'], '优先保证医院节点供水')
+            repeated = client.post(f"/api/runs/{parent['run_id']}/answers", json={'answer': 'ignored', 'idempotency_key': 'clarify-1'})
+            self.assertEqual(repeated.status_code, 200, repeated.text)
+            self.assertEqual(repeated.json()['run_id'], successor['run_id'])
+            dispatch.assert_called_once()
+
+    def test_agh_can_request_clarification_only_for_its_bound_live_session(self):
+        with TestClient(create_app(self.store)) as client:
+            parent = self.parent()
+            response = client.post(f"/api/tasks/{self.task['task_id']}/clarifications",
+                                   headers={'X-WG-AGH-Session': parent['agh_session_ref']},
+                                   json={'question': '最低压力阈值是否适用于全部节点？'})
+            self.assertEqual(response.status_code, 202, response.text)
+            self.assertEqual(self.store.get_run(parent['run_id'])['status'], 'NEEDS_INPUT')
+            saved = self.store._read_json(self.store._run_directory(parent['run_id']) / 'clarification.json')
+            self.assertIn('最低压力', saved['question'])
+
+    def test_recovery_creates_a_fresh_linked_session_after_restart(self):
+        from services.api.agh import LiveExecutor
+        with TestClient(create_app(self.store)) as client, \
+             patch('services.api.agh.bridge', return_value={'snapshot': {'provider': {'id': 'agnes-ai', 'model': 'test', 'credentialConfigured': True}}}), \
+             patch.object(LiveExecutor, 'dispatch') as dispatch:
+            parent = self.store.create_run(self.task, 'live')
+            self.store.transition(parent['run_id'], 'ERROR')
+            self.store._write_json(f"{parent['run_id']}/error.json", {'code': 'SERVER_RESTARTED'})
+            response = client.post(f"/api/runs/{parent['run_id']}/recover", headers={'Idempotency-Key': 'recover-1'})
+            self.assertEqual(response.status_code, 202, response.text)
+            successor = response.json()
+            self.assertEqual(successor['resumed_from_run_id'], parent['run_id'])
+            self.assertEqual(self.store.get_run(parent['run_id'])['status'], 'SUPERSEDED')
+            dispatch.assert_called_once()
+
+    def test_repair_demo_is_explicitly_recorded_on_live_run(self):
+        from services.api.agh import LiveExecutor
+        with TestClient(create_app(self.store)) as client, \
+             patch('services.api.agh.bridge', return_value={'snapshot': {'provider': {'id': 'agnes-ai', 'model': 'test', 'credentialConfigured': True}}}), \
+             patch.object(LiveExecutor, 'dispatch'):
+            response = client.post(f"/api/tasks/{self.task['task_id']}/runs", json={'mode': 'live', 'acceptance_scenario': 'repair_demo'})
+            self.assertEqual(response.status_code, 202, response.text)
+            self.assertEqual(response.json()['acceptance_scenario'], 'repair_demo')
+
+    def test_repair_demo_returns_structured_invalid_action_without_child_run(self):
+        with TestClient(create_app(self.store)) as client:
+            parent = self.parent()
+            # Mark the isolated parent as the explicit acceptance run.
+            with self.store._db() as db:
+                payload = self.store.get_run(parent['run_id'])
+                payload['acceptance_scenario'] = 'repair_demo'
+                from services.api.runtime import canonical
+                db.execute('UPDATE runs SET payload=? WHERE run_id=?', (canonical(payload), parent['run_id']))
+            response = client.post(f"/api/tasks/{self.task['task_id']}/candidate-runs/repair-demo-invalid",
+                                   headers={'X-WG-AGH-Session': parent['agh_session_ref']})
+            self.assertEqual(response.status_code, 201, response.text)
+            self.assertEqual(response.json()['code'], 'INVALID_ACTION')
+            self.assertEqual(self.store.live_children(parent['run_id']), [])
 
 
 if __name__ == '__main__':

@@ -21,14 +21,15 @@ if str(CONTRACTS) not in sys.path:
 
 from waterguard_contracts.core import require, task_hash, task_ref, validate
 
-RUN_STATUS = {"QUEUED", "RUNNING", "NEEDS_INPUT", "COMPLETED", "BUDGET_EXHAUSTED", "ERROR", "CANCELLED"}
+RUN_STATUS = {"QUEUED", "RUNNING", "NEEDS_INPUT", "COMPLETED", "BUDGET_EXHAUSTED", "ERROR", "CANCELLED", "SUPERSEDED"}
 RUN_PHASE = {"INTAKE", "MODELING", "BASELINE", "PLANNING", "SIMULATING", "VERIFYING", "REVIEWING", "PACKAGING"}
-TERMINAL = {"COMPLETED", "BUDGET_EXHAUSTED", "ERROR", "CANCELLED"}
+TERMINAL = {"COMPLETED", "BUDGET_EXHAUSTED", "ERROR", "CANCELLED", "SUPERSEDED"}
 ALLOWED_TRANSITIONS = {
-    "QUEUED": {"RUNNING", "CANCELLED", "ERROR"},
-    "RUNNING": {"NEEDS_INPUT", "COMPLETED", "BUDGET_EXHAUSTED", "ERROR", "CANCELLED"},
-    "NEEDS_INPUT": {"RUNNING", "CANCELLED", "ERROR"},
-    "COMPLETED": set(), "BUDGET_EXHAUSTED": set(), "ERROR": set(), "CANCELLED": set(),
+    "QUEUED": {"RUNNING", "CANCELLED", "ERROR", "SUPERSEDED"},
+    "RUNNING": {"NEEDS_INPUT", "COMPLETED", "BUDGET_EXHAUSTED", "ERROR", "CANCELLED", "SUPERSEDED"},
+    "NEEDS_INPUT": {"RUNNING", "CANCELLED", "ERROR", "SUPERSEDED"},
+    "ERROR": {"SUPERSEDED"},
+    "COMPLETED": set(), "BUDGET_EXHAUSTED": set(), "CANCELLED": set(), "SUPERSEDED": set(),
 }
 
 
@@ -191,12 +192,17 @@ class RunStore:
 
     def active_lives(self) -> list[dict]:
         with self._db() as db:
-            rows = db.execute("SELECT payload FROM runs WHERE mode='live' AND status IN ('QUEUED','RUNNING')").fetchall()
+            rows = db.execute("SELECT payload FROM runs WHERE mode='live' AND status IN ('QUEUED','RUNNING','NEEDS_INPUT')").fetchall()
         return [json.loads(row['payload']) for row in rows]
 
-    def create_run(self, task: dict, mode: str, idempotency_key: str | None = None, source_run_id: str | None = None) -> dict:
+    def create_run(self, task: dict, mode: str, idempotency_key: str | None = None, source_run_id: str | None = None,
+                   *, resumed_from_run_id: str | None = None, acceptance_scenario: str | None = None) -> dict:
         if mode not in {"fixture", "benchmark", "replay", "live"}:
             raise ConflictError("Unsupported run mode")
+        if acceptance_scenario not in {None, 'repair_demo'}:
+            raise ConflictError('Unsupported acceptance scenario')
+        if acceptance_scenario is not None and mode != 'live':
+            raise ConflictError('Acceptance scenarios are supported only for live AGH runs')
         scope = f"run:{task['task_id']}:{task['revision']}"
         with self._db() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -205,7 +211,9 @@ class RunStore:
                 if found:
                     saved = json.loads(found["response"])
                     run = saved.get("run", saved)
-                    if run["mode"] != mode or saved.get("source_run_id") != source_run_id:
+                    if (run["mode"] != mode or saved.get("source_run_id") != source_run_id
+                            or run.get("resumed_from_run_id") != resumed_from_run_id
+                            or run.get("acceptance_scenario") != acceptance_scenario):
                         raise ConflictError("Idempotency key already used with different run parameters")
                     current = db.execute("SELECT payload FROM runs WHERE run_id=?", (run["run_id"],)).fetchone()
                     return json.loads(current["payload"])
@@ -214,6 +222,8 @@ class RunStore:
                        status="QUEUED", phase="INTAKE", agh_session_ref=None, model_config_ref=None,
                        budget_usage={"simulations": 0, "model_calls": None, "wall_time_s": 0.0},
                        conclusion="INCOMPLETE", selected_candidate_id=None,
+                       successor_run_id=None, resumed_from_run_id=resumed_from_run_id,
+                       acceptance_scenario=acceptance_scenario,
                        missing_items=["native_agh_trace", "agh_host_not_configured", "required_stress_tests"])
             validate("RunRecord", run)
             timestamp = now()
@@ -225,6 +235,49 @@ class RunStore:
         ref = self._write_json(f"{run_id}/run.json", run)
         self.emit(run, "user", "run.started", ref)
         return self.get_run(run_id)
+
+    def create_successor(self, source_run_id: str, *, reason: str, answer: str | None = None,
+                         idempotency_key: str | None = None) -> dict:
+        """Create a fresh AGH run linked to an interrupted/clarified predecessor.
+
+        Native AGH session resumption is deliberately not claimed: the predecessor
+        is retained as immutable evidence and becomes SUPERSEDED only after the
+        successor record and continuity artifact have been created.
+        """
+        source = self.get_run(source_run_id)
+        if source['mode'] != 'live':
+            raise ConflictError('Only a live AGH run can have a successor')
+        if source.get('successor_run_id'):
+            if idempotency_key:
+                return self.get_run(source['successor_run_id'])
+            raise ConflictError('Run already has a successor')
+        if source['status'] not in {'NEEDS_INPUT', 'ERROR'}:
+            raise ConflictError('Run is not awaiting clarification or recovery')
+        task = self.get_task(source['task_ref']['task_id'], source['task_ref']['revision'])
+        successor = self.create_run(task, 'live', idempotency_key,
+                                    resumed_from_run_id=source_run_id,
+                                    acceptance_scenario=source.get('acceptance_scenario'))
+        continuity = {
+            'predecessor_run_id': source_run_id, 'successor_run_id': successor['run_id'],
+            'reason': reason, 'answer': answer, 'task_ref': source['task_ref'],
+            'old_agh_session_ref': source.get('agh_session_ref'),
+            'continuity_boundary': 'fresh_agh_session', 'created_at': now(),
+        }
+        self._write_json(f"{source_run_id}/continuity.json", continuity)
+        self._write_json(f"{successor['run_id']}/continuity.json", continuity)
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            current = json.loads(db.execute('SELECT payload FROM runs WHERE run_id=?', (source_run_id,)).fetchone()['payload'])
+            if current['successor_run_id'] and current['successor_run_id'] != successor['run_id']:
+                raise ConflictError('Run already has a different successor')
+            current['successor_run_id'] = successor['run_id']
+            current['status'] = 'SUPERSEDED'
+            validate('RunRecord', current)
+            db.execute('UPDATE runs SET status=?, payload=?, updated_at=? WHERE run_id=?',
+                       ('SUPERSEDED', canonical(current), now(), source_run_id))
+        ref = self._write_json(f"{source_run_id}/run.json", current)
+        self.emit(current, 'host', 'run.completed', ref)
+        return successor
 
     def get_run(self, run_id: str) -> dict:
         with self._db() as db:
@@ -241,7 +294,8 @@ class RunStore:
             run = json.loads(db.execute('SELECT payload FROM runs WHERE run_id=?', (run_id,)).fetchone()['payload'])
             run['agh_session_ref'] = session_id
             run['model_config_ref'] = ref
-            run['missing_items'] = [item for item in run['missing_items'] if item != 'agh_host_not_configured']
+            run['missing_items'] = [item for item in run['missing_items']
+                                    if item not in {'agh_host_not_configured', 'native_agh_trace'}]
             validate('RunRecord', run)
             db.execute('UPDATE runs SET payload=?, updated_at=? WHERE run_id=?', (canonical(run), now(), run_id))
         self._write_json(f'{run_id}/run.json', run)
@@ -284,6 +338,44 @@ class RunStore:
         with self._db() as db:
             rows = db.execute('SELECT runs.payload FROM live_links JOIN runs ON runs.run_id=live_links.child_id WHERE parent_id=?', (parent_id,)).fetchall()
         return [json.loads(row['payload']) for row in rows]
+
+    def live_parent_for_child(self, child_id: str) -> dict | None:
+        """Return the owning live run for a submitted child calculation."""
+        with self._db() as db:
+            row = db.execute('SELECT runs.payload FROM live_links JOIN runs ON runs.run_id=live_links.parent_id WHERE child_id=?',
+                             (child_id,)).fetchone()
+        return json.loads(row['payload']) if row else None
+
+    def clear_missing_items(self, run_id: str, resolved: set[str]) -> dict:
+        """Persist only provenance gaps that remain after host-side verification."""
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT payload FROM runs WHERE run_id=?', (run_id,)).fetchone()
+            if not row:
+                raise NotFoundError('Unknown run')
+            run = json.loads(row['payload'])
+            run['missing_items'] = [item for item in run['missing_items'] if item not in resolved]
+            validate('RunRecord', run)
+            db.execute('UPDATE runs SET payload=?, updated_at=? WHERE run_id=?', (canonical(run), now(), run_id))
+        self._write_json(f'{run_id}/run.json', run)
+        return run
+
+    def set_outcome(self, run_id: str, conclusion: str, selected_candidate_id: str | None) -> dict:
+        """Record a host-derived final conclusion; models never set this field."""
+        if conclusion not in {'FEASIBLE_FOUND', 'NO_FEASIBLE_FOUND', 'INCOMPLETE', 'INVALID'}:
+            raise ValueError('Invalid run conclusion')
+        with self._db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT payload FROM runs WHERE run_id=?', (run_id,)).fetchone()
+            if not row:
+                raise NotFoundError('Unknown run')
+            run = json.loads(row['payload'])
+            run['conclusion'] = conclusion
+            run['selected_candidate_id'] = selected_candidate_id
+            validate('RunRecord', run)
+            db.execute('UPDATE runs SET payload=?, updated_at=? WHERE run_id=?', (canonical(run), now(), run_id))
+        self._write_json(f'{run_id}/run.json', run)
+        return run
 
     def bind_agh_session(self, run_id: str, agh_session_ref: str, model_config_ref: str) -> dict:
         """Record host-verified AGH provenance before a strict gateway starts.

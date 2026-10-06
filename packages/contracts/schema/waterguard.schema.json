@@ -1812,7 +1812,8 @@
         "COMPLETED",
         "BUDGET_EXHAUSTED",
         "ERROR",
-        "CANCELLED"
+        "CANCELLED",
+        "SUPERSEDED"
       ]
     },
     "RunPhase": {
@@ -1928,6 +1929,41 @@
             }
           ]
         },
+        "successor_run_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resumed_from_run_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "acceptance_scenario": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "repair_demo"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "missing_items": {
           "type": "array",
           "items": {
@@ -2031,7 +2067,8 @@
             "gateway",
             "worker",
             "verifier",
-            "user"
+            "user",
+            "host"
           ]
         },
         "type": {
@@ -2041,7 +2078,8 @@
             "candidate.submitted",
             "simulation.completed",
             "verification.completed",
-            "run.completed"
+            "run.completed",
+            "clarification.requested"
           ]
         },
         "candidate_id": {

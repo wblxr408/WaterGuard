@@ -1,6 +1,6 @@
 # WaterGuard Agent 设计
 
-版本：0.3；日期：2026-10-05；状态：官方 AGH 源码与原生工具已接入，模型驱动的任务仍待有效凭据验证。
+版本：0.4；日期：2026-10-06；状态：官方 AGH 源码、原生工具和真实模型驱动闭环已验证；比赛版采用单受限会话分阶段执行。
 
 规则澄清：用户重新核对的要求是核心任务的组织、执行或工具调用必须使用 AGH；模型可使用赛事 Agnes，也可接入允许的开源或第三方模型。WaterGuard 默认选择赛事 Agnes，同时支持 DeepSeek 和 GLM。成果展示使用 WaterGuard 自有界面，通过 SDK 接入 AGH，无需从官方 Web 发起任务。下文的“Agnes”表示当前默认模型的角色，不表示赛事只允许该模型。
 
@@ -189,4 +189,4 @@ flowchart TD
 - [Agnes Code 子代理](https://agnescode.agnes-ai.cn/zh-Hans/docs/guides/context-engineering/subagents/)：角色委派参考。
 - [工具与权限](https://agnescode.agnes-ai.cn/zh-Hans/cli/user-guide/tools/)：权限参考。
 
-待实测：指定 AGH 的产品与版本、工具协议、角色身份、日志导出与调用关联、会话恢复和取消。本文不虚构这些能力已实现。
+已实测：指定 AGH 的本机版本、工具协议、原生 trace 与应用事件关联、取消和关联后继恢复。真实子代理身份隔离仍未实现；比赛版如实使用单受限会话分阶段执行，不将其描述为可信多角色隔离。

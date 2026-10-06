@@ -40,6 +40,69 @@ def _write_association(store, run_id, children):
                                   children=children, events=events))
 
 
+def _write_probe(store, run_id, model, scenario):
+    """Persist a redacted, run-local AGH readiness snapshot.
+
+    The SDK configuration service never returns the secret, but this function
+    still copies only the fields that are useful for independent evidence
+    review.  It deliberately does not call a model or expose account labels.
+    """
+    status = bridge({'action': 'status'})
+    provider = (status.get('snapshot') or {}).get('provider') or {}
+    snapshot = {
+        'status': 'ready', 'bridge': 'official_sdk',
+        'provider': {key: provider.get(key) for key in ('id', 'model', 'route', 'credentialConfigured')},
+        'available_provider_ids': [row.get('id') for row in status.get('providers', []) if isinstance(row, dict)],
+        'mounted_tool_names': ['wg_inspect_network', 'wg_propose_task', 'wg_get_task', 'wg_generate_candidates',
+                               'wg_submit_plan', 'wg_simulate_candidate', 'wg_get_simulation',
+                               'wg_verify_candidate', 'wg_create_perturbation',
+                               'wg_compare_candidates', 'wg_build_evidence', 'wg_request_clarification'],
+        'acceptance_scenario': scenario,
+    }
+    return store._write_json(f'{run_id}/agh/probe.json', snapshot)
+
+
+def _finalize_recommendation(store, run_id, task, child_runs):
+    """Aggregate independent nominal and stress reports into a host conclusion."""
+    required = set(task['perturbation_domain']['required'])
+    nominal, stress = {}, {}
+    for child in child_runs:
+        child_id = child['run_id']
+        perturbation_path = store._run_directory(child_id) / 'perturbation.json'
+        perturbation = store._read_json(perturbation_path) if perturbation_path.is_file() else None
+        for plan in store.list_candidates(child_id):
+            candidate_id = plan['candidate_id']
+            report_path = store._run_directory(child_id) / 'candidates' / candidate_id / 'verification.json'
+            if not report_path.is_file():
+                continue
+            report = store._read_json(report_path)
+            passed = report['validity'] == 'valid' and not report['violations']
+            if perturbation is None:
+                nominal[candidate_id] = (passed, report)
+            elif passed:
+                stress.setdefault(candidate_id, set()).update(perturbation['required_labels'])
+    eligible = [candidate_id for candidate_id, (passed, _report) in nominal.items()
+                if passed and required.issubset(stress.get(candidate_id, set()))]
+    selected = min(eligible, key=lambda cid: (nominal[cid][1]['metrics']['shortage_m3'],
+                                               nominal[cid][1]['metrics']['action_cost'], cid)) if eligible else None
+    if selected:
+        conclusion = 'FEASIBLE_FOUND'
+    elif any(not passed for passed, _report in nominal.values()) and not required:
+        conclusion = 'NO_FEASIBLE_FOUND'
+    else:
+        conclusion = 'INCOMPLETE'
+    summary = {
+        'run_id': run_id, 'required_stress_tests': sorted(required),
+        'nominal_candidate_ids': sorted(nominal),
+        'stress_coverage': {candidate_id: sorted(labels) for candidate_id, labels in sorted(stress.items())},
+        'eligible_candidate_ids': sorted(eligible), 'selected_candidate_id': selected,
+        'conclusion': conclusion,
+    }
+    store._write_json(f'{run_id}/recommendation-summary.json', summary)
+    store.set_outcome(run_id, conclusion, selected)
+    return summary
+
+
 class LiveExecutor:
     """Lifecycle supervisor only. AGH performs all model and tool decisions."""
     def __init__(self, store, benchmark):
@@ -78,7 +141,7 @@ class LiveExecutor:
             # Revoke local tool admission first; an old model session cannot resume a frozen job.
             self.store.transition(run['run_id'], 'ERROR')
             self.store._write_json(f"{run['run_id']}/error.json", {
-                'code': 'SERVER_RESTARTED', 'message': 'AGH run interrupted by server restart; create a new run.'})
+                'code': 'SERVER_RESTARTED', 'message': 'AGH run interrupted by server restart; create a linked successor run.'})
             if run['agh_session_ref']:
                 try:
                     bridge({'action': 'cancel', 'session_id': run['agh_session_ref']})
@@ -96,9 +159,12 @@ class LiveExecutor:
             process = subprocess.Popen(command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                        text=True, encoding='utf-8', cwd=ROOT,
                                        env={**os.environ, 'WG_ARTIFACT_ROOT': str(self.store.artifacts.resolve())})
+            continuation_path = self.store._run_directory(run_id) / 'continuity.json'
+            continuation = self.store._read_json(continuation_path) if continuation_path.is_file() else None
             request = dict(action='run', run_id=run_id, task_id=task['task_id'], model=model,
                            network_id=task['network_ref']['network_id'],
-                           max_wall_time_s=task['budget']['max_wall_time_s'], max_simulations=task['budget']['max_simulations'])
+                           max_wall_time_s=task['budget']['max_wall_time_s'], max_simulations=task['budget']['max_simulations'],
+                           acceptance_scenario=run.get('acceptance_scenario'), continuation=continuation)
             process.stdin.write(json.dumps(request) + '\n')
             process.stdin.flush()
             deadline = started + task['budget']['max_wall_time_s'] + 20
@@ -113,7 +179,18 @@ class LiveExecutor:
             outcome, index, calls, model_calls = None, 0, {}, 0
             from .execution import project_tool_event
             execution_calls = {}
+            paused = False
             while True:
+                if self.store.get_run(run_id)['status'] == 'NEEDS_INPUT':
+                    current = self.store.get_run(run_id)
+                    if current['agh_session_ref']:
+                        try:
+                            bridge({'action': 'cancel', 'session_id': current['agh_session_ref']})
+                        except Exception:
+                            self.store._write_json(f'{run_id}/agh/cancel-warning.json', {'code': 'AGH_CANCEL_NOT_CONFIRMED'})
+                    process.terminate()
+                    paused = True
+                    break
                 if cancel.is_set() or time.monotonic() > deadline:
                     current = self.store.get_run(run_id)
                     if current['agh_session_ref']:
@@ -144,6 +221,7 @@ class LiveExecutor:
                     process.stdin.write(json.dumps({'bound_session_id': row['session_id']}) + '\n')
                     process.stdin.close()
                     self.store.log(run_id, 'AGH 原生会话已绑定冻结任务', event_type='session.bound')
+                    _write_probe(self.store, run_id, row['model'], run.get('acceptance_scenario'))
                 elif row['kind'] == 'event':
                     index += 1
                     event = row['event']
@@ -192,18 +270,36 @@ class LiveExecutor:
                                         candidate_id=candidate_id, simulation_id=simulation_id)
                 elif row['kind'] == 'completed':
                     outcome = row
-            if process.wait(timeout=10) != 0 and not cancel.is_set():
+            if process.wait(timeout=10) != 0 and not cancel.is_set() and not paused:
                 raise RuntimeError('AGH session failed')
+            if paused:
+                return
             if cancel.is_set() or self.store.get_run(run_id)['status'] in TERMINAL:
                 return
             if not outcome or outcome['result']['reason'] != 'completed':
                 raise RuntimeError('AGH did not complete the task turn')
             associations = []
             # Only run IDs from recorded native wg_submit_plan results are considered.
-            for child_id in outcome['child_runs']:
+            if not outcome['child_runs']:
+                raise RuntimeError('AGH completed without a recorded WaterGuard candidate')
+            # A stress review is created after the nominal candidate and is not
+            # itself a wg_submit_plan result.  Trust only children linked by the
+            # host to this already-bound live session, then include all of them
+            # in the final provenance and evidence copy.
+            child_runs = self.store.live_children(run_id)
+            completed_stress_labels = set()
+            for child in child_runs:
+                child_id = child['run_id']
                 child = self.store.get_run(child_id)
                 if child['task_ref'] != run['task_ref']:
                     raise RuntimeError('AGH child task binding mismatch')
+                # A model may preflight a second candidate after the shared
+                # simulation budget has been consumed.  It has not entered a
+                # worker yet, so record it as an explicit non-executed child
+                # rather than leaving the parent permanently active.
+                if child['status'] == 'QUEUED':
+                    self.benchmark.cancel(child_id)
+                    child = self.store.get_run(child_id)
                 if child['status'] not in TERMINAL:
                     raise RuntimeError('AGH finished while a submitted calculation is still active')
                 for plan in self.store.list_candidates(child_id):
@@ -214,13 +310,23 @@ class LiveExecutor:
                         if path.is_file():
                             self.store._write_json(f'{run_id}/candidates/{cid}/{filename}', self.store._read_json(path))
                 associations.append(dict(child_run_id=child_id, task_ref=child['task_ref']))
+                perturbation_path = self.store._run_directory(child_id) / 'perturbation.json'
+                if perturbation_path.is_file():
+                    perturbation = self.store._read_json(perturbation_path)
+                    reports = []
+                    for plan in self.store.list_candidates(child_id):
+                        report_path = self.store._run_directory(child_id) / 'candidates' / plan['candidate_id'] / 'verification.json'
+                        if report_path.is_file():
+                            reports.append(self.store._read_json(report_path))
+                    if reports and all(report['validity'] == 'valid' and not report['violations'] for report in reports):
+                        completed_stress_labels.update(perturbation['required_labels'])
                 import shutil
                 with self.benchmark.evidence_lock:
                     shutil.copytree(self.store._run_directory(child_id), self.store._run_directory(run_id) / 'agh' / 'children' / child_id,
                                     dirs_exist_ok=True)
             _write_association(self.store, run_id, associations)
-            if not associations:
-                raise RuntimeError('AGH completed without a recorded WaterGuard candidate')
+            if set(task['perturbation_domain']['required']).issubset(completed_stress_labels):
+                self.store.clear_missing_items(run_id, {'required_stress_tests'})
             if not any((self.store._run_directory(run_id) / 'candidates' / plan['candidate_id'] / 'verification.json').is_file()
                        for plan in self.store.list_candidates(run_id)):
                 raise RuntimeError('AGH finished without independent candidate verification')
@@ -229,6 +335,7 @@ class LiveExecutor:
             if not _validated_agh_association(self.store._run_directory(run_id) / 'agh' / 'association.json', current):
                 raise RuntimeError('AGH native event association is invalid')
             self.store.bind_agh_session(run_id, current['agh_session_ref'], current['model_config_ref'])
+            _finalize_recommendation(self.store, run_id, task, child_runs)
             self.store.transition(run_id, 'COMPLETED', 'PACKAGING', wall_time_s=time.monotonic()-started)
         except Exception as error:
             self.store._write_json(f'{run_id}/error.json', dict(code='AGH_FAILED', message=str(error)))

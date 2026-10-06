@@ -15,15 +15,25 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 from starlette.responses import FileResponse, StreamingResponse, JSONResponse, RedirectResponse
 
-from .runtime import ConflictError, NotFoundError, ROOT, RunStore
+from .runtime import ConflictError, NotFoundError, ROOT, RunStore, now
 from .workbench import BenchmarkExecutor, TaskProposal, network_details, propose_task, run_results
-from waterguard_contracts.core import FIXTURES, load, task_ref
+from waterguard_contracts.core import FIXTURES, digest, load, task_ref
 
 
 class RunRequest(BaseModel):
     mode: Literal["live", "fixture", "benchmark", "replay"] = "live"
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
     source_run_id: str | None = None
+    acceptance_scenario: Literal["repair_demo"] | None = None
+
+
+class ClarificationAnswer(BaseModel):
+    answer: str = Field(min_length=1, max_length=4000)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class ClarificationRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
 
 
 class ModelConfigRequest(BaseModel):
@@ -32,6 +42,10 @@ class ModelConfigRequest(BaseModel):
     apiKey: str | None = Field(default=None, max_length=65536)
     model: str | None = Field(default=None, max_length=256)
     accountId: str | None = Field(default=None, pattern=r'^[a-z0-9][a-z0-9-]{0,47}$', max_length=48)
+
+
+class PerturbationRequest(BaseModel):
+    demand_multiplier: float = Field(ge=0.01, le=10, allow_inf_nan=False)
 
 
 def app_store(artifacts: Path | None = None, database: Path | None = None) -> RunStore:
@@ -209,6 +223,63 @@ def create_app(store: RunStore | None = None) -> FastAPI:
         except Exception as error:
             fail(error)
 
+    @app.post("/api/tasks/{task_id}/candidate-runs/{candidate_id}", status_code=201)
+    def candidate_run_by_id(task_id: str, candidate_id: str,
+                            x_wg_agh_session: str | None = Header(default=None)):
+        """Submit a server-generated candidate without trusting model JSON reserialization."""
+        try:
+            from .workbench import benchmark_plans
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", candidate_id):
+                raise ValueError("Invalid candidate identifier")
+            parent = store.live_parent(x_wg_agh_session, task_id)
+            task = store.get_task(task_id, parent['task_ref']['revision'] if parent else None)
+            # A deterministic competition acceptance case: the AGH model sees a
+            # structured refusal, but no candidate run or simulation is created.
+            # Normal user/model candidate IDs still take the strict finite-domain
+            # rejection path below.
+            if candidate_id == 'repair-demo-invalid' and parent and parent.get('acceptance_scenario') == 'repair_demo':
+                rejection = {
+                    'accepted': False, 'code': 'INVALID_ACTION',
+                    'message': 'Candidate is outside the frozen server-generated action domain.',
+                    'candidate_id': candidate_id, 'run_id': parent['run_id'],
+                }
+                ref = store._write_json(f"{parent['run_id']}/repair-demo-invalid-action.json", rejection)
+                store.log(parent['run_id'], '受控非法候选已被网关拒绝；未创建仿真作业', level='ERROR', origin='gateway',
+                          tool_name='wg_submit_plan', event_type='candidate.rejected')
+                return rejection
+            plan = next((item for item in benchmark_plans(task, network_details(task["network_ref"]["network_id"])["catalog"])
+                         if item["candidate_id"] == candidate_id), None)
+            if plan is None:
+                raise ValueError("Candidate is not in the server-generated finite domain")
+            run = store.create_run(task, "benchmark")
+            if parent:
+                store.link_live_child(parent['run_id'], run['run_id'])
+            store._write_json(f"{run['run_id']}/submitted-plan.json", plan)
+            store._write_json(f"{run['run_id']}/task.json", task)
+            ref = store._write_json(f"{run['run_id']}/candidates/{candidate_id}/plan.json", plan)
+            store.emit(run, "gateway", "candidate.submitted", ref, candidate_id=candidate_id)
+            return run
+        except Exception as error:
+            fail(error)
+
+    @app.post('/api/tasks/{task_id}/clarifications', status_code=202)
+    def request_clarification(task_id: str, request: ClarificationRequest,
+                              x_wg_agh_session: str | None = Header(default=None)):
+        """Persist an AGH question and stop the current turn pending user input."""
+        try:
+            parent = store.live_parent(x_wg_agh_session, task_id)
+            if parent is None:
+                raise ConflictError('Clarification requires the active AGH parent session')
+            if parent['status'] != 'RUNNING':
+                raise ConflictError('Run is not accepting a clarification request')
+            record = {'question': request.question, 'asked_at': now()}
+            ref = store._write_json(f"{parent['run_id']}/clarification.json", record)
+            updated = store.transition(parent['run_id'], 'NEEDS_INPUT', 'MODELING')
+            store.emit(updated, 'agh', 'clarification.requested', ref)
+            return {'run': updated, 'clarification': record}
+        except Exception as error:
+            fail(error)
+
     @app.post("/api/runs/{run_id}/simulate", status_code=202)
     def simulate_submitted(run_id: str):
         try:
@@ -221,6 +292,41 @@ def create_app(store: RunStore | None = None) -> FastAPI:
                 store.reserve_live_child(run_id)
             executor.dispatch(run)
             return store.get_run(run_id)
+        except Exception as error:
+            fail(error)
+
+    @app.post("/api/runs/{run_id}/perturbations", status_code=201)
+    def create_perturbation_run(run_id: str, request: PerturbationRequest,
+                                x_wg_agh_session: str | None = Header(default=None)):
+        """Freeze one bounded stress case as a new AGH-owned child calculation."""
+        try:
+            source = store.get_run(run_id)
+            task = store.get_task(source["task_ref"]["task_id"], source["task_ref"]["revision"])
+            parent = store.live_parent(x_wg_agh_session, task["task_id"])
+            if parent is None or store.live_parent_for_child(run_id) != parent:
+                raise ConflictError("Stress review requires the active AGH parent session")
+            if source["status"] != "COMPLETED":
+                raise ConflictError("Stress review requires a completed submitted candidate")
+            plan_path = store._run_directory(run_id) / "submitted-plan.json"
+            if not plan_path.is_file():
+                raise ConflictError("Run has no explicitly submitted candidate")
+            plan = store._read_json(plan_path)
+            parameters = {"demand_multiplier": request.demand_multiplier}
+            if parameters["demand_multiplier"] not in task["perturbation_domain"]["demand_multipliers"]:
+                raise ValueError("Demand multiplier is outside the frozen perturbation domain")
+            perturbation = {
+                "perturbation_id": "pert-" + digest({"task_ref": plan["task_ref"], "candidate_id": plan["candidate_id"], "parameters": parameters})[7:23],
+                "candidate_id": plan["candidate_id"], "parameters": parameters,
+                "required_labels": task["perturbation_domain"]["required"],
+            }
+            from services.hydraulics.compiler import validate_perturbation
+            validate_perturbation(task, plan, perturbation)
+            stress = store.create_run(task, "benchmark")
+            store.link_live_child(parent["run_id"], stress["run_id"])
+            store._write_json(f"{stress['run_id']}/task.json", task)
+            store._write_json(f"{stress['run_id']}/submitted-plan.json", plan)
+            store._write_json(f"{stress['run_id']}/perturbation.json", perturbation)
+            return {"run": stress, "perturbation": perturbation}
         except Exception as error:
             fail(error)
 
@@ -238,7 +344,9 @@ def create_app(store: RunStore | None = None) -> FastAPI:
                 reports = []
                 for plan in store.list_candidates(run_id):
                     root = store._run_directory(run_id) / "candidates" / plan["candidate_id"]
-                    report = verify(task, plan, store._read_json(root / "result.json"), details["catalog"], details["scene"])
+                    perturbation_path = store._run_directory(run_id) / "perturbation.json"
+                    perturbation = store._read_json(perturbation_path) if perturbation_path.is_file() else None
+                    report = verify(task, plan, store._read_json(root / "result.json"), details["catalog"], details["scene"], perturbation)
                     ref = store._write_json(f"{run_id}/candidates/{plan['candidate_id']}/verification.json", report)
                     store.emit(run, "verifier", "verification.completed", ref, candidate_id=plan["candidate_id"], simulation_id=report["simulation_id"])
                     reports.append(report)
@@ -284,7 +392,8 @@ def create_app(store: RunStore | None = None) -> FastAPI:
                     raise HTTPException(422, {'code': 'MODEL_NOT_ALLOWED', 'message': '请选择 Agnes、DeepSeek 或 GLM 账号。'})
                 if request.source_run_id:
                     raise ValueError('source_run_id is only valid in replay mode')
-                run = store.create_run(task, 'live', request.idempotency_key)
+                run = store.create_run(task, 'live', request.idempotency_key,
+                                       acceptance_scenario=request.acceptance_scenario)
                 live.dispatch(run, model)
                 return run
             if request.mode == "benchmark" and task["schema_version"] != "0.4.0":
@@ -368,6 +477,17 @@ def create_app(store: RunStore | None = None) -> FastAPI:
         except Exception as error:
             fail(error)
 
+    @app.get('/api/runs/{run_id}/recommendation')
+    def recommendation(run_id: str):
+        try:
+            store.get_run(run_id)
+            path = store._run_directory(run_id) / 'recommendation-summary.json'
+            if not path.is_file():
+                raise NotFoundError('Run has no derived recommendation yet')
+            return store._read_json(path)
+        except Exception as error:
+            fail(error)
+
     @app.get("/api/runs/{run_id}/error")
     def run_error(run_id: str):
         try:
@@ -406,7 +526,7 @@ def create_app(store: RunStore | None = None) -> FastAPI:
         try:
             from services.evidence.service import export_evidence
             run = store.get_run(run_id)
-            if run["status"] not in {"COMPLETED", "ERROR", "CANCELLED", "BUDGET_EXHAUSTED"}:
+            if run["status"] not in {"COMPLETED", "ERROR", "CANCELLED", "BUDGET_EXHAUSTED", "SUPERSEDED"}:
                 raise ConflictError("Evidence download requires a terminal run")
             with executor.evidence_lock:
                 store.get_evidence(run_id)
@@ -416,12 +536,48 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             fail(error)
 
     @app.post("/api/runs/{run_id}/answers")
-    def answer(run_id: str, _answer: dict[str, Any]):
+    def answer(run_id: str, request: ClarificationAnswer):
         try:
             run = store.get_run(run_id)
-            if run["status"] != "NEEDS_INPUT":
+            retrying = run['status'] == 'SUPERSEDED' and run.get('successor_run_id') and request.idempotency_key
+            if run["status"] != "NEEDS_INPUT" and not retrying:
                 raise ConflictError("Run is not awaiting a clarification answer")
-            raise HTTPException(503, {"code": "AGH_UNAVAILABLE", "message": "AGH resume adapter is not configured."})
+            from .agh import bridge
+            try:
+                status = bridge({'action': 'status'})
+                model = status['snapshot'].get('provider')
+            except Exception:
+                raise HTTPException(503, {'code': 'AGH_UNAVAILABLE', 'message': 'AGH daemon is unavailable'})
+            if not model or not model.get('credentialConfigured'):
+                raise HTTPException(503, {'code': 'MODEL_NOT_CONFIGURED', 'message': 'AGH model credential is not configured'})
+            successor = store.create_successor(run_id, reason='clarification_answer', answer=request.answer,
+                                               idempotency_key=request.idempotency_key)
+            if not retrying:
+                live.dispatch(successor, model)
+            return successor
+        except HTTPException:
+            raise
+        except Exception as error:
+            fail(error)
+
+    @app.post('/api/runs/{run_id}/recover', status_code=202)
+    def recover_run(run_id: str, idempotency_key: str | None = Header(default=None)):
+        try:
+            run = store.get_run(run_id)
+            if run['status'] != 'ERROR':
+                raise ConflictError('Only an interrupted ERROR live run can be recovered')
+            error_path = store._run_directory(run_id) / 'error.json'
+            error = store._read_json(error_path) if error_path.is_file() else {}
+            if error.get('code') != 'SERVER_RESTARTED':
+                raise ConflictError('Only SERVER_RESTARTED runs can be recovered')
+            from .agh import bridge
+            status = bridge({'action': 'status'})
+            model = status['snapshot'].get('provider')
+            if not model or not model.get('credentialConfigured'):
+                raise HTTPException(503, {'code': 'MODEL_NOT_CONFIGURED', 'message': 'AGH model credential is not configured'})
+            successor = store.create_successor(run_id, reason='server_restart', idempotency_key=idempotency_key)
+            live.dispatch(successor, model)
+            return successor
         except HTTPException:
             raise
         except Exception as error:
@@ -433,7 +589,7 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run["status"] == "CANCELLED":
                 return run
-            if run["status"] in {"COMPLETED", "BUDGET_EXHAUSTED", "ERROR"}:
+            if run["status"] in {"COMPLETED", "BUDGET_EXHAUSTED", "ERROR", "SUPERSEDED"}:
                 raise ConflictError("Terminal run cannot be cancelled")
             return live.cancel(run_id) if run['mode'] == 'live' else executor.cancel(run_id)
         except Exception as error:
@@ -476,7 +632,7 @@ def create_app(store: RunStore | None = None) -> FastAPI:
                     idle = 0
                     continue
                 current = await asyncio.to_thread(store.get_run, run_id)
-                if not follow or (current['status'] in {'COMPLETED', 'ERROR', 'CANCELLED', 'BUDGET_EXHAUSTED'}
+                if not follow or (current['status'] in {'COMPLETED', 'ERROR', 'CANCELLED', 'BUDGET_EXHAUSTED', 'SUPERSEDED'}
                                   and await asyncio.to_thread(store.stream_finished, run_id, cursor)):
                     yield f"event: stream.complete\ndata: {json.dumps(current, ensure_ascii=False)}\n\n"
                     return

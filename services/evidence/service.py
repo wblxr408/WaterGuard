@@ -78,9 +78,16 @@ def build_evidence(artifacts_root: Path, run: dict) -> dict:
     native_ref = "artifact:agh/native" if native.is_dir() and any(item.is_file() and item.stat().st_size > 0 for item in native.rglob("*")) else None
     association = run_dir / "agh" / "association.json"
     association_ref = "artifact:agh/association.json" if _validated_agh_association(association, run) else None
+    # Run records begin with conservative placeholders.  Resolve provenance
+    # placeholders from the files that have actually been persisted instead of
+    # carrying a stale "missing" claim into a later evidence export.
     missing = list(run.get("missing_items", []))
-    if native_ref and association_ref:
-        missing = [item for item in missing if item not in {'native_agh_trace', 'agh_host_not_configured', 'agh_event_association'}]
+    if native_ref is not None:
+        missing = [item for item in missing if item != "native_agh_trace"]
+    if association_ref is not None:
+        missing = [item for item in missing if item != "agh_event_association"]
+    if run.get("agh_session_ref") and run.get("model_config_ref"):
+        missing = [item for item in missing if item != "agh_host_not_configured"]
     if native_ref is None:
         if "native_agh_trace" not in missing:
             missing.append("native_agh_trace")

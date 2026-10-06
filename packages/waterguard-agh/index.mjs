@@ -7,7 +7,7 @@ const object = (properties) => ({ [Kind]: 'Object', type: 'object', properties,
   required: Object.keys(properties), additionalProperties: false })
 
 const base = () => {
-  const url = new URL(process.env.WG_API_URL || 'http://127.0.0.1:8000')
+  const url = new URL(process.env.WG_API_URL || 'http://127.0.0.1:8010')
   if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) throw new Error('WaterGuard API must be loopback')
   return url.origin
 }
@@ -35,6 +35,9 @@ export const waterguardTools = {
         requiresApproval: 'never', deferLoading: false },
       async execute(parameters, toolContext) { return context.run(toolContext || {}, async () => answer(await execute(parameters))) },
     })
+    register('wg_propose_task', 'Freeze a bounded public-network task from user-approved parameters. It cannot create field-control authority.',
+      { network_id: string(), fault_kind: string(), candidate_limit: { [Kind]: 'Number', type: 'number', minimum: 1, maximum: 6 } },
+      ({ network_id, fault_kind, candidate_limit }) => api('/api/tasks/from-proposal', 'POST', { network_id, fault_kind, candidate_limit }), false)
     register('wg_inspect_network', 'Read the approved network topology, catalog and physical source. No field control.',
       { network_id: string() }, ({ network_id }) => api(`/api/networks/${segment(network_id)}`))
     register('wg_get_task', 'Read a user-frozen TaskSpec. You cannot lower its thresholds or overwrite its revision.',
@@ -43,8 +46,10 @@ export const waterguardTools = {
       { task_id: string() }, ({ task_id }) => api(`/api/tasks/${segment(task_id)}/candidate-plans`))
     register('wg_jev_decide', 'Ask TypeSafe Jev for next-candidate routing probabilities and hydraulic risk from frozen server state. Call before selecting a candidate and after independent verification. If configured=false, continue Agnes planning.',
       { task_id: string() }, ({ task_id }) => api(`/api/tasks/${segment(task_id)}/jev-decision`, 'POST', {}), false)
-    register('wg_submit_plan', 'Preflight one ActionPlan JSON against the server-frozen task; creates a queued calculation record without dispatch.',
-      { task_id: string(), plan_json: string(32768) }, ({ task_id, plan_json }) => api(`/api/tasks/${segment(task_id)}/candidate-runs`, 'POST', JSON.parse(plan_json)), false)
+    register('wg_request_clarification', 'Ask one concrete user question when the frozen task is materially ambiguous. The current AGH turn is stopped; a new linked session starts only after the user answers.',
+      { task_id: string(), question: string(4000) }, ({ task_id, question }) => api(`/api/tasks/${segment(task_id)}/clarifications`, 'POST', { question }), false)
+    register('wg_submit_plan', 'Submit exactly one candidate_id returned by wg_generate_candidates. The server retrieves the frozen ActionPlan and creates a queued calculation record.',
+      { task_id: string(), candidate_id: string() }, ({ task_id, candidate_id }) => api(`/api/tasks/${segment(task_id)}/candidate-runs/${segment(candidate_id)}`, 'POST'), false)
     register('wg_simulate_candidate', 'Dispatch only the submitted candidate. Returns actual hydraulic output; independent verification is a separate tool.',
       { run_id: string() }, async ({ run_id }) => {
         await api(`/api/runs/${segment(run_id)}/simulate`, 'POST')
@@ -60,6 +65,17 @@ export const waterguardTools = {
       }, false)
     register('wg_verify_candidate', 'Independently recompute metrics and violations from the stored actual simulation. No model-authored pass flags.',
       { run_id: string() }, ({ run_id }) => api(`/api/runs/${segment(run_id)}/verify`, 'POST'), false)
+    register('wg_create_perturbation', 'Create one bounded demand stress review for a completed submitted candidate. It creates a new queued run; call simulate and verify on that returned run.',
+      { run_id: string(), demand_multiplier: { [Kind]: 'Number', type: 'number', minimum: 0.01, maximum: 10 } },
+      ({ run_id, demand_multiplier }) => api(`/api/runs/${segment(run_id)}/perturbations`, 'POST', { demand_multiplier }), false)
+    register('wg_get_simulation', 'Read the persisted result and verification artifacts for one submitted candidate run.',
+      { run_id: string() }, async ({ run_id }) => ({ run: await api(`/api/runs/${segment(run_id)}`), results: await api(`/api/runs/${segment(run_id)}/results`) }))
+    register('wg_compare_candidates', 'Read comparable independently verified result records for submitted candidate runs. It never accepts model-supplied metrics or promotes an ineligible candidate.',
+      { run_ids_json: string(8192) }, async ({ run_ids_json }) => {
+        const runIds = JSON.parse(run_ids_json)
+        if (!Array.isArray(runIds) || !runIds.length || !runIds.every(id => typeof id === 'string')) throw new Error('run_ids_json must be a non-empty JSON string array')
+        return { candidates: await Promise.all(runIds.map(async run_id => ({ run_id, results: await api(`/api/runs/${segment(run_id)}/results`) }))) }
+      })
     register('wg_build_evidence', 'Read the hash inventory, native provenance gaps, and download URL. Does not certify missing AGH traces.',
       { run_id: string() }, async ({ run_id }) => ({ manifest: await api(`/api/runs/${segment(run_id)}/evidence`),
         download_url: `${base()}/api/runs/${segment(run_id)}/evidence/download` }))

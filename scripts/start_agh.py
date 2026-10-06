@@ -42,7 +42,8 @@ if __name__ == "__main__":
     if not entry.is_file():
         raise SystemExit("Build vendor/agnes-harness first; see docs/AGH基座与启动.md")
     node = node_runtime()
-    env = {**os.environ, "AGH_HOME": str(ROOT / ".cache/agh-waterguard"), "AGNES_PROFILE": "local-dev",
+    agh_home = Path(os.environ.get("WG_AGH_HOME", ROOT / ".cache/agh-waterguard")).resolve()
+    env = {**os.environ, "AGH_HOME": str(agh_home), "AGNES_PROFILE": "local-dev",
            "WG_API_URL": f"http://127.0.0.1:{args.api_port}"}
     api = None
     try:

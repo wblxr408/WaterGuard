@@ -5,6 +5,7 @@ import threading
 import time
 import uuid
 import copy
+import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
@@ -165,6 +166,26 @@ class BenchmarkExecutor:
             self.store._write_json(f"{run_id}/run.json", run)
             build_evidence(self.store.artifacts, run)
 
+    @staticmethod
+    def _controlled_test_delay(cancel: threading.Event) -> None:
+        """Test-only delay used to verify Live cancellation propagation.
+
+        It is disabled unless both environment switches are present, so a
+        production/user run cannot request artificial delay through the API.
+        """
+        if os.environ.get('WG_TEST_MODE') != '1':
+            return
+        try:
+            seconds = float(os.environ.get('WG_TEST_SIMULATION_DELAY_S', '0'))
+        except ValueError as error:
+            raise ValueError('WG_TEST_SIMULATION_DELAY_S must be numeric') from error
+        if not 0 <= seconds <= 30:
+            raise ValueError('WG_TEST_SIMULATION_DELAY_S must be within 0..30')
+        until = time.monotonic() + seconds
+        while time.monotonic() < until:
+            if cancel.wait(min(.05, until - time.monotonic())):
+                return
+
     def execute(self, run_id: str, cancel: threading.Event) -> None:
         started = time.monotonic()
         try:
@@ -200,6 +221,8 @@ class BenchmarkExecutor:
                             raise ValueError("Replay engine changed; create a new benchmark")
             root = self.store._run_directory(run_id)
             submitted = root / "submitted-plan.json"
+            perturbation_file = root / "perturbation.json"
+            perturbation = load(perturbation_file) if perturbation_file.is_file() else None
             if submitted.is_file():
                 plans = [load(submitted)]
             adapter = PhysicalAdapter(root / "simulations")
@@ -232,7 +255,10 @@ class BenchmarkExecutor:
                         for filename, value in (("series.json", result["series"]), ("diagnostics.json", result["diagnostics"]), ("result.json", result)):
                             self.store._write_json(f"{run_id}/simulations/{sid}/{filename}", value)
                     else:
-                        result = adapter.simulate(task, plan, timeout_s=remaining, cancel_event=cancel)
+                        self._controlled_test_delay(cancel)
+                        if cancel.is_set():
+                            return
+                        result = adapter.simulate(task, plan, perturbation=perturbation, timeout_s=remaining, cancel_event=cancel)
                 finally:
                     self.store.settle_simulation(reservation["reservation_id"])
                 sid = result["artifact"]["simulation_id"]
@@ -255,7 +281,7 @@ class BenchmarkExecutor:
                     if cancel.is_set():
                         return
                     self.store.transition(run_id, "RUNNING", "VERIFYING")
-                report = verify(task, plan, result, catalog, scene)
+                report = verify(task, plan, result, catalog, scene, perturbation)
                 ref = self.store._write_json(f"{run_id}/candidates/{cid}/verification.json", report)
                 self.store.emit(run, "verifier", "verification.completed", ref, candidate_id=cid, simulation_id=sid)
                 if source_root is not None:
