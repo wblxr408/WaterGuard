@@ -60,10 +60,10 @@ def validate_boundaries(wn,raw,engine,times):
             require(math.isclose(float(raw.node['head'].at[t,name]),float(node.head_timeseries.at(t)),abs_tol=1e-4,rel_tol=1e-7),'Raw source head boundary mismatch: '+name)
 
 
-def validate_raw(folder,task,plan,series):
+def validate_raw(folder,task,plan,series,perturbation=None):
     from .compiler import compile_task
     from .physical import assess,engineering_summary
-    wn,source,_,_,mapping=compile_task(task,plan)
+    wn,source,_,_,mapping=compile_task(task,plan,perturbation)
     from .datasets import SOURCES
     require(load(folder/'network-manifest.json')==source and file_hash(folder/'LICENSE-WNTR.md')==SOURCES['LICENSE.md'][1],'Frozen source/license manifest mismatch')
     detailed=task['schema_version']=='0.4.0';engine=task['hydraulic_options']['engine']
@@ -144,7 +144,7 @@ def validate_output(folder,*,expected_request=None,expected_manifest=None,expect
     require(all(p.is_file() and not p.is_symlink() for p in folder.iterdir()),'Unsafe worker artifact')
     request=load(folder/'request.json')
     if expected_request is not None:require(request==expected_request,'Worker modified supervisor request')
-    task,plan=request['task'],request['plan']
+    task,plan,perturbation=request['task'],request['plan'],request.get('perturbation')
     validate('TaskSpec',task);validate('ActionPlan',plan)
     require(task_hash(task)==task['constraint_hash'] and plan_hash(plan)==plan['plan_hash'] and plan['task_ref']==task_ref(task),'Frozen input hash/binding mismatch')
     result=load(folder/'result.json')
@@ -154,7 +154,7 @@ def validate_output(folder,*,expected_request=None,expected_manifest=None,expect
     require(artifact['simulation_id']==folder.name==diag['simulation_id'],'Worker simulation binding mismatch')
     require(artifact['task_ref']==task_ref(task) and artifact['candidate_id']==plan['candidate_id'],'Worker task/plan binding mismatch')
     require(artifact['engine_version']==request['engine_version'],'Worker engine binding mismatch')
-    require(artifact['input_hash']==input_hash(task,plan,request['engine_version']),'Worker input hash mismatch')
+    require(artifact['input_hash']==input_hash(task,plan,request['engine_version'],perturbation),'Worker input hash mismatch')
     require(artifact['time_axis']==task['time_window'],'Worker time axis mismatch')
     require(task==load(folder/'task.json') and plan==load(folder/'plan.json'),'Worker frozen input mismatch')
     manifest=load(folder/'input-manifest.json');environment=load(folder/'environment.json')
@@ -162,12 +162,12 @@ def validate_output(folder,*,expected_request=None,expected_manifest=None,expect
     if expected_environment is not None:require(environment==expected_environment,'Worker modified environment')
     require(manifest['input_hash']==artifact['input_hash'] and manifest['engine_version']==request['engine_version'],'Worker input manifest mismatch')
     require(request['engine_version'].endswith(';runtime/'+digest(environment)[7:]),'Frozen runtime identity mismatch')
-    require(artifact['perturbation_id'] is None,'Unexpected perturbation binding')
+    require(artifact['perturbation_id']==(None if perturbation is None else perturbation['perturbation_id']),'Unexpected perturbation binding')
     for key,name in [('source_sha256','source.inp'),('overlay_sha256','runtime-overlay.json'),('task_sha256','task.json'),('plan_sha256','plan.json'),('environment_sha256','environment.json')]:
         if key=='environment_sha256' and key not in manifest:continue  # Historical 0.4 evidence.
         require(manifest[key]==file_hash(folder/name),'Frozen file hash mismatch: '+name)
     require(manifest['source_sha256']==task['network_ref']['sha256'] and manifest['overlay_sha256']==task['network_ref']['overlay_hash'],'Source/overlay identity mismatch')
-    require(manifest['failure_model']==task['fault'] and manifest['hydraulic_options']==task['hydraulic_options'] and manifest['control_policy']==task['control_policy'],'Input manifest options mismatch')
+    require(manifest['failure_model']==task['fault'] and manifest['hydraulic_options']==task['hydraulic_options'] and manifest['control_policy']==task['control_policy'] and manifest.get('perturbation')==perturbation,'Input manifest options mismatch')
     for key,ref in [('diagnostics_ref','diagnostics.json'),('entity_map_ref','entity-map.json'),('physical_checks_ref','physical-checks.json'),('input_manifest_ref','input-manifest.json')]:
         require(artifact[key]==ref,'Worker artifact reference mismatch')
     require(result['mode']==artifact['mode']==diag['mode']=='benchmark','Worker mode mismatch')
@@ -192,7 +192,7 @@ def validate_output(folder,*,expected_request=None,expected_manifest=None,expect
             analysis=load(folder/'hydraulic-analysis.json')
             require(analysis['mode']=='benchmark' and analysis['internal_samples']>=len(series['frames']), 'Missing dense hydraulic analysis')
             require(analysis['physical_parameters']==task['physical_parameters'],'Physical analysis parameter mismatch')
-        validate_raw(folder,task,plan,series)
+        validate_raw(folder,task,plan,series,perturbation)
     else:
         require(series is None and artifact['series_ref'] is None and bool(diag['errors']) and diag['error_code'] is not None,'Invalid worker failure result')
         if artifact['status']=='CANCELLED':require(diag['error_code'] in ('CANCELLED','SUPERVISOR_INTERRUPTED'),'Invalid cancellation code')

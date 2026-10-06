@@ -156,6 +156,23 @@ def _preflight_action_plan(task: dict, plan: dict, catalog: dict) -> dict:
     }
 
 
+def _parse_perturbation(task: dict, plan: dict, perturbation_json: str | None) -> dict | None:
+    if perturbation_json is None:
+        return None
+    perturbation = json.loads(perturbation_json)
+    if not isinstance(perturbation, dict) or set(perturbation) != {"perturbation_id", "candidate_id", "parameters", "required_labels"}:
+        raise ValueError("Perturbation must be a complete server-defined record")
+    if perturbation["candidate_id"] != plan["candidate_id"] or perturbation["required_labels"] != task["perturbation_domain"]["required"]:
+        raise ValueError("Perturbation does not bind to this frozen task and candidate")
+    parameters = perturbation["parameters"]
+    if not isinstance(parameters, dict) or set(parameters) != {"demand_multiplier"} or parameters["demand_multiplier"] not in task["perturbation_domain"]["demand_multipliers"]:
+        raise ValueError("Perturbation parameters are outside the frozen domain")
+    expected_id = "pert-" + digest({"task_ref": plan["task_ref"], "candidate_id": plan["candidate_id"], "parameters": parameters})[7:23]
+    if perturbation["perturbation_id"] != expected_id:
+        raise ValueError("Perturbation identifier is not server-derived")
+    return perturbation
+
+
 def _response(status: str, code: str, summary: str, *, retryable: bool = False, **extra) -> dict:
     return {"status": status, "code": code, "data_ref": None, "summary": summary,
             "violations": [], "retryable": retryable, "remaining_budget": None,
@@ -254,7 +271,8 @@ def wg_submit_plan(plan_json: str, run_id: str | None = None, task_json: str | N
 
 
 @mcp.tool()
-def wg_simulate_candidate(plan_json: str, mode: str = "benchmark", run_id: str | None = None, task_json: str | None = None) -> dict:
+def wg_simulate_candidate(plan_json: str, mode: str = "benchmark", run_id: str | None = None, task_json: str | None = None,
+                          perturbation_json: str | None = None) -> dict:
     """Dispatch an isolated hydraulic calculation and return a job handle."""
     try:
         # Compatibility for the former positional (task_json, plan_json, mode) helper.
@@ -264,6 +282,9 @@ def wg_simulate_candidate(plan_json: str, mode: str = "benchmark", run_id: str |
         _unused, plan = _objects("{}", plan_json)
         _, catalog = _catalog_for(task["network_ref"]["network_id"], task["schema_version"])
         _preflight_action_plan(task, plan, catalog)
+        perturbation = _parse_perturbation(task, plan, perturbation_json)
+        if perturbation is not None and mode != "benchmark":
+            raise ValueError("Perturbations require the physical benchmark adapter")
         reservation = None
         if store is not None and run is not None:
             reservation = store.reserve_simulation(run["run_id"], "gateway:" + plan["plan_hash"])
@@ -273,11 +294,11 @@ def wg_simulate_candidate(plan_json: str, mode: str = "benchmark", run_id: str |
         persisted_job_id = "job-" + uuid.uuid4().hex if store is not None and run is not None else None
         if persisted_job_id is not None:
             store.create_simulation_job(run["run_id"], persisted_job_id, plan["candidate_id"], reservation["reservation_id"] if reservation else None)
-        accepted = JOBS.submit(task, plan, mode, job_id=persisted_job_id)
+        accepted = JOBS.submit(task, plan, mode, job_id=persisted_job_id, perturbation=perturbation)
         if accepted["status"] == "accepted":
             JOB_CONTEXT[accepted["job_id"]] = {"task": task, "plan": plan, "store": store,
                                                 "run_id": run["run_id"] if run is not None else None,
-                                                "reservation": reservation, "report": None}
+                                                "reservation": reservation, "perturbation": perturbation, "report": None}
             if store is not None:
                 store.update_simulation_job(accepted["job_id"], "RUNNING")
             return _response("accepted", accepted["code"], "Isolated simulation job submitted.", job_id=accepted["job_id"])
@@ -369,7 +390,7 @@ def wg_verify_candidate(job_id: str, run_id: str | None = None) -> dict:
             else:
                 from services.hydraulics.adapter import network_assets
                 _, _, scene, catalog = network_assets(task["network_ref"]["network_id"])
-        report = verify(task, plan, state["result"], catalog, scene)
+        report = verify(task, plan, state["result"], catalog, scene, context.get("perturbation"))
         context["report"] = report
         return _response("ok", "VERIFICATION_COMPLETED", "Independent verification completed.", report=report)
     except Exception as exc:

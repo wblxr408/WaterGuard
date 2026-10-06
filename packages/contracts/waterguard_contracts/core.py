@@ -84,8 +84,11 @@ def task_ref(task):
                 network_hash=task['network_ref']['sha256'], constraint_hash=task['constraint_hash'])
 
 
-def input_hash(task, plan, engine_version):
-    return digest(dict(task=task, plan=plan, engine_version=engine_version, perturbation_id=None))
+def input_hash(task, plan, engine_version, perturbation=None):
+    """Bind every physical input, including the bounded stress parameters."""
+    # Preserve the established nominal hash encoding for existing immutable
+    # fixtures; a non-null record carries the full bounded parameters.
+    return digest(dict(task=task, plan=plan, engine_version=engine_version, perturbation_id=perturbation))
 
 
 def resolve(root: Path, reference: str) -> Path:
@@ -147,17 +150,17 @@ def check_plan(task, plan, catalog):
         previous[link] = time
 
 
-def verify_fixture(task, plan, result, catalog, scene):
+def verify_fixture(task, plan, result, catalog, scene, perturbation=None):
     """Recompute sample metrics. Does not establish physical truth or live eligibility."""
-    return _verify_result(task, plan, result, catalog, scene, 'fixture', VERIFIER)
+    return _verify_result(task, plan, result, catalog, scene, 'fixture', VERIFIER, perturbation)
 
 
-def verify_benchmark(task, plan, result, catalog, scene):
+def verify_benchmark(task, plan, result, catalog, scene, perturbation=None):
     """Recompute real engine results; no AGH or recommendation attestation."""
-    return _verify_result(task, plan, result, catalog, scene, 'benchmark', 'hydraulic-reference/0.2.0')
+    return _verify_result(task, plan, result, catalog, scene, 'benchmark', 'hydraulic-reference/0.2.0', perturbation)
 
 
-def _verify_result(task, plan, result, catalog, scene, mode, verifier_version):
+def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, perturbation=None):
     check_task(task, catalog, scene)
     check_plan(task, plan, catalog)
     validate('SimulationResult', result)
@@ -165,8 +168,9 @@ def _verify_result(task, plan, result, catalog, scene, mode, verifier_version):
     require(result['mode'] == artifact['mode'] == diag['mode'] == mode, f'{mode} verifier rejects non-{mode} input')
     require(artifact['candidate_id'] == plan['candidate_id'] and artifact['task_ref'] == task_ref(task), 'Simulation binding mismatch')
     require(artifact['time_axis'] == task['time_window'], 'Time axis mismatch')
-    require(artifact['perturbation_id'] is None, 'Nominal reference verifier cannot attest stress tests')
-    require(artifact['input_hash'] == input_hash(task, plan, artifact['engine_version']), 'Simulation input hash mismatch')
+    expected_perturbation_id = None if perturbation is None else perturbation['perturbation_id']
+    require(artifact['perturbation_id'] == expected_perturbation_id, 'Simulation perturbation binding mismatch')
+    require(artifact['input_hash'] == input_hash(task, plan, artifact['engine_version'], perturbation), 'Simulation input hash mismatch')
     require(diag['simulation_id'] == artifact['simulation_id'], 'Diagnostic binding mismatch')
     reasons = []
     if artifact['status'] != 'SUCCEEDED' or diag['errors'] or diag['converged'] is False:
@@ -223,14 +227,14 @@ def _verify_result(task, plan, result, catalog, scene, mode, verifier_version):
                     critical_pass += dt if pressure_ok and ratio_ok else 0
     facilities = {f['link_id']: f for f in catalog['facilities']}
     report = dict(
-        schema_version=task['schema_version'], verification_id='verify-' + plan['candidate_id'], simulation_id=artifact['simulation_id'],
+        schema_version=task['schema_version'], verification_id='verify-' + plan['candidate_id'] + ('' if perturbation is None else '-' + perturbation['perturbation_id']), simulation_id=artifact['simulation_id'],
         candidate_id=plan['candidate_id'], task_ref=task_ref(task), mode=mode,
         validity='invalid' if reasons else 'valid', invalid_reasons=sorted(set(reasons)), violations=violations,
         metrics=dict(shortage_m3=round(shortage, 9), supply_ratio=None if expected == 0 else supplied / expected,
                      min_pressure_m=minimum, critical_node_time_pass_ratio=None if critical_total == 0 else critical_pass / critical_total,
                      action_cost=sum(facilities[a['link_id']]['action_cost'] for a in plan['actions'])),
         coverage=dict(start_s=w['evaluation_start_s'], end_s=w['end_s'], assessed_node_ids=users,
-                      required_stress_tests=task['perturbation_domain']['required'], completed_stress_tests=[]),
+                      required_stress_tests=task['perturbation_domain']['required'], completed_stress_tests=[] if perturbation is None else perturbation['required_labels']),
         admission=dict(action_valid='pass', simulation_valid='fail' if reasons else 'pass',
                        nominal_constraints_pass='pending' if reasons else ('fail' if violations else 'pass'),
                        required_stress_tests_pass='pending', recommendation_eligible='fail'),

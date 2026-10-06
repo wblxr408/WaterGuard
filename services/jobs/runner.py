@@ -15,7 +15,7 @@ if str(CONTRACTS) not in sys.path:
     sys.path.insert(0, str(CONTRACTS))
 
 
-def _simulate_worker(queue, task: dict, plan: dict, mode: str, output_root: str) -> None:
+def _simulate_worker(queue, task: dict, plan: dict, mode: str, output_root: str, perturbation: dict | None = None) -> None:
     """Child process boundary: no AGH/model code is imported here."""
     try:
         if mode == "fixture":
@@ -27,7 +27,7 @@ def _simulate_worker(queue, task: dict, plan: dict, mode: str, output_root: str)
             # explicitly versioned 0.2 fixture catalogue.
             if task.get("schema_version") in {"0.3.0", "0.4.0"}:
                 from services.hydraulics.runtime import PhysicalAdapter
-                result = PhysicalAdapter(Path(output_root)).simulate(task, plan)
+                result = PhysicalAdapter(Path(output_root)).simulate(task, plan, perturbation=perturbation)
             else:
                 from services.hydraulics.adapter import EpanetAdapter
                 result = EpanetAdapter(Path(output_root)).simulate(task, plan)
@@ -57,12 +57,12 @@ class SimulationJobManager:
         self.jobs: dict[str, Job] = {}
         self.context = mp.get_context("spawn")
 
-    def submit(self, task: dict, plan: dict, mode: str, *, job_id: str | None = None) -> dict:
+    def submit(self, task: dict, plan: dict, mode: str, *, job_id: str | None = None, perturbation: dict | None = None) -> dict:
         active = sum(job.status in {"QUEUED", "RUNNING"} for job in self.jobs.values())
         if active >= self.max_concurrent:
             return {"status": "rejected", "code": "BUDGET_EXHAUSTED", "summary": "Simulation concurrency slots are exhausted.", "retryable": True}
         queue = self.context.Queue()
-        process = self.context.Process(target=_simulate_worker, args=(queue, task, plan, mode, str(self.output_root)))
+        process = self.context.Process(target=_simulate_worker, args=(queue, task, plan, mode, str(self.output_root), perturbation))
         job_id = job_id or "job-" + uuid.uuid4().hex
         if not isinstance(job_id, str) or not job_id.startswith("job-") or job_id in self.jobs:
             raise ValueError("Invalid or duplicate simulation job identifier")

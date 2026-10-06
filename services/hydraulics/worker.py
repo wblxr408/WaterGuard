@@ -21,7 +21,7 @@ from waterguard_contracts.core import load, require, validate, file_hash
 def compute(folder):
     folder = Path(folder)
     request=load(folder/'request.json')
-    task,plan=request['task'],request['plan']
+    task,plan,perturbation=request['task'],request['plan'],request.get('perturbation')
     captured=[]
     raw_converged=None
     code='INPUT_INVALID'
@@ -32,7 +32,7 @@ def compute(folder):
         require(load(folder/'environment.json')==runtime_environment(),'Worker environment differs from frozen input')
         for key,name in [('source_sha256','source.inp'),('overlay_sha256','runtime-overlay.json'),('task_sha256','task.json'),('plan_sha256','plan.json'),('environment_sha256','environment.json')]:
             require(load(folder/'input-manifest.json')[key]==file_hash(folder/name),'Frozen input drift: '+name)
-        wn,source,scene,catalog,mapping=compile_task(task,plan)
+        wn,source,scene,catalog,mapping=compile_task(task,plan,perturbation)
         detailed=task['schema_version']=='0.4.0'
         engine=task['hydraulic_options']['engine']
         hydraulic_step=task['hydraulic_options']['hydraulic_timestep_s']
