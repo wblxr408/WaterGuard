@@ -218,16 +218,16 @@ class PhysicalAdapter:
 
     def simulate(self, task, plan, *, perturbation=None, timeout_s=None, cancel_event=None):
         # Serialize a snapshot before starting a worker; never keep caller-owned objects.
-        task,plan = json.loads(json.dumps([task,plan],allow_nan=False))
+        task,plan,perturbation = json.loads(json.dumps([task,plan,perturbation],allow_nan=False))
         validate('TaskSpec',task)
         validate('ActionPlan',plan)
         require(task['schema_version']==plan['schema_version'] and task['schema_version'] in ('0.3.0','0.4.0'),'PhysicalAdapter requires matching 0.3/0.4')
         require(task_hash(task)==task['constraint_hash'] and plan_hash(plan)==plan['plan_hash'],'Input hash mismatch')
         require(plan['task_ref']==task_ref(task),'Plan/task binding mismatch')
-        # Compiler performs the complete domain and task/plan binding check;
-        # the immutable request below then carries the exact stress parameters.
-        from .compiler import compile_task
-        compile_task(task, plan, perturbation)
+        # Reject unbounded stress inputs before allocation. Full physical compilation
+        # stays in the isolated worker so its failures retain diagnostics and evidence.
+        from .compiler import validate_perturbation
+        validate_perturbation(task, plan, perturbation)
         source = manifest(task['network_ref']['network_id'])
         maximum = task['budget']['max_wall_time_s']
         require(timeout_s is None or (isinstance(timeout_s,(int,float)) and not isinstance(timeout_s,bool) and math.isfinite(timeout_s) and timeout_s>0),'Timeout must be finite and positive')

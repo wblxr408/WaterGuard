@@ -47,6 +47,17 @@ def assets(network_id):
     return wn, source, scene, catalog
 
 
+def validate_perturbation(task, plan, perturbation):
+    if perturbation is None:
+        return
+    require(isinstance(perturbation, dict) and set(perturbation) == {'perturbation_id', 'candidate_id', 'parameters', 'required_labels'}, 'Invalid perturbation record')
+    require(perturbation['candidate_id'] == plan['candidate_id'], 'Perturbation candidate mismatch')
+    require(isinstance(perturbation['perturbation_id'], str) and perturbation['perturbation_id'], 'Invalid perturbation identifier')
+    require(isinstance(perturbation['parameters'], dict) and set(perturbation['parameters']) == {'demand_multiplier'}, 'Unsupported perturbation parameters')
+    require(perturbation['parameters']['demand_multiplier'] in task['perturbation_domain']['demand_multipliers'], 'Perturbation demand multiplier outside declared domain')
+    require(perturbation['required_labels'] == task['perturbation_domain']['required'], 'Perturbation labels do not match task domain')
+
+
 def compile_task(task, plan, perturbation=None):
     wn, source, scene, catalog = assets(task['network_ref']['network_id'])
     check_task(task, catalog, scene)
@@ -62,13 +73,7 @@ def compile_task(task, plan, perturbation=None):
     require(options['minimum_pressure_m'] < options['required_pressure_m'] and options['required_pressure_m'] >= 0.07, 'Invalid PDD pressure range')
     require(0 < options['pressure_exponent'] <= 1, 'PDD exponent outside supported (0,1]')
     require(options['demand_multiplier'] in task['perturbation_domain']['demand_multipliers'], 'Demand multiplier outside declared domain')
-    if perturbation is not None:
-        require(isinstance(perturbation, dict) and set(perturbation) == {'perturbation_id', 'candidate_id', 'parameters', 'required_labels'}, 'Invalid perturbation record')
-        require(perturbation['candidate_id'] == plan['candidate_id'], 'Perturbation candidate mismatch')
-        require(isinstance(perturbation['perturbation_id'], str) and perturbation['perturbation_id'], 'Invalid perturbation identifier')
-        require(isinstance(perturbation['parameters'], dict) and set(perturbation['parameters']) == {'demand_multiplier'}, 'Unsupported perturbation parameters')
-        require(perturbation['parameters']['demand_multiplier'] in task['perturbation_domain']['demand_multipliers'], 'Perturbation demand multiplier outside declared domain')
-        require(perturbation['required_labels'] == task['perturbation_domain']['required'], 'Perturbation labels do not match task domain')
+    validate_perturbation(task, plan, perturbation)
     fault = task['fault']
     if fault:
         extra=set(fault)-{'kind','link_id','start_s','end_s','mapping'}

@@ -12,6 +12,17 @@ from waterguard_contracts.core import digest, input_hash, load
 
 
 class PerturbationTests(unittest.TestCase):
+    def test_out_of_domain_perturbation_is_rejected_before_allocating_artifacts(self):
+        task, plan = physical_case("epa-net1", "closure")
+        perturbation = {"perturbation_id": "pert-test", "candidate_id": plan["candidate_id"],
+                        "parameters": {"demand_multiplier": 999},
+                        "required_labels": task["perturbation_domain"]["required"]}
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = PhysicalAdapter(Path(directory))
+            with self.assertRaisesRegex(ValueError, "outside declared domain"):
+                adapter.simulate(task, plan, perturbation=perturbation)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
     def test_demand_perturbation_is_bound_to_the_real_physical_input(self):
         task, plan = physical_case("epa-net1", "closure")
         parameters = {"demand_multiplier": 1.1}
