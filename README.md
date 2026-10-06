@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-已拉取官方 AGH 源码作为 Git 子模块基座，并构建官方 Web 与 daemon。WaterGuard 原生插件提供任务读取、候选提交、水力仿真、独立验证和证据工具；由 AGH 承担模型与工具调度。EPA Net1/Net3 的真实计算、任务存储、取消、Fixture、Replay 与证据导出已接入 FastAPI，公共契约为 0.4.0。当前尚无有效存储的模型账号，模型驱动的 Live 尚未验证。
+已拉取官方 AGH 源码作为 Git 子模块基座，并构建官方 Web 与 daemon。WaterGuard 原生插件提供任务读取、候选提交、水力仿真、独立验证和证据工具；由 AGH 承担模型与工具调度。EPA Net1/Net3 的真实计算、任务存储、取消、Fixture、Replay 与证据导出已接入 FastAPI，公共契约为 0.4.0。2026-10-06 本机赛事 Agnes 账号已通过官方认证并保存，默认模型为 `agnes-3.0-flash`，复用已保存凭据的连接测试通过。模型驱动的水力 Live 闭环尚未验证。
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
 

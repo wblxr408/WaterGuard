@@ -52,13 +52,13 @@ cd D:\WaterGuard
 node --import ./vendor/agnes-harness/node_modules/tsx/dist/loader.mjs scripts/configure_agh.mjs
 ```
 
-模型凭据在新版“智能体 → 模型账号”输入，支持赛事 Agnes、DeepSeek 与 GLM，具体地址见 [模型接入](模型接入.md)。也可在官方 AGH 设置页配置，或在本机通过 `AGNES_API_KEY` 环境变量交给配置脚本。只有官方验证成功后才保存账号，报告不包含密钥。当前没有有效存储的模型账号，因此模型驱动的 Live 尚未验证。
+模型凭据在新版“智能体 → 模型账号”输入，支持赛事 Agnes、DeepSeek 与 GLM，具体地址见 [模型接入](模型接入.md)。也可在官方 AGH 设置页配置，或在本机通过 `AGNES_API_KEY` 环境变量交给配置脚本。只有官方验证成功后才保存账号，报告不包含密钥。2026-10-06 本机赛事 Agnes 账号已认证并保存，默认模型为 `agnes-3.0-flash`，已保存凭据复测通过；模型驱动的水力 Live 闭环尚未验证。
 
 ## 使用业务工具
 
 在 WaterGuard 工作台确认任务、选择 Live 并启动。后端通过官方 SDK 创建 AGH 会话，冻结模型选择与任务版本，由 AGH 中的模型读取任务、生成候选、选择并提交方案、仿真、独立验证及读取证据。工具名称与执行边界见 [原生插件](../packages/waterguard-agh/README.md)。官方工作台也可手工创建以 `D:\WaterGuard` 为工作目录的会话调用工具。
 
-当前已验证原生插件加载、分步工具调用及模型配置接口。SDK Live 执行路径已实现；真实模型会话、原生 trace 与运行证据关联仍需有效凭据完成验收。`mode=live` 在缺少账号时返回 `503 MODEL_NOT_CONFIGURED`，daemon 不可用时返回 `503 AGH_UNAVAILABLE`。缺失正式准入证据时，`live_export_allowed` 保持 false。
+当前已验证原生插件加载、分步工具调用及模型账号认证、保存与存储凭据复用。SDK Live 执行路径已实现；真实模型会话、原生 trace 与水力运行证据关联仍需完成验收。`mode=live` 在缺少账号时返回 `503 MODEL_NOT_CONFIGURED`，daemon 不可用时返回 `503 AGH_UNAVAILABLE`。缺失正式准入证据时，`live_export_allowed` 保持 false。
 
 ## 验证与更新官方源码
 

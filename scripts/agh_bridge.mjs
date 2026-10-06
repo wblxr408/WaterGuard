@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolve, join } from 'node:path'
 import { mkdirSync, appendFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
+import { resolveModelConfig } from './agh_model_config.mjs'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const source = join(root, 'vendor/agnes-harness')
@@ -39,7 +40,7 @@ try {
     send({ kind: 'status', available: true, snapshot,
       providers: choices.filter(row => providers.providers.some(p => p.id === row.id)) })
   } else if (['test', 'save'].includes(input.action)) {
-    const config = input.config
+    const config = resolveModelConfig(input.config, await client.config.get())
     const choice = choices.find(row => row.id === config.providerId)
     if (!choice || (config.baseUrl && !choice.base_urls.includes(config.baseUrl.replace(/\/$/, '')))) throw new Error('MODEL_ENDPOINT_NOT_ALLOWED')
     const tested = await client.config.test(config)
@@ -48,7 +49,7 @@ try {
       if (!tested.verified) throw new Error('MODEL_AUTH_FAILED: AGH did not validate this account')
       if (!config.model || !tested.models.some(row => row.id === config.model)) throw new Error('MODEL_NOT_IN_ACCOUNT_CATALOG')
       const before = await client.config.get()
-      const saved = await client.config.save({ ...config, accountId: input.accountId || config.providerId,
+      const saved = await client.config.save({ ...config, accountId: config.accountId || config.providerId,
         label: choice.label, makeDefault: input.makeDefault !== false, expectedRevision: before.revision })
       send({ kind: 'saved', snapshot: saved })
     }
