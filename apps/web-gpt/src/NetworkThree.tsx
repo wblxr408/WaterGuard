@@ -126,7 +126,7 @@ const NetworkThree = forwardRef<ThreeView, Props>(function NetworkThree(props, r
     )]));
     const width = Math.max(14, (maxX - minX) * scale + 8);
     const depth = Math.max(14, (maxY - minY) * scale + 8);
-    const base = mesh(geo(new THREE.BoxGeometry(width, 0.38, depth)), mat(new THREE.MeshStandardMaterial({ color: 0xe1e6f2, roughness: 0.85, metalness: 0.08 })));
+    const base = mesh(geo(new THREE.BoxGeometry(width, 0.38, depth)), mat(new THREE.MeshStandardMaterial({ color: 0xdde5e6, roughness: 0.85, metalness: 0.08 })));
     base.position.y = -0.3;
     const gridPoints: number[] = [];
     for (let x = -width / 2; x <= width / 2; x += 2) gridPoints.push(x, -0.1, -depth / 2, x, -0.1, depth / 2);
@@ -202,7 +202,7 @@ const NetworkThree = forwardRef<ThreeView, Props>(function NetworkThree(props, r
       halo.scale.setScalar(0.44);
       halo.visible = false;
       if (node.kind !== "junction") {
-        const body = mesh(cylinder, mat(new THREE.MeshStandardMaterial({ color: 0x657de0, metalness: 0.65, roughness: 0.3 })), group);
+        const body = mesh(cylinder, mat(new THREE.MeshStandardMaterial({ color: 0x497b81, metalness: 0.65, roughness: 0.3 })), group);
         body.position.y = 0.75;
         body.scale.set(0.57, 1.5, 0.57);
         body.userData.entity = entity;
@@ -221,7 +221,7 @@ const NetworkThree = forwardRef<ThreeView, Props>(function NetworkThree(props, r
       anchors.set(key(entity), position.clone().add(new THREE.Vector3(0, node.kind === "junction" ? 0.3 : 1.65, 0)));
       nodeParts.set(node.id, { lamp, halo, material });
     }
-    const selection = mesh(ringGeometry, mat(new THREE.MeshBasicMaterial({ color: 0x6478ef, transparent: true, opacity: 0.9 })));
+    const selection = mesh(ringGeometry, mat(new THREE.MeshBasicMaterial({ color: 0x176e65, transparent: true, opacity: 0.9 })));
     selection.rotation.x = -Math.PI / 2;
     selection.scale.setScalar(0.65);
     const labelNodes = new Map<string, HTMLSpanElement>();

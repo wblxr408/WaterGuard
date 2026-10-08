@@ -5,7 +5,7 @@
 .three-top-button { color: #64728e; font-size: 11px; display: inline-flex; align-items: center; gap: 5px; }
 .three-top-button:hover { color: #5266bb; }
 .three-material-note { font-size: 10px; color: #8490a6; margin-left: auto; }
-.network-three { position: relative; width: 100%; height: clamp(420px, calc(100vh - 430px), 660px); background: radial-gradient(ellipse at 45% 25%, #f9fbff 0%, #edf1fb 78%); isolation: isolate; }
+.network-three { position: relative; width: 100%; height: clamp(420px, calc(100vh - 430px), 660px); background: #f4f7f8; isolation: isolate; }
 .network-three canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
 .network-three canvas:focus-visible { outline: 2px solid #8297ee; outline-offset: -4px; }
 .network-canvas:has(.network-three) .map-status { pointer-events: none; }

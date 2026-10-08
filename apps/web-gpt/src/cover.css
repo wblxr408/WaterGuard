@@ -5,16 +5,16 @@ main.cover-main {
   padding-top: 0;
 }
 .cover {
-  --cv-bg: #02050d;
+  --cv-bg: #101c22;
   --cv-ink: #eaf0fb;
   --cv-ink-2: rgba(212, 222, 244, 0.8);
   --cv-muted: rgba(196, 208, 234, 0.62);
   --cv-line: rgba(150, 180, 255, 0.14);
-  --cv-cyan: #46d6ff;
+  --cv-cyan: #84d5ca;
   --cv-amber: #ffb547;
   --cv-teal: #2fe0b5;
   --cv-mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
-  --cv-pad: max(40px, calc((100vw - 1440px) / 2));
+  --cv-pad: clamp(24px, 4vw, 72px);
   position: relative;
   isolation: isolate;
   color: var(--cv-ink);
@@ -53,7 +53,7 @@ main.cover-main {
   grid-template-rows: 1fr auto;
   padding: 0 var(--cv-pad);
   overflow: hidden;
-  background: linear-gradient(180deg, #040b1f, #030817 55%, var(--cv-bg));
+  background: var(--cv-bg);
 }
 .hero-glow {
   position: absolute;
@@ -61,7 +61,7 @@ main.cover-main {
   pointer-events: none;
   background: radial-gradient(
     ellipse 30% 52% at 50% 50%,
-    rgba(40, 92, 210, 0.34),
+    rgba(72, 120, 116, 0.12),
     transparent 70%
   );
   will-change: transform;
@@ -263,7 +263,7 @@ main.cover-main {
   width: 52px;
   height: 52px;
   margin-left: 26px;
-  background: #2d6bff;
+  background: #176e65;
   color: #fff;
 }
 .hero-btn.primary .sq svg {
@@ -276,7 +276,7 @@ main.cover-main {
   gap: 12px;
   padding: 0 22px;
   color: #e3eaf9;
-  background: rgba(14, 30, 72, 0.42);
+  background: #1c2c33;
   border: 1px solid rgba(150, 180, 255, 0.24);
 }
 .hero-btn.ghost:hover {
@@ -381,7 +381,7 @@ main.cover-main {
   background:
     radial-gradient(
       ellipse 70% 50% at 50% 58%,
-      rgba(40, 92, 210, 0.22),
+      rgba(72, 120, 116, 0.08),
       transparent 70%
     ),
     var(--cv-bg);
@@ -437,7 +437,7 @@ main.cover-main {
   background: #f4f6fb;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 50px 120px -40px rgba(20, 70, 200, 0.55),
+    0 30px 70px -30px rgba(0, 0, 0, 0.35),
     0 30px 60px -30px rgba(0, 0, 0, 0.8);
   transition:
     transform 0.5s var(--ease-expo),
@@ -447,7 +447,7 @@ main.cover-main {
   transform: translateY(-4px);
   box-shadow:
     0 0 0 1px rgba(150, 200, 255, 0.25),
-    0 60px 140px -40px rgba(40, 110, 255, 0.7),
+    0 30px 70px -30px rgba(0, 0, 0, 0.5),
     0 30px 60px -30px rgba(0, 0, 0, 0.8);
 }
 .sys-screen img {

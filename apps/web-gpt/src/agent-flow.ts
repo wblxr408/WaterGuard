@@ -147,6 +147,7 @@ export const STAGE_H = LAYOUT.padY * 2 + LAYOUT.rowGap + LAYOUT.nodeH;
 /** 运行事件落在哪个节点 */
 export const nodeOfEvent: Record<RunEvent["type"], string> = {
   "run.started": "start",
+  "clarification.requested": "model",
   "candidate.submitted": "plan",
   "simulation.completed": "sim",
   "verification.completed": "verify",

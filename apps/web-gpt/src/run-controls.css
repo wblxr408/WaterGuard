@@ -1,5 +1,5 @@
 .run-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex-basis: 100%; padding-top: 12px; border-top: 1px solid var(--line); }
-.operation-dialog { max-width: 650px; border-radius: 18px; }
+.operation-dialog { max-width: 650px; border-radius: 6px; }
 .operation-dialog header h2 { margin: 0; }
 .operation-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; border: 0; margin: 0; padding: 22px 25px 12px; }
 .operation-fields label { display: flex; flex-direction: column; align-items: stretch; gap: 8px; font-size: 13px; color: var(--muted); }
@@ -10,7 +10,7 @@
 .operation-message p { margin: 0 0 6px; }
 .operation-error { color: #b42318; overflow-wrap: anywhere; }
 .operation-dialog footer { border-top: 1px solid var(--line); }
-.threshold-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.threshold-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .threshold-controls > div { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; font-size: 13px; }
 .threshold-controls small { color: var(--muted); }
 .operation-fields input:disabled { color: var(--muted); background: var(--surface-alt, #f4f6fa); }

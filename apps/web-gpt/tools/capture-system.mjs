@@ -51,7 +51,7 @@ await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-m
 await send('Page.navigate', { url: base })
 await sleep(3000)
 for (const [id, label] of PAGES) {
-  const ok = await evaluate(`(() => { const b = [...document.querySelectorAll('nav button')].find((x) => x.textContent.trim() === ${JSON.stringify(label)}); b?.click(); return !!b; })()`)
+  const ok = await evaluate(`(() => { const b = [...document.querySelectorAll('nav button')].find((x) => x.getAttribute('aria-label') === ${JSON.stringify(label)}); b?.click(); return !!b; })()`)
   if (!ok) throw new Error(`找不到导航「${label}」`)
   await sleep(3200)
   await evaluate('window.scrollTo(0, 0)')

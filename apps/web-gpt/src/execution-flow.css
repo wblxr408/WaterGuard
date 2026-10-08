@@ -60,7 +60,7 @@
 .ex-outline.branched .ex-list-node.candidate { background: #f6f3ff; border-left: 3px solid #7650d8; }
 .ex-outline.branched .ex-list-node.candidate.idle { background: #f9fafb; border-left-color: #98a2b3; }
 .ex-outline.branched .ex-list-node.condition { margin-left: 16px; width: calc(100% - 16px); }
-.ex-list-node { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 12px 32px; background: #fff; border: 1px solid var(--line); border-radius: 12px; text-align: left; }
+.ex-list-node { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 12px 32px; background: #fff; border: 1px solid var(--line); border-radius: 6px; text-align: left; }
 .ex-list-node .wf-text { flex: 1; }
 .ex-list-node .ex-branch { position: static; font-size: 11px; }
 .ex-list-node.jev { border-color: #a7c8f6; background: #f3f7ff; }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Violation, RunRecord } from "@waterguard/contracts";
 import {
   actionText,
@@ -723,7 +723,11 @@ function Overview({
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>(() => new URLSearchParams(window.location.search).has("run") ? "agent" : "cover");
+  const [page, setPage] = useState<Page>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("page");
+    return navigation.some((item) => item.id === requested) ? requested as Page : params.has("run") ? "agent" : "cover";
+  });
   const [source, setSource] = useState<Source>("china");
   const [selection, setSelection] = useState("");
   const [activeRun, setActiveRun] = useState<RunRecord | null>(null);
@@ -743,25 +747,6 @@ export default function App() {
   const [focus, setFocus] = useState(false);
   const loadHydraulics = page !== "agent";
   const inspect = (title: string, data: unknown) => setDialog({ title, data });
-  const navRef = useRef<HTMLElement>(null);
-  // 导航指示条滑到当前页按钮下方；窗口或字体变化时重新定位。
-  useLayoutEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const place = () => {
-      const active = nav.querySelector<HTMLElement>(
-        'button[aria-current="page"]',
-      );
-      if (!active) return;
-      nav.style.setProperty("--ind-x", `${active.offsetLeft}px`);
-      nav.style.setProperty("--ind-w", `${active.offsetWidth}px`);
-    };
-    place();
-    document.fonts?.ready.then(place);
-    const ro = new ResizeObserver(place);
-    ro.observe(nav);
-    return () => ro.disconnect();
-  }, [page]);
   useEffect(() => {
     if (!loadHydraulics || source === 'runtime') return;
     const controller = new AbortController();
@@ -845,6 +830,10 @@ export default function App() {
     w?.candidates.find((x) => x.id === candidateId) ?? w?.candidates.at(-1);
   const openPage = (p: Page) => {
     setPage(p);
+    const url = new URL(window.location.href);
+    if (p === "cover" && !url.searchParams.has("run")) url.searchParams.delete("page");
+    else url.searchParams.set("page", p);
+    window.history.replaceState(null, "", url);
     window.scrollTo({ top: 0, behavior: "instant" });
   };
   const chooseCandidate = (id: string) => {
@@ -869,6 +858,7 @@ export default function App() {
   return (
     <div
       className={`app ${focus ? "focus-mode" : ""} ${page === "cover" ? "on-cover" : ""}`}
+      data-page={page}
     >
       <a className="skip-link" href="#main-content">
         跳到主要内容
@@ -891,22 +881,36 @@ export default function App() {
               <small>水脉卫士</small>
             </div>
           </a>
-          <nav aria-label="主要导航" ref={navRef}>
+          <div className="header-context">
+            <span>供水管网决策平台</span>
+            <Icon name="chevron" size={14} />
+            <strong>{navigation.find((item) => item.id === page)?.label}</strong>
+          </div>
+          <span className="header-edition">WaterGuard <span> / </span> Operations</span>
+        </div>
+      </header>
+      <aside className="workspace-nav" aria-label="工作区导航">
+          <div className="nav-section-label">工作空间 <span>WORKSPACE</span></div>
+          <nav aria-label="主要导航">
             {navigation.map((n) => (
               <button
                 key={n.id}
+                aria-label={n.label}
+                title={n.label}
                 aria-current={page === n.id ? "page" : undefined}
                 className={page === n.id ? "active" : ""}
                 onClick={() => openPage(n.id)}
               >
                 <Icon name={n.icon} size={18} />
-                <span>{n.label}</span>
+                <span>{n.label}<small>{n.english}</small></span>
               </button>
             ))}
-            <span className="nav-indicator" aria-hidden="true" />
           </nav>
-        </div>
-      </header>
+          <div className="nav-footer">
+            <Icon name="water" size={18} />
+            <div><strong>水脉卫士</strong><span>供水应急 · 仿真与决策</span></div>
+          </div>
+      </aside>
       {page === "cover" ? (
         <main id="main-content" className="cover-main">
           <Cover w={w} openPage={openPage} />
@@ -971,7 +975,17 @@ export default function App() {
           </header>
           <main id="main-content">
             {source === 'runtime' && <JevPanel runId={selection || undefined} />}
-            {w && c && source !== 'fixture' && <ThresholdControls task={c.task} created={(run) => { followRun(run.run_id); setRetry((n) => n + 1); }} />}
+            {w && c && source !== 'fixture' && (
+              <details className="workspace-configuration">
+                <summary>
+                  <Icon name="sliders" size={15} />
+                  <strong>工况与验收</strong>
+                  <span>{c.name}</span>
+                  <span className="configuration-threshold">压力 ≥ {num(c.task.hard_constraints.min_pressure_m, 2)} m · 供需比 ≥ {num(c.task.hard_constraints.min_supply_ratio * 100, 2)}%</span>
+                  <Icon name="down" size={13} />
+                </summary>
+                <div className="configuration-body">
+                  <ThresholdControls task={c.task} created={(run) => { followRun(run.run_id); setRetry((n) => n + 1); }} />
             {w && c && (source === "bench" || source === "china") && (
               <div className="benchmark-picker">
                 <label htmlFor="benchmark-case">选择真实工况</label>
@@ -989,6 +1003,9 @@ export default function App() {
                 </select>
                 <span>正常工况与所选工况对照</span>
               </div>
+            )}
+                </div>
+              </details>
             )}
             {error ? (
               <div className="error-state" role="alert">
