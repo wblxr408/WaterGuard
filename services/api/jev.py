@@ -74,12 +74,16 @@ def decide(store, parent):
         if current['status'] != 'RUNNING':
             raise ConflictError('运行已结束。')
         task = store.get_task(current['task_ref']['task_id'], current['task_ref']['revision'])
+        from .workflow_guard import workflow_hint
+        hint = workflow_hint(store, current)
         if not credentials():
-            return {'configured': False, 'decisions': []}
+            return {'configured': False, 'decisions': [], 'host_workflow': hint}
         existing = decisions(store, current['run_id'])
         if len(existing) >= 2 * task['budget']['max_simulations'] + 2:
             raise ConflictError('Jev 决策次数已用完。')
         plans = benchmark_plans(task, network_details(task['network_ref']['network_id'])['catalog'])
+        from .planning import revision_records
+        plans.extend(row['plan'] for row in revision_records(store, current))
         rows = run_results(store, current['run_id'])
         submitted = {row['plan']['candidate_id'] for row in rows}
         remaining = task['budget']['max_simulations'] - current['budget_usage']['simulations']
@@ -87,11 +91,14 @@ def decide(store, parent):
         criteria = {plan['candidate_id']: json.dumps({'actions': plan['actions'], 'baseline': not plan['actions']}) for plan in available}
         criteria['finish'] = 'Summarize verified results; choose if a verified result meets constraints or no simulation budget remains.'
         state = {'task_ref': current['task_ref'], 'fault': task['fault'], 'constraints': task['hard_constraints'], 'remaining_simulations': remaining,
-                 'results': [{'candidate_id': row['plan']['candidate_id'], 'verification': row['verification']} for row in rows]}
+                 'results': [{'candidate_id': row['plan']['candidate_id'], 'verification':
+                     {key: row['verification'][key] for key in ('validity', 'admission', 'metrics')}
+                     | {'violation_count': len(row['verification']['violations'])}
+                     if row['verification'] else None} for row in rows], 'host_workflow': hint}
         result = evaluate(state, criteria)
         if store.get_run(current['run_id'])['status'] != 'RUNNING':
             raise ConflictError('运行已结束。')
         result.update({'id': uuid.uuid4().hex, 'sequence': len(existing) + 1, 'run_id': current['run_id'], 'task_ref': current['task_ref'], 'created_at': time.time(), 'state': state})
         store._write_json(f"{current['run_id']}/jev/decision-{result['sequence']:04d}.json", result)
         store.log(current['run_id'], 'Jev 决策：' + result['answers']['next']['choice'], tool_name='wg_jev_decide', event_type='jev.completed')
-        return {'configured': True, **result, 'candidate': next((plan for plan in available if plan['candidate_id'] == result['answers']['next']['choice']), None)}
+        return {'configured': True, **result, 'host_workflow': hint, 'candidate': next((plan for plan in available if plan['candidate_id'] == result['answers']['next']['choice']), None)}

@@ -56,6 +56,13 @@ def validate_perturbation(task, plan, perturbation):
     require(isinstance(perturbation['parameters'], dict) and set(perturbation['parameters']) == {'demand_multiplier'}, 'Unsupported perturbation parameters')
     require(perturbation['parameters']['demand_multiplier'] in task['perturbation_domain']['demand_multipliers'], 'Perturbation demand multiplier outside declared domain')
     require(perturbation['required_labels'] == task['perturbation_domain']['required'], 'Perturbation labels do not match task domain')
+    for label in perturbation['required_labels']:
+        require(label.startswith('demand-plus-') and label.endswith('pct'), 'Unsupported stress label')
+        increase = float(label[len('demand-plus-'):-len('pct')])
+        nominal = task.get('hydraulic_options', {}).get('demand_multiplier', 1)
+        require(math.isfinite(increase) and increase > 0 and
+                math.isclose(perturbation['parameters']['demand_multiplier'], nominal * (1 + increase / 100), rel_tol=1e-12),
+                'Stress label does not match actual demand increase relative to nominal')
 
 
 def compile_task(task, plan, perturbation=None):

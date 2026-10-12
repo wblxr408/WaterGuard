@@ -390,7 +390,8 @@ def wg_verify_candidate(job_id: str, run_id: str | None = None) -> dict:
             else:
                 from services.hydraulics.adapter import network_assets
                 _, _, scene, catalog = network_assets(task["network_ref"]["network_id"])
-        report = verify(task, plan, state["result"], catalog, scene, context.get("perturbation"))
+        report = verify(task, plan, state["result"], catalog, scene, context.get("perturbation"),
+                        artifact_dir=JOBS.output_root / state['result']['artifact']['simulation_id'])
         context["report"] = report
         return _response("ok", "VERIFICATION_COMPLETED", "Independent verification completed.", report=report)
     except Exception as exc:

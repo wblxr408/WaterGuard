@@ -360,10 +360,13 @@ class RunStore:
         self._write_json(f'{run_id}/run.json', run)
         return run
 
-    def set_outcome(self, run_id: str, conclusion: str, selected_candidate_id: str | None) -> dict:
+    def set_outcome(self, run_id: str, conclusion: str, selected_candidate_id: str | None,
+                    mitigation_candidate_id: str | None = None) -> dict:
         """Record a host-derived final conclusion; models never set this field."""
-        if conclusion not in {'FEASIBLE_FOUND', 'NO_FEASIBLE_FOUND', 'INCOMPLETE', 'INVALID'}:
+        if conclusion not in {'FEASIBLE_FOUND', 'BEST_EFFORT_MITIGATION', 'NO_FEASIBLE_FOUND', 'INCOMPLETE', 'INVALID'}:
             raise ValueError('Invalid run conclusion')
+        if conclusion == 'BEST_EFFORT_MITIGATION' and (selected_candidate_id is not None or not mitigation_candidate_id):
+            raise ValueError('Mitigation requires a separate candidate and cannot be recommended')
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT payload FROM runs WHERE run_id=?', (run_id,)).fetchone()
@@ -372,6 +375,7 @@ class RunStore:
             run = json.loads(row['payload'])
             run['conclusion'] = conclusion
             run['selected_candidate_id'] = selected_candidate_id
+            run['mitigation_candidate_id'] = mitigation_candidate_id
             validate('RunRecord', run)
             db.execute('UPDATE runs SET payload=?, updated_at=? WHERE run_id=?', (canonical(run), now(), run_id))
         self._write_json(f'{run_id}/run.json', run)
@@ -612,6 +616,15 @@ class RunStore:
             active = db.execute("SELECT COUNT(*) AS count FROM simulation_reservations WHERE run_id=? AND state='RESERVED'", (run_id,)).fetchone()["count"]
             if used >= task["budget"]["max_simulations"]:
                 raise ConflictError("BUDGET_EXHAUSTED: simulation budget reached")
+            if run['mode'] == 'live' and used == task['budget']['max_simulations'] - 1:
+                child_ids = db.execute('SELECT runs.payload FROM live_links JOIN runs ON runs.run_id=live_links.child_id WHERE parent_id=?', (run_id,)).fetchall()
+                children = [json.loads(row['payload']) for row in child_ids]
+                target = next((child for child in children if child['run_id'] == request_key), None)
+                if target and not (self._run_directory(request_key) / 'perturbation.json').is_file():
+                    from .workflow_guard import reviews
+                    _nominal, pending, _complete = reviews(self, task, children)
+                    if pending:
+                        raise ConflictError('STRESS_SLOT_RESERVED: use wg_create_perturbation on ' + pending[0]['run_id'] + '; the last simulation is reserved for its required stress review')
             if active >= task["budget"]["max_parallel"]:
                 raise ConflictError("BUDGET_EXHAUSTED: simulation concurrency slots reached")
             reservation = "res-" + uuid.uuid4().hex

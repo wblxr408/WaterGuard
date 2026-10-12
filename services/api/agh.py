@@ -56,7 +56,8 @@ def _write_probe(store, run_id, model, scenario):
         'mounted_tool_names': ['wg_inspect_network', 'wg_propose_task', 'wg_get_task', 'wg_generate_candidates',
                                'wg_submit_plan', 'wg_simulate_candidate', 'wg_get_simulation',
                                'wg_verify_candidate', 'wg_create_perturbation',
-                               'wg_compare_candidates', 'wg_build_evidence', 'wg_request_clarification'],
+                               'wg_compare_candidates', 'wg_build_evidence', 'wg_request_clarification',
+                               'wg_diagnose_failure', 'wg_revise_plan'],
         'acceptance_scenario': scenario,
     }
     return store._write_json(f'{run_id}/agh/probe.json', snapshot)
@@ -64,8 +65,13 @@ def _write_probe(store, run_id, model, scenario):
 
 def _finalize_recommendation(store, run_id, task, child_runs):
     """Aggregate independent nominal and stress reports into a host conclusion."""
+    import copy
+    from services.evidence.service import _validated_agh_association
+    from waterguard_contracts.core import validate
+    parent = store.get_run(run_id)
+    provenance = _validated_agh_association(store._run_directory(run_id) / 'agh/association.json', parent)
     required = set(task['perturbation_domain']['required'])
-    nominal, stress = {}, {}
+    nominal, stress, stress_reports, tested = {}, {}, {}, {}
     for child in child_runs:
         child_id = child['run_id']
         perturbation_path = store._run_directory(child_id) / 'perturbation.json'
@@ -76,30 +82,92 @@ def _finalize_recommendation(store, run_id, task, child_runs):
             if not report_path.is_file():
                 continue
             report = store._read_json(report_path)
+            result_path = report_path.with_name('result.json')
+            if not result_path.is_file():
+                continue
+            artifact = store._read_json(result_path)['artifact']
+            if (report['task_ref'] != parent['task_ref'] or artifact['task_ref'] != parent['task_ref']
+                    or report['simulation_id'] != artifact['simulation_id']):
+                raise RuntimeError('Recommendation report binding mismatch')
             passed = report['validity'] == 'valid' and not report['violations']
             if perturbation is None:
-                nominal[candidate_id] = (passed, report)
-            elif passed:
-                stress.setdefault(candidate_id, set()).update(perturbation['required_labels'])
-    eligible = [candidate_id for candidate_id, (passed, _report) in nominal.items()
-                if passed and required.issubset(stress.get(candidate_id, set()))]
-    selected = min(eligible, key=lambda cid: (nominal[cid][1]['metrics']['shortage_m3'],
-                                               nominal[cid][1]['metrics']['action_cost'], cid)) if eligible else None
+                nominal[candidate_id] = (passed, report, plan, child_id)
+            else:
+                stress_reports.setdefault(candidate_id, []).append((passed, report, plan, perturbation))
+    for cid, records in stress_reports.items():
+        if cid not in nominal:
+            continue
+        for passed, report, plan, perturbation in records:
+            from services.hydraulics.compiler import validate_perturbation
+            validate_perturbation(task, plan, perturbation)
+            if plan['plan_hash'] != nominal[cid][2]['plan_hash']:
+                raise RuntimeError('Stress plan differs from nominal candidate')
+            if report['validity'] == 'valid':
+                tested.setdefault(cid, set()).update(perturbation['required_labels'])
+            if passed:
+                stress.setdefault(cid, set()).update(perturbation['required_labels'])
+    eligible = [cid for cid, (passed, _report, _plan, _child) in nominal.items()
+                if provenance and passed and required.issubset(stress.get(cid, set()))]
+    from services.hydraulics.configuration import ranking_key
+    selected = min(eligible, key=lambda cid: ranking_key(task, nominal[cid][1])) if eligible else None
+    valid = [cid for cid, row in nominal.items() if row[1]['validity'] == 'valid']
+    best_effort = min(valid, key=lambda cid: ranking_key(task, nominal[cid][1])) if valid else None
+    from services.verifier.mitigation import mitigation_record
+    baseline_ids = [cid for cid in valid if not nominal[cid][2]['actions']]
+    baseline_id = min(baseline_ids) if baseline_ids else None
+    rescues = {}
+    if baseline_id:
+        for cid in valid:
+            if not nominal[cid][2]['actions']:
+                continue
+            rescue = mitigation_record(task, nominal[baseline_id][1], nominal[cid][1])
+            if rescue and rescue['improves_baseline']:
+                rescues[cid] = rescue
+    mitigation_id = min(rescues, key=lambda cid: ranking_key(task, nominal[cid][1])) if provenance and rescues and not selected else None
     if selected:
         conclusion = 'FEASIBLE_FOUND'
-    elif any(not passed for passed, _report in nominal.values()) and not required:
+    elif mitigation_id:
+        conclusion = 'BEST_EFFORT_MITIGATION'
+    elif provenance and nominal and all(not row[0] or required.issubset(tested.get(cid, set())) for cid, row in nominal.items()):
         conclusion = 'NO_FEASIBLE_FOUND'
     else:
         conclusion = 'INCOMPLETE'
+    for cid, (passed, original, plan, child_id) in nominal.items():
+        report = copy.deepcopy(original)
+        covered = required.issubset(tested.get(cid, set()))
+        stress_passed = required.issubset(stress.get(cid, set()))
+        report['coverage']['completed_stress_tests'] = sorted(tested.get(cid, set()))
+        report['admission']['required_stress_tests_pass'] = 'pass' if stress_passed else ('fail' if covered else 'pending')
+        report['admission']['recommendation_eligible'] = 'pass' if cid in eligible else 'fail'
+        report['recommendation_blockers'] = ([] if provenance else ['native_agh_trace_missing'])
+        if not passed:
+            report['recommendation_blockers'].append('nominal_constraints_failed')
+        if not stress_passed:
+            report['recommendation_blockers'].append('required_stress_tests_failed' if covered else 'required_stress_tests_pending')
+        report['verifier_version'] += '+agh-host/1.0.0'
+        if cid == mitigation_id:
+            rescues[cid].update(actions=plan['actions'], plan_hash=plan['plan_hash'],
+                required_stress_tests_pass=report['admission']['required_stress_tests_pass'],
+                completed_stress_tests=report['coverage']['completed_stress_tests'])
+        validate('VerificationReport', report)
+        for filename, value in [('plan.json', plan), ('result.json', store._read_json(store._run_directory(child_id) / 'candidates' / cid / 'result.json')), ('verification.json', report)]:
+            store._write_json(f'{run_id}/candidates/{cid}/{filename}', value)
     summary = {
         'run_id': run_id, 'required_stress_tests': sorted(required),
         'nominal_candidate_ids': sorted(nominal),
         'stress_coverage': {candidate_id: sorted(labels) for candidate_id, labels in sorted(stress.items())},
+        'stress_tested': {cid: sorted(labels) for cid, labels in sorted(tested.items())},
+        'native_provenance_valid': provenance,
+        'scope': 'Only tested candidates in the frozen finite action domain; no claim of global optimality.',
         'eligible_candidate_ids': sorted(eligible), 'selected_candidate_id': selected,
+        'best_effort_candidate_id': best_effort, 'objective_order': task['objectives'],
+        'best_effort_is_recommendation': best_effort in eligible,
+        'mitigation_candidate_id': mitigation_id,
+        'mitigation': rescues.get(mitigation_id),
         'conclusion': conclusion,
     }
     store._write_json(f'{run_id}/recommendation-summary.json', summary)
-    store.set_outcome(run_id, conclusion, selected)
+    store.set_outcome(run_id, conclusion, selected, mitigation_id)
     return summary
 
 
@@ -117,6 +185,8 @@ class LiveExecutor:
         for child in self.store.live_children(run_id):
             if child['task_ref'] != parent['task_ref']:
                 raise RuntimeError('AGH child task binding mismatch')
+            if (self.store._run_directory(child['run_id']) / 'perturbation.json').is_file():
+                continue
             for plan in self.store.list_candidates(child['run_id']):
                 folder = self.store._run_directory(child['run_id']) / 'candidates' / plan['candidate_id']
                 if not (folder / 'verification.json').is_file() or not (folder / 'result.json').is_file():
@@ -156,6 +226,7 @@ class LiveExecutor:
                 return
             run = self.store.transition(run_id, 'RUNNING', 'PLANNING')
             task = self.store.get_task(run['task_ref']['task_id'], run['task_ref']['revision'])
+            self.store._write_json(f'{run_id}/task.json', task)
             process = subprocess.Popen(command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                        text=True, encoding='utf-8', cwd=ROOT,
                                        env={**os.environ, 'WG_ARTIFACT_ROOT': str(self.store.artifacts.resolve())})
@@ -270,17 +341,21 @@ class LiveExecutor:
                                         candidate_id=candidate_id, simulation_id=simulation_id)
                 elif row['kind'] == 'completed':
                     outcome = row
-            if process.wait(timeout=10) != 0 and not cancel.is_set() and not paused:
+            budget_exhausted = bool(outcome and outcome.get('budget_exhausted')) or self.store.get_run(run_id)['status'] == 'BUDGET_EXHAUSTED'
+            if process.wait(timeout=10) != 0 and not cancel.is_set() and not paused and not budget_exhausted:
                 raise RuntimeError('AGH session failed')
             if paused:
                 return
-            if cancel.is_set() or self.store.get_run(run_id)['status'] in TERMINAL:
+            if cancel.is_set() or (self.store.get_run(run_id)['status'] in TERMINAL and not budget_exhausted):
                 return
-            if not outcome or outcome['result']['reason'] != 'completed':
+            if budget_exhausted:
+                self.store._write_json(f'{run_id}/error.json', dict(code='BUDGET_EXHAUSTED', message='AGH exhausted the frozen wall-time budget'))
+                self.store.transition(run_id, 'BUDGET_EXHAUSTED', wall_time_s=time.monotonic()-started)
+            elif not outcome or outcome['result']['reason'] != 'completed':
                 raise RuntimeError('AGH did not complete the task turn')
             associations = []
             # Only run IDs from recorded native wg_submit_plan results are considered.
-            if not outcome['child_runs']:
+            if not budget_exhausted and not outcome['child_runs']:
                 raise RuntimeError('AGH completed without a recorded WaterGuard candidate')
             # A stress review is created after the nominal candidate and is not
             # itself a wg_submit_plan result.  Trust only children linked by the
@@ -297,12 +372,12 @@ class LiveExecutor:
                 # simulation budget has been consumed.  It has not entered a
                 # worker yet, so record it as an explicit non-executed child
                 # rather than leaving the parent permanently active.
-                if child['status'] == 'QUEUED':
+                if child['status'] == 'QUEUED' or (budget_exhausted and child['status'] not in TERMINAL):
                     self.benchmark.cancel(child_id)
                     child = self.store.get_run(child_id)
                 if child['status'] not in TERMINAL:
                     raise RuntimeError('AGH finished while a submitted calculation is still active')
-                for plan in self.store.list_candidates(child_id):
+                for plan in self.store.list_candidates(child_id) if not (self.store._run_directory(child_id) / 'perturbation.json').is_file() else []:
                     cid = plan['candidate_id']
                     child_root = self.store._run_directory(child_id) / 'candidates' / cid
                     for filename in ('plan.json', 'result.json', 'verification.json'):
@@ -318,7 +393,7 @@ class LiveExecutor:
                         report_path = self.store._run_directory(child_id) / 'candidates' / plan['candidate_id'] / 'verification.json'
                         if report_path.is_file():
                             reports.append(self.store._read_json(report_path))
-                    if reports and all(report['validity'] == 'valid' and not report['violations'] for report in reports):
+                    if reports and all(report['validity'] == 'valid' for report in reports):
                         completed_stress_labels.update(perturbation['required_labels'])
                 import shutil
                 with self.benchmark.evidence_lock:
@@ -334,9 +409,14 @@ class LiveExecutor:
             current = self.store.get_run(run_id)
             if not _validated_agh_association(self.store._run_directory(run_id) / 'agh' / 'association.json', current):
                 raise RuntimeError('AGH native event association is invalid')
-            self.store.bind_agh_session(run_id, current['agh_session_ref'], current['model_config_ref'])
+            if budget_exhausted:
+                # The already-bound session is terminal and cannot be reactivated.
+                self.store.clear_missing_items(run_id, {'native_agh_trace', 'agh_host_not_configured'})
+            else:
+                self.store.bind_agh_session(run_id, current['agh_session_ref'], current['model_config_ref'])
             _finalize_recommendation(self.store, run_id, task, child_runs)
-            self.store.transition(run_id, 'COMPLETED', 'PACKAGING', wall_time_s=time.monotonic()-started)
+            self.store.transition(run_id, 'BUDGET_EXHAUSTED' if budget_exhausted else 'COMPLETED',
+                                  'PACKAGING', wall_time_s=time.monotonic()-started)
         except Exception as error:
             self.store._write_json(f'{run_id}/error.json', dict(code='AGH_FAILED', message=str(error)))
             if self.store.get_run(run_id)['status'] not in TERMINAL:

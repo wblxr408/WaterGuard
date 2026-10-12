@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Response, Request
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from starlette.responses import FileResponse, StreamingResponse, JSONResponse, RedirectResponse
 
 from .runtime import ConflictError, NotFoundError, ROOT, RunStore, now
@@ -45,7 +45,21 @@ class ModelConfigRequest(BaseModel):
 
 
 class PerturbationRequest(BaseModel):
-    demand_multiplier: float = Field(ge=0.01, le=10, allow_inf_nan=False)
+    demand_multiplier: float = Field(gt=0, allow_inf_nan=False)
+
+
+class RevisionAction(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['link_open', 'link_close', 'pump_on', 'pump_off']
+    link_id: str = Field(min_length=1, max_length=128)
+    simulation_time_s: int = Field(ge=0, strict=True)
+
+
+class RevisionRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    source_run_id: str = Field(pattern=r'^run-[A-Za-z0-9_-]+$', max_length=128)
+    actions: list[RevisionAction] = Field(min_length=1, max_length=8)
+    reason: str = Field(min_length=10, max_length=1000)
 
 
 def app_store(artifacts: Path | None = None, database: Path | None = None) -> RunStore:
@@ -194,7 +208,46 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             from .workbench import benchmark_plans
             parent = store.live_parent(x_wg_agh_session, task_id)
             task = store.get_task(task_id, parent['task_ref']['revision'] if parent else None)
-            return benchmark_plans(task, network_details(task["network_ref"]["network_id"])["catalog"])
+            plans = benchmark_plans(task, network_details(task["network_ref"]["network_id"])["catalog"])
+            if parent:
+                from .planning import revision_records
+                plans.extend(row['plan'] for row in revision_records(store, parent))
+            return plans
+        except Exception as error:
+            fail(error)
+
+    @app.get('/api/runs/{run_id}/failure-diagnosis')
+    def failure_diagnosis(run_id: str):
+        try:
+            from .planning import diagnose_failure
+            return diagnose_failure(store, run_id)
+        except Exception as error:
+            fail(error)
+
+    @app.get('/api/runs/{run_id}/workflow')
+    def calculation_workflow(run_id: str):
+        try:
+            run = store.get_run(run_id)
+            parent = run if run['mode'] == 'live' else store.live_parent_for_child(run_id)
+            if parent is None:
+                return {'required_next': 'no_live_workflow', 'owner': 'server'}
+            from .workflow_guard import workflow_hint
+            return workflow_hint(store, store.get_run(parent['run_id']))
+        except Exception as error:
+            fail(error)
+
+    @app.post('/api/tasks/{task_id}/candidate-revisions', status_code=201)
+    def revise_plan(task_id: str, request: RevisionRequest,
+                    x_wg_agh_session: str | None = Header(default=None)):
+        try:
+            from .planning import create_revision
+            parent = store.live_parent(x_wg_agh_session, task_id)
+            if parent is None:
+                raise ConflictError('Plan revision requires the active AGH parent session')
+            task = store.get_task(task_id, parent['task_ref']['revision'])
+            with executor.evidence_lock:
+                return create_revision(store, store.get_run(parent['run_id']), task, request.source_run_id,
+                                       [a.model_dump() for a in request.actions], request.reason)
         except Exception as error:
             fail(error)
 
@@ -250,7 +303,18 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             plan = next((item for item in benchmark_plans(task, network_details(task["network_ref"]["network_id"])["catalog"])
                          if item["candidate_id"] == candidate_id), None)
             if plan is None:
+                from .planning import load_revision_plan
+                plan = load_revision_plan(store, parent, task, candidate_id)
+            if plan is None:
                 raise ValueError("Candidate is not in the server-generated finite domain")
+            if parent and parent['budget_usage']['simulations'] >= task['budget']['max_simulations']:
+                raise ConflictError('BUDGET_EXHAUSTED: compare verified runs and read the parent evidence; do not create a new job')
+            if parent:
+                from .workflow_guard import workflow_hint
+                hint = workflow_hint(store, parent)
+                if hint['required_next'] in {'diagnose_and_revise', 'simulate_revision'} and plan['source'] != 'agh':
+                    return {'accepted': False, 'code': 'REVISION_REQUIRED', 'message': hint['reason'],
+                            'source_run_id': hint['source_run_id'], 'workflow': hint, 'candidate_id': candidate_id}
             run = store.create_run(task, "benchmark")
             if parent:
                 store.link_live_child(parent['run_id'], run['run_id'])
@@ -311,6 +375,14 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             if not plan_path.is_file():
                 raise ConflictError("Run has no explicitly submitted candidate")
             plan = store._read_json(plan_path)
+            if parent['budget_usage']['simulations'] >= task['budget']['max_simulations']:
+                raise ConflictError('BUDGET_EXHAUSTED: no stress simulation slot remains; compare and archive the actual failures')
+            report_path = store._run_directory(run_id) / 'candidates' / plan['candidate_id'] / 'verification.json'
+            if not report_path.is_file():
+                raise ConflictError('Stress admission requires the independent nominal verification first')
+            nominal_report = store._read_json(report_path)
+            if nominal_report['validity'] != 'valid' or nominal_report['violations']:
+                raise ConflictError('NOMINAL_FAILED: this candidate cannot qualify through stress; choose another permitted candidate or compare actual failures')
             parameters = {"demand_multiplier": request.demand_multiplier}
             if parameters["demand_multiplier"] not in task["perturbation_domain"]["demand_multipliers"]:
                 raise ValueError("Demand multiplier is outside the frozen perturbation domain")
@@ -346,7 +418,9 @@ def create_app(store: RunStore | None = None) -> FastAPI:
                     root = store._run_directory(run_id) / "candidates" / plan["candidate_id"]
                     perturbation_path = store._run_directory(run_id) / "perturbation.json"
                     perturbation = store._read_json(perturbation_path) if perturbation_path.is_file() else None
-                    report = verify(task, plan, store._read_json(root / "result.json"), details["catalog"], details["scene"], perturbation)
+                    result = store._read_json(root / 'result.json')
+                    report = verify(task, plan, result, details["catalog"], details["scene"], perturbation,
+                                    artifact_dir=store._run_directory(run_id) / 'simulations' / result['artifact']['simulation_id'])
                     ref = store._write_json(f"{run_id}/candidates/{plan['candidate_id']}/verification.json", report)
                     store.emit(run, "verifier", "verification.completed", ref, candidate_id=plan["candidate_id"], simulation_id=report["simulation_id"])
                     reports.append(report)
@@ -354,6 +428,11 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             return reports
         except Exception as error:
             fail(error)
+
+    @app.get('/api/dispatch/defaults')
+    def dispatch_defaults():
+        from services.hydraulics.configuration import defaults
+        return defaults()
 
     @app.get("/api/runs")
     def recent_runs():
@@ -472,8 +551,11 @@ def create_app(store: RunStore | None = None) -> FastAPI:
                     mapping=store._read_json(simulation_root / 'simulations' / sid / 'entity-map.json')))
             if not candidates:
                 raise ConflictError('Run has no verified results yet')
+            summary_path = root / 'recommendation-summary.json'
+            mitigation = store._read_json(summary_path).get('mitigation') if summary_path.is_file() else None
             return dict(source='runtime', mode=run['mode'], base='/wg', run=run,
-                        scene=details['scene'], manifest=details['manifest'], candidates=candidates, index=None)
+                        scene=details['scene'], manifest=details['manifest'], candidates=candidates, index=None,
+                        mitigation=mitigation)
         except Exception as error:
             fail(error)
 
@@ -517,7 +599,14 @@ def create_app(store: RunStore | None = None) -> FastAPI:
     @app.get("/api/runs/{run_id}/evidence")
     def evidence(run_id: str):
         try:
-            return store.get_evidence(run_id)
+            run = store.get_run(run_id)
+            with executor.evidence_lock:
+                # The native tool can inspect real files before final packaging.
+                # An active inventory explicitly remains ineligible for export.
+                manifest = store._run_directory(run_id) / 'evidence-manifest.json'
+                if not manifest.is_file() or run['status'] not in {'COMPLETED', 'ERROR', 'CANCELLED', 'BUDGET_EXHAUSTED', 'SUPERSEDED'}:
+                    executor.package(run_id)
+                return store.get_evidence(run_id)
         except Exception as error:
             fail(error)
 

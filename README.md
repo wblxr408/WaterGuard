@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+2026-10-12最新交付：已完成真实AGH尽力挽救运行，方案对照突出正常/降级覆盖、相对基线改善和剩余违规。[本科组提交材料](docs/submission/README.md)提供50字简介、4975字详情、最新实测摘要及实际截图；[尽力挽救验收](docs/尽力挽救交付验收.md)区分本次结果与下文历史六场景。完整原始证据和演示数据库随无视频提交ZIP提供，入口见[证据索引](docs/submission/证据索引.md)。提交版直接启动与复现以[最新说明](docs/submission/复现与运行.md)为准。
+
 已拉取官方 AGH 源码作为 Git 子模块基座，并构建官方 Web 与 daemon。WaterGuard 原生插件提供任务读取、受限候选、真实水力仿真、独立验证与证据工具；AGH 中的模型负责工具选择和反馈后的下一步决策。EPA Net1/Net3 的真实计算、任务存储、取消、Fixture、Replay 与证据导出已接入 FastAPI，公共契约为 0.4.0。2026-10-06 已使用保存的 `agnes-3.0-flash` 凭据完成真实 Live 闭环、受控 `INVALID_ACTION` 后修正、运行中取消和服务重启后的关联后继运行；正式记录均带原生 trace、探针、关联表与哈希证据包。
 
 运行完整仿真请看 [同学 1 接入与复现](docs/同学1交付与复现.md)。[交付证据](benchmarks/student1/) 包含 22 个真实工况及同条件 A/B 改善样例；[数据说明](data/README.md) 保留公开来源和初版 EPANET 基准。
@@ -22,7 +24,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
 
 打开 [WaterGuard 工作台](http://127.0.0.1:5173/)。启动脚本自动启动 8000–8002 的只读数据服务、8010 的任务 API 和新版前端。智能体页提供新建任务、取消运行和 AGH 模型账号配置；持续 SSE 推送工作流、原生工具摘要和 Info log，支持断线续读、运行选择、日志筛选与导出。人工 Fixture 回放需显式选择。
 
-仓库根目录也可执行 `npm run start:web` 或双击 `scripts/start_waterguard.cmd`。单独启动 API 使用 `npm run start:api`，默认 8010；API 根地址重定向到唯一的 5173 前端。自定义端口需同步 Vite 的 `WATERGUARD_API_URL` 和原生插件配置，参见 [AGH 基座与启动](docs/AGH基座与启动.md)。
+仓库根目录可执行 `npm run start:fullstack`，或双击 `scripts/start_waterguard.cmd` 一键启动前端、任务 API 和所需数据服务；`npm run start:web` 是兼容命令。单独启动 API 使用 `npm run start:api`，默认 8010；API 根地址重定向到唯一的 5173 前端。自定义端口需同步 Vite 的 `WATERGUARD_API_URL` 和原生插件配置，参见 [AGH 基座与启动](docs/AGH基座与启动.md)。
 
 ### AGH 与联调
 
@@ -72,10 +74,18 @@ AGH 是核心任务的执行基座。选定的模型在其中承担任务建模�
 ## 实施顺序
 
 1. 按 [AGH 验收操作手册](docs/AGH验收操作手册.md) 复跑正常、失败修正、取消和恢复四类记录。
-2. 完成留出场景评测、视频录制、成员贡献与第三方资料披露。
+2. 留出场景评测和实际界面视频已完成；成员贡献与全员声明由团队按实际情况填写确认。
 3. 再评估多角色隔离与同预算收益；没有可信隔离和量化收益时不将其作为已实现能力。
 
+## 本轮严格赛事验收
+
+六个真实 AGH 场景已完成，含正常保供、Net3 工程失败与备用泵修正、中国管网断裂、非法动作恢复及两个留出场景。所有内部水力区间用于正式验收，名义和同方案需求 +10% 复验共同决定推荐；物理计算成功而业务未达标时明确拒绝推荐。
+
+[逐项验收与评分分析](docs/赛事逐项验收与评分分析.md) 包含具体节点、时间段、六项要求、评分证据和实际对照；[提交说明](docs/参赛提交说明.md) 包含运行方式与团队字段。本轮原始汇总为 `artifacts/contest-acceptance-v4/summary.json`，场景诊断为 `artifacts/scenario-lab/report.md`；完整本地技术包与四分钟视频位于 `artifacts/`。188 项自动检查通过、2 项平台跳过，另有真实 Live、数值研究、浏览器和 ZIP 复核证据。实际评委成绩与团队声明单独确认。
+
 ## 参考资料
+
+逐节点正常供水时间、冻结目标排序和可配置需求增幅 x 的实现与验收入口见 [逐节点保供调度与可配置复验](docs/逐节点保供调度与可配置复验.md)。部署默认参数集中在 `config/dispatch-defaults.json`，任务参数可覆盖并进入冻结哈希。
 
 - [赛事规程](https://agnes-ai.cn/hackathon)
 - [WNTR 公开模型](https://usepa.github.io/WNTR/libraries.html)

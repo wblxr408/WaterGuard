@@ -19,6 +19,18 @@ VERSION = '0.1.0'
 VERIFIER = 'fixture-reference/0.1.0'
 
 
+def latency_floor_s(fault_start_s, step_s, detection_s, decision_wall_clock_s, actuation_s):
+    """Earliest honest action sim-time: fault onset plus the real response latency,
+    rounded UP to the next control boundary. Backdating an action before this time
+    claims a decision that was not physically ready, so the server refuses it."""
+    total = detection_s + decision_wall_clock_s + actuation_s
+    require(all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0
+                for v in (detection_s, decision_wall_clock_s, actuation_s)), 'Response latency must be finite and non-negative')
+    require(isinstance(step_s, int) and step_s > 0, 'Invalid step for latency floor')
+    return int(fault_start_s) + math.ceil(total / step_s) * step_s
+
+
+
 def load(path: Path):
     for attempt in range(6):
         try:
@@ -124,6 +136,25 @@ def check_task(task, catalog, scene):
     limits = task['action_limits']
     require(set(limits['allowed_link_ids']) <= set(facilities), 'Unknown allowed facility')
     require(w['evaluation_start_s'] <= limits['earliest_s'] <= limits['latest_s'] < w['end_s'], 'Invalid action window')
+    latency = task.get('response_latency')
+    if latency is not None:
+        # A real-time dispatch task cannot credit any supply before the fault, and
+        # cannot let an action land before detection + decision + actuation elapses.
+        require(task['fault'] is not None, 'Response latency requires an actual fault')
+        require(w['evaluation_start_s'] == task['fault']['start_s'],
+                'Real-time accounting must start at fault onset (evaluation_start_s == fault.start_s)')
+        floor = latency_floor_s(task['fault']['start_s'], w['step_s'],
+                                latency['detection_s'], latency['decision_wall_clock_s'], latency['actuation_s'])
+        require(latency['earliest_effective_s'] == floor, 'Declared earliest_effective_s is not the real-latency floor')
+        require(limits['earliest_s'] >= floor, 'Action window backdates before the real response-latency floor')
+    emergency = task.get('emergency_floor')
+    if emergency is not None:
+        # A best-effort rescue floor only ever relaxes the hard constraints; it can
+        # never tighten them or masquerade as the recommendation gate.
+        require(0 < emergency['min_pressure_m'] <= task['hard_constraints']['min_pressure_m'],
+                'Emergency pressure floor must be positive and no stricter than the hard constraint')
+        require(0 < emergency['min_supply_ratio'] <= task['hard_constraints']['min_supply_ratio'],
+                'Emergency supply floor must be positive and no stricter than the hard constraint')
     require(task['schema_version'] in ('0.3.0','0.4.0') or task['fault'] is None or task['fault']['kind'] == 'closure', 'Reference verifier supports closure only before 0.3.0')
 
 
@@ -160,7 +191,7 @@ def verify_benchmark(task, plan, result, catalog, scene, perturbation=None):
     return _verify_result(task, plan, result, catalog, scene, 'benchmark', 'hydraulic-reference/0.2.0', perturbation)
 
 
-def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, perturbation=None):
+def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, perturbation=None, *, assessment_frames=None):
     check_task(task, catalog, scene)
     check_plan(task, plan, catalog)
     validate('SimulationResult', result)
@@ -197,13 +228,18 @@ def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, p
         if set(link_ids) != links or len(link_ids) != len(links):
             reasons.append('missing_duplicate_or_unknown_links')
     constraints = task['hard_constraints']
+    emergency = task.get('emergency_floor')
     shortage = expected = supplied = 0.0
     minimum = None
     violations = []
     critical = {n['id'] for n in scene['nodes'] if n['critical'] and n['kind'] == 'junction'}
     critical_pass = critical_total = 0
+    node_times = {node: [0, 0] for node in users}
+    emergency_times = {node: [0, 0] for node in users} if emergency is not None else None
     if not reasons:
-        for frame in frames:
+        # Public frames remain schema-checked above. The engineering verifier
+        # supplies independently checked internal event intervals for admission.
+        for frame in frames if assessment_frames is None else assessment_frames:
             t, dt = frame['time_s'], frame['duration_s']
             if t < w['evaluation_start_s']:
                 continue
@@ -216,6 +252,15 @@ def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, p
                 pressure_ok = p + constraints['pressure_tolerance_m'] >= constraints['min_pressure_m']
                 ratio = None if d == 0 else min(q, d) / d
                 ratio_ok = ratio is None or ratio + constraints['ratio_tolerance'] >= constraints['min_supply_ratio']
+                node_times[n['node_id']][0] += dt
+                node_times[n['node_id']][1] += dt if pressure_ok and ratio_ok else 0
+                if emergency is not None:
+                    # Relaxed livelihood floor: counted only for best-effort analysis,
+                    # never as recommendation admission.
+                    emerg_pressure_ok = p + constraints['pressure_tolerance_m'] >= emergency['min_pressure_m']
+                    emerg_ratio_ok = ratio is None or ratio + constraints['ratio_tolerance'] >= emergency['min_supply_ratio']
+                    emergency_times[n['node_id']][0] += dt
+                    emergency_times[n['node_id']][1] += dt if emerg_pressure_ok and emerg_ratio_ok else 0
                 for ok, code, value, threshold, unit in [
                     (pressure_ok, 'MIN_PRESSURE', p, constraints['min_pressure_m'], 'm'),
                     (ratio_ok, 'MIN_SUPPLY_RATIO', ratio, constraints['min_supply_ratio'], 'ratio'),
@@ -226,6 +271,17 @@ def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, p
                     critical_total += dt
                     critical_pass += dt if pressure_ok and ratio_ok else 0
     facilities = {f['link_id']: f for f in catalog['facilities']}
+    emergency_rows = {} if emergency is None else {node: (total, passed) for node, (total, passed) in emergency_times.items()}
+    availability = []
+    for node, (total, passed) in node_times.items():
+        row = dict(node_id=node, assessed_duration_s=total, normal_supply_duration_s=passed,
+                   normal_supply_time_ratio=None if total == 0 else passed / total)
+        if emergency is not None:
+            e_total, e_passed = emergency_rows[node]
+            row.update(emergency_supply_duration_s=e_passed,
+                       emergency_supply_time_ratio=None if e_total == 0 else e_passed / e_total)
+        availability.append(row)
+    ratios = [row['normal_supply_time_ratio'] for row in availability if row['normal_supply_time_ratio'] is not None]
     report = dict(
         schema_version=task['schema_version'], verification_id='verify-' + plan['candidate_id'] + ('' if perturbation is None else '-' + perturbation['perturbation_id']), simulation_id=artifact['simulation_id'],
         candidate_id=plan['candidate_id'], task_ref=task_ref(task), mode=mode,
@@ -240,6 +296,21 @@ def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, p
                        required_stress_tests_pass='pending', recommendation_eligible='fail'),
         recommendation_blockers=[mode + '_only', 'native_agh_trace_missing', 'required_stress_tests_pending'], verifier_version=verifier_version,
     )
+    if mode != 'fixture' or any(o.startswith('maximize_') for o in task['objectives']):
+        report['metrics'].update(node_availability=availability,
+            fully_compliant_node_count=sum(1 for r in availability if r['assessed_duration_s'] > 0
+                and r['normal_supply_duration_s'] == r['assessed_duration_s']),
+            assessed_node_count=len(ratios),
+            min_node_time_pass_ratio=min(ratios) if ratios else None,
+            mean_node_time_pass_ratio=sum(ratios) / len(ratios) if ratios else None)
+        if emergency is not None:
+            emerg_ratios = [row['emergency_supply_time_ratio'] for row in availability
+                            if row.get('emergency_supply_time_ratio') is not None]
+            report['metrics'].update(
+                emergency_min_node_time_pass_ratio=min(emerg_ratios) if emerg_ratios else None,
+                emergency_mean_node_time_pass_ratio=sum(emerg_ratios) / len(emerg_ratios) if emerg_ratios else None,
+                nodes_reaching_emergency_service=sum(1 for r in emerg_ratios if r >= 1 - 1e-9),
+                assessed_node_count=len(emerg_ratios))
     validate('VerificationReport', report)
     return report
 

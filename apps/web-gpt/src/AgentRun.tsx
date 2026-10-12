@@ -26,7 +26,6 @@ export const missingText: Record<string, string> = {
   agh_host_not_configured: "AGH 会话",
   real_hydraulic_results: "真实水力结果",
   required_stress_tests: "扰动复验",
-  "demand-plus-10pct": "需水 +10% 复验",
 };
 const short = (name: string) => name.split(" · ")[0];
 

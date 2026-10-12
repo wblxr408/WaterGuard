@@ -17,12 +17,14 @@ from .storage import write
 from waterguard_contracts.core import digest, load, require, verify_benchmark
 
 PREFIX = 'WaterGuard thresholds v1: '
-RETENTION = .95
+from .configuration import defaults
 _lock = threading.RLock()
 
 
-def derive(series, window):
+def derive(series, window, retention=None):
     """Use every evaluated node/time; never fit to a fault or candidate result."""
+    retention = defaults()['baseline_retention'] if retention is None else retention
+    require(math.isfinite(retention) and 0 < retention <= 1, 'Invalid baseline retention')
     frames = [f for f in series['frames'] if window['evaluation_start_s'] <= f['time_s'] < window['end_s']]
     require(bool(frames), 'No evaluated baseline frames; select manual thresholds')
     pressures, ratios = [], []
@@ -36,13 +38,13 @@ def derive(series, window):
     require(pressures and ratios, 'Baseline has no evaluated demand; select manual thresholds')
     p, r = min(pressures), min(ratios)
     require(p > .02 and r > .001, 'Baseline has nonpositive pressure or effectively no supply; select manual thresholds')
-    return dict(min_pressure_m=math.floor(p * RETENTION * 100) / 100,
-                min_supply_ratio=math.floor(min(r, 1) * RETENTION * 10000) / 10000,
+    return dict(min_pressure_m=math.floor(p * retention * 100) / 100,
+                min_supply_ratio=math.floor(min(r, 1) * retention * 10000) / 10000,
                 baseline_min_pressure_m=p, baseline_min_supply_ratio=r,
-                retention=RETENTION)
+                retention=retention)
 
 
-def recommend(network_id, engine='wntr', root=None):
+def recommend(network_id, engine='wntr', root=None, retention=None):
     task, plan = physical_case(network_id, 'normal', engine)
     identity = engine_identity(task)
     key = digest(dict(task_hash=task['constraint_hash'], engine=identity))[7:]
@@ -68,14 +70,15 @@ def recommend(network_id, engine='wntr', root=None):
         if not (saved / 'verification.json').is_file():
             write(saved / 'verification.json', report)
             seal(saved)
-        values = derive(result['series'], task['time_window'])
-        return dict(mode='adaptive', algorithm='baseline-envelope-v1', **values,
+        from services.verifier.service import dense_frames
+        values = derive({'frames': dense_frames(saved, task)}, task['time_window'], retention)
+        return dict(mode='adaptive', algorithm='baseline-envelope-v2-dense', **values,
                     reference_simulation_id=result['artifact']['simulation_id'],
                     reference_input_hash=result['artifact']['input_hash'],
                     reference_task_hash=task['constraint_hash'], engine_version=identity,
                     network_ref=task['network_ref'], time_window=task['time_window'],
                     hydraulic_options=task['hydraulic_options'],
-                    interpretation='Fault-free minimum node/time values × 95%; relative degradation thresholds, not regulatory limits.')
+                    interpretation=f"Fault-free minimum node/time values × {values['retention'] * 100:g}%; relative degradation thresholds, not regulatory limits.")
 
 
 def apply(task, policy):

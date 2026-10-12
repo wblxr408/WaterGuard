@@ -27,7 +27,15 @@ export type TaskSpec = {
   /**
    * @minItems 1
    */
-  objectives: ["minimize_shortage" | "minimize_action_cost", ...("minimize_shortage" | "minimize_action_cost")[]];
+  objectives: [
+    "minimize_shortage" | "minimize_action_cost" | "maximize_min_node_availability" | "maximize_mean_node_availability",
+    ...(
+      | "minimize_shortage"
+      | "minimize_action_cost"
+      | "maximize_min_node_availability"
+      | "maximize_mean_node_availability"
+    )[]
+  ];
   hard_constraints: HardConstraints;
   /**
    * @minItems 0
@@ -46,6 +54,8 @@ export type TaskSpec = {
   hydraulic_options?: HydraulicOptions;
   control_policy?: ControlPolicy;
   physical_parameters?: PhysicalParameters;
+  response_latency?: ResponseLatency;
+  emergency_floor?: EmergencyFloor;
 };
 export type Fault = {
   [k: string]: unknown;
@@ -269,6 +279,22 @@ export interface BackgroundLeak {
   area_m2: number;
   discharge_coefficient: number;
 }
+export interface ResponseLatency {
+  detection_s: number;
+  actuation_s: number;
+  decision_wall_clock_s: number;
+  earliest_effective_s: number;
+  measurement: "measured" | "declared";
+  source: string;
+}
+/**
+ * Relaxed livelihood-protection service floor for best-effort emergency rescue. Never replaces the hard recommendation constraints; a candidate meeting only this floor is best-effort, not recommended.
+ */
+export interface EmergencyFloor {
+  min_pressure_m: number;
+  min_supply_ratio: number;
+  source?: string;
+}
 export interface ActionPlan {
   schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   candidate_id: string;
@@ -423,6 +449,22 @@ export interface Metrics {
   min_pressure_m: number | null;
   critical_node_time_pass_ratio: number | null;
   action_cost: number;
+  min_node_time_pass_ratio?: number | null;
+  mean_node_time_pass_ratio?: number | null;
+  node_availability?: NodeAvailability[];
+  emergency_min_node_time_pass_ratio?: number | null;
+  emergency_mean_node_time_pass_ratio?: number | null;
+  nodes_reaching_emergency_service?: number;
+  assessed_node_count?: number;
+  fully_compliant_node_count?: number;
+}
+export interface NodeAvailability {
+  node_id: string;
+  assessed_duration_s: number;
+  normal_supply_duration_s: number;
+  normal_supply_time_ratio: number | null;
+  emergency_supply_duration_s?: number;
+  emergency_supply_time_ratio?: number | null;
 }
 export interface Coverage {
   start_s: number;
@@ -461,7 +503,7 @@ export interface RunRecord {
     model_calls: number | null;
     wall_time_s: number;
   };
-  conclusion: "FEASIBLE_FOUND" | "NO_FEASIBLE_FOUND" | "INCOMPLETE" | "INVALID";
+  conclusion: "FEASIBLE_FOUND" | "BEST_EFFORT_MITIGATION" | "NO_FEASIBLE_FOUND" | "INCOMPLETE" | "INVALID";
   selected_candidate_id: string | null;
   successor_run_id?: string | null;
   resumed_from_run_id?: string | null;
@@ -470,6 +512,7 @@ export interface RunRecord {
    * @minItems 0
    */
   missing_items: string[];
+  mitigation_candidate_id?: string | null;
 }
 export interface RunEvent {
   schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
@@ -487,6 +530,7 @@ export interface RunEvent {
   type:
     | "run.started"
     | "candidate.submitted"
+    | "candidate.revised"
     | "simulation.completed"
     | "verification.completed"
     | "run.completed"

@@ -12,6 +12,7 @@ from .runtime import PhysicalAdapter, engine_identity, seal
 from .integrity import verify_inventory, validate_output
 from .thresholds import adaptive_case, PREFIX
 from waterguard_contracts.core import load, require, verify_benchmark, file_hash
+from services.verifier.service import verify
 
 OUTPUT = ROOT / 'artifacts/china-zhijiang'
 
@@ -47,6 +48,8 @@ def current(output):
                 return False
             if result['artifact']['status'] != 'SUCCEEDED':
                 return False
+            if not load(folder / 'verification.json')['verifier_version'].startswith('waterguard-dense-verifier/'):
+                return False
         return True
     except (OSError, ValueError, KeyError, TypeError):
         return False
@@ -63,7 +66,7 @@ def run(output=OUTPUT):
             task, plan = adaptive_case(CHINA_NETWORK, kind, engine)
             result = adapter.simulate(task, plan)
             require(result['artifact']['status'] == 'SUCCEEDED', str(result['diagnostics']['errors']))
-            report = verify_benchmark(task, plan, result, catalog, scene)
+            report = verify(task, plan, result, catalog, scene, artifact_dir=output / result['artifact']['simulation_id'])
             require(report['validity'] == 'valid', 'Invalid Chinese network simulation')
             sid = result['artifact']['simulation_id']
             write(output / sid / 'verification.json', report)

@@ -19,6 +19,8 @@ export const recommendationBlockerText: Record<string, string> = {
   benchmark_only: "仅有固定脚本计算结果",
   fixture_only: "仅有人工样例结果",
   native_agh_trace_missing: "缺少原生 AGH 记录",
+  nominal_constraints_failed: "名义硬约束未通过",
+  required_stress_tests_failed: "同方案扰动复验未通过",
   required_stress_tests_pending: "扰动复验未完成",
 };
 export const sources = {
@@ -92,6 +94,10 @@ export interface Candidate {
   mapping: Mapping | null;
 }
 export interface Workspace {
+  mitigation?: { candidate_id: string; any_node_regressed: boolean; per_node: {
+    node_id: string; baseline_normal_s: number; selected_normal_s: number; delta_s: number;
+    emergency_delta_s: number | null;
+  }[] } | null;
   source: Source;
   mode: Mode;
   base: string;
@@ -100,6 +106,50 @@ export interface Workspace {
   candidates: Candidate[];
   index: BenchIndex | null;
   run: RunRecord | null;
+}
+
+export function deliveredCandidate(w: Pick<Workspace, 'run' | 'candidates'>): Candidate | undefined {
+  const id = w.run?.selected_candidate_id ?? w.run?.mitigation_candidate_id;
+  return w.candidates.find(c => c.id === id) ?? w.candidates.at(-1);
+}
+
+/** Display only comparable, independently verified service outcomes; never infer delivery. */
+export function serviceOutcome(c: Candidate, w: Pick<Workspace, 'run' | 'candidates'>) {
+  if (c.verification.validity !== 'valid') return null;
+  const m = c.verification.metrics;
+  const nodes = m.node_availability;
+  const baseline = w.candidates.find(b => {
+    const bn = b.verification.metrics.node_availability;
+    return b.verification.validity === 'valid' && b.plan.actions.length === 0
+      && b.task.task_id === c.task.task_id && b.task.revision === c.task.revision
+      && b.task.constraint_hash === c.task.constraint_hash
+      && b.task.time_window.evaluation_start_s === c.task.time_window.evaluation_start_s
+      && b.task.time_window.end_s === c.task.time_window.end_s
+      && nodes?.length && bn?.length === nodes.length
+      && nodes.every(n => bn.some(v => v.node_id === n.node_id && v.assessed_duration_s === n.assessed_duration_s));
+  });
+  const bm = baseline?.verification.metrics;
+  const delta = (a: number | null | undefined, b: number | null | undefined, scale = 1) =>
+    a == null || b == null ? null : Math.round((a - b) * scale * 1e8) / 1e8;
+  const sameFloor = baseline?.task.emergency_floor?.min_pressure_m === c.task.emergency_floor?.min_pressure_m
+    && baseline?.task.emergency_floor?.min_supply_ratio === c.task.emergency_floor?.min_supply_ratio;
+  const layer = (emergency: boolean) => {
+    const mean = emergency ? m.emergency_mean_node_time_pass_ratio : m.mean_node_time_pass_ratio;
+    const before = emergency ? (sameFloor ? bm?.emergency_mean_node_time_pass_ratio : null) : bm?.mean_node_time_pass_ratio;
+    const count = emergency ? m.nodes_reaching_emergency_service : m.fully_compliant_node_count;
+    const beforeCount = emergency ? (sameFloor ? bm?.nodes_reaching_emergency_service : null) : bm?.fully_compliant_node_count;
+    return { mean: mean ?? null, before: before ?? null, count: count ?? null,
+      worst: (emergency ? m.emergency_min_node_time_pass_ratio : m.min_node_time_pass_ratio) ?? null,
+      deltaPp: delta(mean, before, 100), deltaCount: delta(count, beforeCount) };
+  };
+  return { baselineId: baseline?.id ?? null, normal: layer(false),
+    emergency: c.task.emergency_floor ? layer(true) : null,
+    total: m.assessed_node_count ?? null, shortage: m.shortage_m3,
+    shortageReduction: delta(bm?.shortage_m3, m.shortage_m3),
+    residualNodeCount: new Set(c.verification.violations.map(v => v.node_id)).size,
+    violationCount: c.verification.violations.length,
+    delivery: w.run?.selected_candidate_id === c.id ? 'recommendation'
+      : w.run?.mitigation_candidate_id === c.id ? 'mitigation' : 'candidate' };
 }
 
 export async function get<T>(
@@ -281,12 +331,14 @@ export const runStatusText: Record<string, string> = {
 export const conclusionText: Record<string, string> = {
   FEASIBLE_FOUND: "找到可行方案",
   NO_FEASIBLE_FOUND: "预算内未找到可行方案",
+  BEST_EFFORT_MITIGATION: "尽力挽救 · 未完全达标",
   INCOMPLETE: "未完成工程推荐",
   INVALID: "无效",
 };
 export const eventText: Record<string, string> = {
   "run.started": "运行开始",
   "candidate.submitted": "提交候选方案",
+  "candidate.revised": "依据失败修订动作",
   "simulation.completed": "仿真完成",
   "verification.completed": "验收完成",
   "run.completed": "运行结束",

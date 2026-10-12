@@ -8,7 +8,7 @@ export interface CandidateSummary {
 export interface AssessmentSummary {
   validity: 'valid' | 'invalid' | null;
   admission: { nominal_constraints_pass?: 'pass' | 'fail' | 'pending'; required_stress_tests_pass?: 'pass' | 'fail' | 'pending'; recommendation_eligible?: 'pass' | 'fail' | 'pending' };
-  metrics: { min_pressure_m?: number; supply_ratio?: number; shortage_m3?: number };
+  metrics: { min_pressure_m?: number; supply_ratio?: number; shortage_m3?: number; min_node_time_pass_ratio?: number; mean_node_time_pass_ratio?: number };
   violation_count: number;
 }
 
@@ -70,10 +70,14 @@ const tools: Record<string, { title: string; kind: ExecutionNode['kind'] }> = {
   wg_get_task: { title: '读取任务', kind: 'gateway' },
   wg_inspect_network: { title: '分析管网', kind: 'tool' },
   wg_generate_candidates: { title: '规划候选', kind: 'llm' },
+  wg_diagnose_failure: { title: '定位实际失效', kind: 'tool' },
+  wg_revise_plan: { title: '修订动作与时序', kind: 'llm' },
   wg_jev_decide: { title: 'Jev 决策', kind: 'jev' },
   wg_submit_plan: { title: '提交方案', kind: 'llm' },
   wg_simulate_candidate: { title: '水力仿真', kind: 'tool' },
   wg_verify_candidate: { title: '独立验收', kind: 'tool' },
+  wg_compare_candidates: { title: '比较方案', kind: 'tool' },
+  wg_create_perturbation: { title: '同方案压力复验', kind: 'tool' },
   wg_build_evidence: { title: '读取证据', kind: 'gateway' },
 };
 export const EXECUTION_LAYOUT = { w: 232, h: 108, dx: 294, dy: 176, pad: 46, columns: 4 };
@@ -123,11 +127,24 @@ export function executionGraph(frames: ExecutionFrame[], run: RunRecord | null, 
     if (event.type === 'tool.completed') {
       node.endedAt = event.occurred_at;
       node.state = event.failed ? 'fail' : 'ok';
-      node.summary = event.failed ? '调用失败' : event.summary ?? (node.candidateId ? `候选：${node.candidateId}` : '调用已返回');
+      node.summary = event.failed ? event.summary ?? '调用失败' : event.summary ?? (node.candidateId ? `候选：${node.candidateId}` : '调用已返回');
     }
   }
   if (ended) for (const node of nodes) if (node.state === 'running') {
     node.state = 'interrupted'; node.summary = '运行结束，未收到调用返回';
+  }
+  if (ended && run && ['COMPLETED', 'BUDGET_EXHAUSTED'].includes(run.status) && run.conclusion) {
+    const feasible = run.conclusion === 'FEASIBLE_FOUND';
+    const mitigation = run.conclusion === 'BEST_EFFORT_MITIGATION';
+    const noFeasible = run.conclusion === 'NO_FEASIBLE_FOUND';
+    nodes.push({ id: 'host-final-admission', title: '最终准入汇总', tool: '运行服务汇总', kind: 'condition',
+      state: feasible || mitigation ? 'ok' : noFeasible ? 'fail' : 'wait',
+      statusLabel: feasible ? '可推荐' : mitigation ? '尽力挽救 · 未完全达标' : noFeasible ? '已测范围无可行方案' : '证据不完整',
+      summary: feasible ? `${run.selected_candidate_id}：名义约束、同方案扰动与原生记录均通过` :
+        mitigation ? `${run.mitigation_candidate_id}：已交付基线改善方案；仍有准入未通过，不可推荐为完全达标` :
+        noFeasible ? '已测候选未满足冻结约束；保留失败与改进证据' : '必要验收或关联证据尚不完整',
+      candidateId: run.selected_candidate_id ?? run.mitigation_candidate_id, startedAt: frames.find(f => f.type === 'end')!.occurred_at,
+      events: [], x: 0, y: 0 });
   }
   // Child IDs connect later simulations/verifications to the submission that created them.
   const childCandidates = new Map<string, string>();

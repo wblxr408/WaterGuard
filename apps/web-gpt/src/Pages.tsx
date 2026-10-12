@@ -17,6 +17,7 @@ import {
 } from "./data";
 import Icon from "./Icon";
 import ModelDemo from "./ModelDemo";
+import ServiceOutcome from "./ServiceOutcome";
 import { modelAssets, studioImage } from "./model-assets";
 
 export type Inspect = (title: string, data: unknown) => void;
@@ -77,7 +78,7 @@ export function Violations({
     (v) => filter === "all" || v.code === filter,
   );
   return (
-    <section className="violations-panel">
+    <section className="violations-panel" id="remaining-violations">
       <div className="panel-heading">
         <div>
           <h2>
@@ -212,6 +213,7 @@ export function Compare({
           {sameTask ? '比较候选方案的压力、供需比与验收结果。' : '正常与故障工况对照。'}
         </p>
       </div>
+      <ServiceOutcome candidate={selected} workspace={w} />
       <div className="comparison-layout">
         {w.candidates.map((c, i) => (
           <article
@@ -257,15 +259,21 @@ export function Compare({
                 </strong>
               </div>
               <div>
-                <span>总体供需比</span>
+                <span>逐节点平均正常供水时间</span>
                 <strong>
-                  {c.verification.metrics.supply_ratio == null
+                  {c.verification.metrics.mean_node_time_pass_ratio == null
                     ? "—"
-                    : num(c.verification.metrics.supply_ratio * 100)}
+                    : num(c.verification.metrics.mean_node_time_pass_ratio * 100)}
                   <small>%</small>
                 </strong>
               </div>
             </div>
+            <p>最差节点正常供水时间：{c.verification.metrics.min_node_time_pass_ratio == null ? '—' : `${num(c.verification.metrics.min_node_time_pass_ratio * 100)}%`}</p>
+            <p>全程完全达标节点：{c.verification.metrics.fully_compliant_node_count ?? '—'} / {c.verification.metrics.assessed_node_count ?? '—'}</p>
+            {w.run?.mitigation_candidate_id === c.id && <p>正式尽力挽救方案 · 仍未完全达标，详见下方准入与违规。</p>}
+            {c.task.emergency_floor && <p>应急降级服务（≥{c.task.emergency_floor.min_pressure_m} m／≥{num(c.task.emergency_floor.min_supply_ratio * 100)}%）：全程覆盖 {c.verification.metrics.nodes_reaching_emergency_service ?? '—'} 个节点；平均 {c.verification.metrics.emergency_mean_node_time_pass_ratio == null ? '—' : `${num(c.verification.metrics.emergency_mean_node_time_pass_ratio * 100)}%`}，最差 {c.verification.metrics.emergency_min_node_time_pass_ratio == null ? '—' : `${num(c.verification.metrics.emergency_min_node_time_pass_ratio * 100)}%`}。</p>}
+            {w.mitigation?.candidate_id === c.id && <details><summary>相对无动作基线的逐节点改善{w.mitigation.any_node_regressed ? '（含回退节点）' : ''}</summary><table><thead><tr><th>节点</th><th>基线正常秒数</th><th>挽救正常秒数</th><th>变化（秒）</th><th>降级覆盖变化（秒）</th></tr></thead><tbody>{w.mitigation.per_node.map(row => <tr key={row.node_id}><td>{row.node_id}</td><td>{num(row.baseline_normal_s, 0)}</td><td>{num(row.selected_normal_s, 0)}</td><td>{num(row.delta_s, 0)}</td><td>{row.emergency_delta_s == null ? '未配置' : num(row.emergency_delta_s, 0)}</td></tr>)}</tbody></table></details>}
+            {c.verification.metrics.node_availability && <details><summary>各节点正常供水时长与占比</summary><table><thead><tr><th>节点</th><th>正常供水 / 评估时长（秒）</th><th>占比</th></tr></thead><tbody>{c.verification.metrics.node_availability.map(row => <tr key={row.node_id}><td>{row.node_id}</td><td>{num(row.normal_supply_duration_s, 0)} / {num(row.assessed_duration_s, 0)}</td><td>{row.normal_supply_time_ratio == null ? '—' : `${num(row.normal_supply_time_ratio * 100)}%`}</td></tr>)}</tbody></table></details>}
             <div className="action-list">
               <h4>处置动作</h4>
               {c.plan.actions.length ? (
@@ -317,6 +325,9 @@ export function Compare({
               ? selected.verification.recommendation_blockers.map((reason) => recommendationBlockerText[reason] ?? reason).join(" · ")
               : "请查看五层准入与原始验收报告。"}
           </p>
+          {selected.verification.verifier_version.startsWith('waterguard-dense-verifier/') && (
+            <p>验收指标与违规区间按全部内部水力时刻计算；图中曲线采用 {num(selected.task.time_window.step_s / 60)} 分钟公共采样。供水量不含漏损，压力复验必须沿用同一动作方案。</p>
+          )}
         </div>
         <button
           className="text-button"
@@ -618,15 +629,24 @@ export function Evidence({
             <p className="mono">{c.evidence.bundle_id}</p>
           </div>
         </div>
-        <button
-          className="button primary"
-          onClick={() =>
-            download(`${c.evidence.bundle_id}-manifest.json`, c.evidence)
-          }
-        >
-          <Icon name="download" size={17} />
-          下载证据索引
-        </button>
+        <div style={{ gap: 12, flexWrap: 'wrap' }}>
+          <button
+            className="button secondary"
+            onClick={() =>
+              download(`${c.evidence.bundle_id}-manifest.json`, c.evidence)
+            }
+          >
+            <Icon name="download" size={17} />
+            下载证据索引
+          </button>
+          {w.source === 'runtime' && w.run?.run_id === c.evidence.run_id && c.evidence.live_export_allowed && (
+            <a className="button primary" download
+              href={`${w.base}/api/runs/${encodeURIComponent(c.evidence.run_id)}/evidence/download`}>
+              <Icon name="download" size={17} />
+              下载完整证据包
+            </a>
+          )}
+        </div>
       </div>
       <div className="evidence-info">
         <span>
@@ -833,6 +853,7 @@ export function FixtureEvents({
           <span>
             {w.run.selected_candidate_id
               ? `选定 ${w.run.selected_candidate_id}`
+              : w.run.mitigation_candidate_id ? `尽力挽救 ${w.run.mitigation_candidate_id}（未完全达标）`
               : "未选定推荐方案"}
           </span>
         </p>

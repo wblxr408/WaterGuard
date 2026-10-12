@@ -21,7 +21,8 @@ def run(output=ROOT/'artifacts/physics-study'):
         result=adapter.simulate(task,plan)
         sid=result['artifact']['simulation_id'];folder=output/sid
         _,_,scene,catalog=assets(task['network_ref']['network_id'])
-        verification=verify_benchmark(task,plan,result,catalog,scene)
+        from services.verifier.service import verify
+        verification=verify(task,plan,result,catalog,scene,artifact_dir=folder)
         write(folder/'verification.json',verification);seal(folder)
         analysis=load(folder/'hydraulic-analysis.json') if (folder/'hydraulic-analysis.json').exists() else None
         record=dict(case=label,group=group,network_id=task['network_ref']['network_id'],engine=task['hydraulic_options']['engine'],

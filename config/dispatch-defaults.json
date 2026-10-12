@@ -1,0 +1,88 @@
+{
+  "demand_increase_pct": 10,
+  "emergency_floor": {
+    "min_pressure_m": 15,
+    "min_supply_ratio": 0.75,
+    "source": "User-confirmed engineering assumption on 2026-10-12; additional emergency coverage only."
+  },
+  "baseline_retention": 0.95,
+  "time_window": {
+    "start_s": 0,
+    "end_s": 10800,
+    "step_s": 900,
+    "warmup_end_s": 3600,
+    "evaluation_start_s": 3600
+  },
+  "fault": {
+    "start_s": 3600,
+    "end_s": 7200,
+    "location_fraction": 0.5,
+    "discharge_coefficient": 0.75,
+    "leak_area_m2": 0.0005
+  },
+  "hard_constraints": {
+    "min_pressure_m": 20,
+    "min_supply_ratio": 0.95,
+    "pressure_tolerance_m": 1e-06,
+    "ratio_tolerance": 1e-06
+  },
+  "hydraulic_options": {
+    "engine": "wntr",
+    "minimum_pressure_m": 0,
+    "required_pressure_m": 20,
+    "pressure_exponent": 0.5,
+    "hydraulic_timestep_s": 300,
+    "demand_multiplier": 1
+  },
+  "action_limits": {
+    "max_actions": 8,
+    "earliest_s": 3600,
+    "latest_s": 9900,
+    "min_switch_interval_s": 900
+  },
+  "response_latency": {
+    "detection_latency_s": 60,
+    "actuation_latency_s": 120
+  },
+  "budget": {
+    "max_simulations": 40,
+    "max_parallel": 2,
+    "max_wall_time_s": 120,
+    "max_revisions": 4
+  },
+  "proposal": {
+    "network_id": "epa-net1",
+    "fault_kind": "closure",
+    "candidate_limit": 16,
+    "max_actions": 4,
+    "max_wall_time_s": 600
+  },
+  "scenario_links": {
+    "epa-net1": {
+      "fault_link_id": "12",
+      "pump_cycle_id": "9"
+    },
+    "epa-net3": {
+      "fault_link_id": "123",
+      "pump_cycle_id": "335"
+    },
+    "china-zhijiang": {
+      "fault_link_id": "1"
+    }
+  },
+  "physical_parameters": {
+    "roughness_multiplier": 1,
+    "reservoir_head_offset_m": 0,
+    "tank_level_offset_m": 0,
+    "node_demand_multipliers": {},
+    "node_pdd": {},
+    "background_leaks": [],
+    "solver_tolerance": 1e-08
+  },
+  "objectives": [
+    "maximize_min_node_availability",
+    "maximize_mean_node_availability",
+    "minimize_shortage",
+    "minimize_action_cost"
+  ]
+}

@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import * as data from '../src/data.ts';
+
+function candidate(id, actions, mean, emergency, shortage) {
+  return { id, name: id, task: { task_id: 'task', revision: 1, constraint_hash: 'same',
+    time_window: { evaluation_start_s: 3600, end_s: 10800 },
+    emergency_floor: { min_pressure_m: 15, min_supply_ratio: .75 } }, plan: { actions },
+    verification: { validity: 'valid', violations: [{ node_id: 'a' }, { node_id: 'a' }],
+      metrics: { assessed_node_count: 2, fully_compliant_node_count: 1,
+        mean_node_time_pass_ratio: mean, min_node_time_pass_ratio: 0,
+        nodes_reaching_emergency_service: 1, emergency_mean_node_time_pass_ratio: emergency,
+        emergency_min_node_time_pass_ratio: 0, shortage_m3: shortage,
+        node_availability: [{ node_id: 'a', assessed_duration_s: 7200 }, { node_id: 'b', assessed_duration_s: 7200 }] } } };
+}
+const baseline = () => candidate('base', [], .5, .6, 100);
+const rescue = () => candidate('rescue', [{ kind: 'pump_on' }], .8, .9, 40);
+function outcome(c, candidates, run = null) { return data.serviceOutcome?.(c, { candidates, run }); }
+
+test('selection changes effect comparison and separates affected nodes from violation records', () => {
+  const b = baseline(), c = rescue(), run = { mitigation_candidate_id: c.id };
+  const result = outcome(c, [b, c], run);
+  assert.equal(result?.normal.deltaPp, 30);
+  assert.equal(result.emergency.deltaPp, 30);
+  assert.equal(result.shortageReduction, 60);
+  assert.equal(result.residualNodeCount, 1);
+  assert.equal(result.violationCount, 2);
+  assert.equal(result.delivery, 'mitigation');
+  const switched = outcome(b, [b, c], run);
+  assert.equal(switched.delivery, 'candidate');
+  assert.equal(switched.normal.mean, .5);
+  assert.equal(switched.normal.deltaPp, 0);
+  assert.equal(outcome(c, [b, c]).delivery, 'candidate');
+});
+
+test('no cross-window or cross-node baseline comparisons and missing data is not zero', () => {
+  const b = baseline(), c = rescue();
+  b.task.time_window.end_s = 12000;
+  assert.equal(outcome(c, [b, c])?.baselineId, null);
+  b.task.time_window.end_s = 10800;
+  b.verification.metrics.node_availability[1].node_id = 'other';
+  assert.equal(outcome(c, [b, c]).normal.deltaPp, null);
+  delete c.verification.metrics.mean_node_time_pass_ratio;
+  delete c.task.emergency_floor;
+  assert.equal(outcome(c, [c]).normal.mean, null);
+  assert.equal(outcome(c, [c]).emergency, null);
+});
+
+test('regression stays negative and a different emergency floor cannot produce a delta', () => {
+  const b = baseline(), c = rescue();
+  c.verification.metrics.mean_node_time_pass_ratio = .4;
+  b.task.emergency_floor.min_pressure_m = 12;
+  assert.equal(outcome(c, [b, c])?.normal.deltaPp, -10);
+  assert.equal(outcome(c, [b, c]).emergency.deltaPp, null);
+  c.verification.validity = 'invalid';
+  assert.equal(outcome(c, [b, c]), null);
+});

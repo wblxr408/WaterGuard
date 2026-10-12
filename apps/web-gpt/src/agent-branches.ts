@@ -57,7 +57,7 @@ export function branchGraph(frames: ExecutionFrame[], run: RunRecord | null) {
     const source = offered.source ?? preparation.at(-1)?.id;
     connect(source, candidate.id, selected ? 'chosen' : 'offer', '候选');
     let bottom = y + 144;
-    submissions.forEach((c, i) => { const n = place({ ...c, title: 'Agnes 选择', summary: c.state === 'running' ? '正在提交方案' : c.summary === '调用失败' ? c.summary : `提交 ${id}` }, 1, y + i * L.dy);
+    submissions.forEach((c, i) => { const n = place({ ...c, title: 'Agnes 选择', summary: c.state === 'running' ? '正在提交方案' : c.state === 'fail' ? c.summary : `提交 ${id}` }, 1, y + i * L.dy);
       connect(candidate.id, n.id, 'chosen'); bottom = Math.max(bottom, n.y + L.h); });
     // Pair each simulation with its subsequent verification, retaining repeated attempts.
     const groups: ExecutionNode[][] = [];
@@ -81,7 +81,7 @@ export function branchGraph(frames: ExecutionFrame[], run: RunRecord | null) {
         const result = assessment.admission[key];
         if (!result) continue;
         const gate = place({ id: `${n.id}:${key}`, title: `${title}${result === 'pass' ? '通过' : result === 'fail' ? '未通过' : '待验证'}`,
-          kind: 'condition', tool: '独立验收报告', state: result === 'pass' ? 'ok' : result === 'fail' ? 'fail' : 'wait',
+          kind: 'condition', tool: '调用时验收报告', state: result === 'pass' ? 'ok' : result === 'fail' ? 'fail' : 'wait',
           statusLabel: result === 'pass' ? '通过' : result === 'fail' ? '未通过' : '待验证',
           summary: key === 'nominal_constraints_pass' ? `违规 ${assessment.violation_count} 项` : result === 'pending' ? '等待扰动验收结果' : result === 'pass' ? '扰动验收已通过' : '扰动验收未通过',
           startedAt: report!.occurred_at, events: [], candidateId: id, assessment, x: 0, y: 0 }, 3, n.y + j * 134);

@@ -82,6 +82,10 @@ def build_evidence(artifacts_root: Path, run: dict) -> dict:
     # placeholders from the files that have actually been persisted instead of
     # carrying a stale "missing" claim into a later evidence export.
     missing = list(run.get("missing_items", []))
+    terminal = run.get('status') in {'COMPLETED', 'ERROR', 'CANCELLED', 'BUDGET_EXHAUSTED', 'SUPERSEDED'}
+    missing = [item for item in missing if item != 'execution_in_progress']
+    if not terminal:
+        missing.append('execution_in_progress')
     if native_ref is not None:
         missing = [item for item in missing if item != "native_agh_trace"]
     if association_ref is not None:
@@ -110,7 +114,7 @@ def build_evidence(artifacts_root: Path, run: dict) -> dict:
         "association_ref": association_ref, "artifacts": entries,
         "hashes": {entry["ref"]: entry["sha256"] for entry in entries}, "redactions": [],
         "missing_items": missing,
-        "live_export_allowed": bool(run["mode"] == "live" and run.get("agh_session_ref") and run.get("model_config_ref") and native_ref and association_ref),
+        "live_export_allowed": bool(terminal and run["mode"] == "live" and run.get("agh_session_ref") and run.get("model_config_ref") and native_ref and association_ref),
     }
     validate("EvidenceManifest", evidence)
     output = run_dir / "evidence-manifest.json"

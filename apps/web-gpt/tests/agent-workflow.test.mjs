@@ -4,6 +4,7 @@ import { flowState } from '../src/agent-flow.ts';
 import { mindState } from '../src/agent-mindmap.ts';
 import { executionFrames, executionGraph } from '../src/agent-execution.ts';
 import { branchGraph } from '../src/agent-branches.ts';
+import * as data from '../src/data.ts';
 
 test('verification after simulation completion remains completed in both workflow views', () => {
   const run = { status: 'COMPLETED', phase: 'PACKAGING', conclusion: 'INCOMPLETE' };
@@ -87,12 +88,29 @@ test('nominal rejection is a returned verification; no phantom revision or pendi
     { type: 'run.completed', occurred_at: event(4).occurred_at },
   ]);
   const graph = executionGraph(frames, { status: 'COMPLETED', conclusion: 'INCOMPLETE' });
-  assert.equal(graph.nodes.length, 4);
+  assert.equal(graph.nodes.length, 5);
   assert.equal(graph.nodes[1].state, 'ok');
   assert.equal(graph.nodes[2].state, 'ok');
   assert.equal(graph.nodes[3].state, 'ok');
+  assert.equal(graph.nodes[4].id, 'host-final-admission');
+  assert.equal(graph.nodes[4].state, 'wait');
   assert.equal(graph.switches, 0);
   assert.equal(graph.retries, 0);
+});
+
+test('final host admission follows termination and preserves historical pending gates', () => {
+  const calls = [event(1, 'verify', 'wg_verify_candidate'), event(2, 'verify', 'wg_verify_candidate', 'tool.completed', {
+    candidate_id: 'a', assessment: { validity: 'valid', admission: { nominal_constraints_pass: 'pass', required_stress_tests_pass: 'pending' }, metrics: {}, violation_count: 0 },
+  })];
+  const trace = { events: calls, evidence: null };
+  const run = { status: 'COMPLETED', conclusion: 'FEASIBLE_FOUND', selected_candidate_id: 'a' };
+  assert.ok(!executionGraph(executionFrames(trace, []), run).nodes.some(n => n.id === 'host-final-admission'));
+  const frames = executionFrames(trace, [{ type: 'run.completed', occurred_at: event(3).occurred_at }]);
+  const graph = branchGraph(frames, run);
+  assert.equal(graph.nodes.find(n => n.id === 'host-final-admission').state, 'ok');
+  assert.equal(graph.nodes.find(n => n.id === 'host-final-admission').events.length, 0);
+  assert.equal(graph.nodes.find(n => n.id.endsWith('required_stress_tests_pass')).state, 'wait');
+  assert.equal(new Set(graph.nodes.flatMap(n => n.events.map(e => e.native_tool_call_ref))).size, 1);
 });
 
 test('terminal interruption and unconfigured Jev preserve actual return state', () => {
@@ -106,6 +124,30 @@ test('terminal interruption and unconfigured Jev preserve actual return state', 
 });
 
 const offered = id => ({ candidate_id: id, parent_candidate_id: null, actions: [] });
+test('opening a completed rescue selects the delivered candidate rather than the last tested one', () => {
+  const candidates = [{ id: 'baseline' }, { id: 'rescue' }, { id: 'last-tested' }];
+  assert.equal(data.deliveredCandidate?.({ candidates, run: { mitigation_candidate_id: 'rescue', selected_candidate_id: null } })?.id, 'rescue');
+});
+test('formal mitigation ends as delivered with its own candidate, not a recommendation', () => {
+  const run = { status: 'COMPLETED', conclusion: 'BEST_EFFORT_MITIGATION', selected_candidate_id: null, mitigation_candidate_id: 'rescue' };
+  const frames = executionFrames({ events: [], evidence: null }, [{ type: 'run.completed', occurred_at: event(1).occurred_at }]);
+  for (const graph of [executionGraph(frames, run), branchGraph(frames, run)]) {
+    const final = graph.nodes.find(n => n.id === 'host-final-admission');
+    assert.equal(final.state, 'ok');
+    assert.equal(final.candidateId, 'rescue');
+    assert.equal(final.statusLabel, '尽力挽救 · 未完全达标');
+  }
+});
+test('wall budget termination still exposes the verified mitigation in both workflow views', () => {
+  const run = { status: 'BUDGET_EXHAUSTED', conclusion: 'BEST_EFFORT_MITIGATION', selected_candidate_id: null, mitigation_candidate_id: 'rescue' };
+  const frames = executionFrames({ events: [], evidence: null }, [{ type: 'run.completed', occurred_at: event(1).occurred_at }]);
+  for (const graph of [executionGraph(frames, run), branchGraph(frames, run)]) {
+    const final = graph.nodes.find(n => n.id === 'host-final-admission');
+    assert.equal(final?.candidateId, 'rescue');
+    assert.equal(final.state, 'ok');
+    assert.equal(final.statusLabel, '尽力挽救 · 未完全达标');
+  }
+});
 test('candidate branches appear only after the planning return and stay unassessed until selected', () => {
   const frames = framesOf([event(1, 'generate', 'wg_generate_candidates'),
     event(2, 'generate', 'wg_generate_candidates', 'tool.completed', { candidates: [offered('a'), offered('b')] }),
@@ -158,4 +200,36 @@ test('semantic graph preserves actual retry and plan-switch edges without mergin
   assert.ok(graph.edges.some(e => e.kind === 'retry' && e.from === 'evaluation:sim-fail' && e.to === 'evaluation:sim-retry'));
   assert.ok(graph.edges.some(e => e.kind === 'candidate' && e.from === 'submit-a' && e.to === 'submit-b'));
   assert.equal(graph.nodes.find(n => n.id === 'candidate:b').summary, '候选操作尚未返回');
+});
+
+test('controlled invalid-action feedback remains a rejected action in both execution views', () => {
+  const frames = framesOf([event(1, 'bad', 'wg_submit_plan', 'tool.started', { candidate_id: 'invalid' }),
+    event(2, 'bad', 'wg_submit_plan', 'tool.completed', { candidate_id: 'invalid', failed: true, summary: '动作被拒绝 · INVALID_ACTION' })]);
+  const ordered = executionGraph(frames, null).nodes[0];
+  const branched = branchGraph(frames, null).nodes.find(n => n.id === 'bad');
+  assert.equal(ordered.state, 'fail');
+  assert.equal(branched.state, 'fail');
+  assert.equal(ordered.summary, '动作被拒绝 · INVALID_ACTION');
+  assert.equal(branched.summary, ordered.summary);
+});
+
+test('actual plan revision preserves returned controls and parent lineage in the graph', () => {
+  const revised = { candidate_id: 'revised', parent_candidate_id: 'original', actions: [
+    { kind: 'pump_on', link_id: '10', simulation_time_s: 4500 }] };
+  const frames = framesOf([
+    event(1, 'first', 'wg_submit_plan', 'tool.started', { candidate_id: 'original' }),
+    event(2, 'first', 'wg_submit_plan', 'tool.completed', { candidate_id: 'original', target_run_id: 'source' }),
+    event(3, 'diagnose', 'wg_diagnose_failure', 'tool.started', { target_run_id: 'source' }),
+    event(4, 'diagnose', 'wg_diagnose_failure', 'tool.completed', { candidate_id: 'original', summary: '实际失效' }),
+    event(5, 'revision', 'wg_revise_plan', 'tool.started'),
+    event(6, 'revision', 'wg_revise_plan', 'tool.completed', { candidate_id: 'revised', parent_candidate_id: 'original', candidate_plan: revised }),
+    event(7, 'second', 'wg_submit_plan', 'tool.started', { candidate_id: 'revised' }),
+    event(8, 'second', 'wg_submit_plan', 'tool.completed', { candidate_id: 'revised', parent_candidate_id: 'original', candidate_plan: revised, target_run_id: 'new-child' }),
+  ]);
+  const ordered = executionGraph(frames, null);
+  assert.equal(ordered.nodes.find(n => n.id === 'revision').title, '修订动作与时序');
+  assert.equal(ordered.nodes.find(n => n.id === 'second').branch, '修改方案');
+  const graph = branchGraph(frames, null);
+  assert.deepEqual(graph.nodes.find(n => n.id === 'candidate:revised').candidatePlan, revised);
+  assert.ok(graph.edges.some(e => e.kind === 'candidate' && e.to === 'second'));
 });

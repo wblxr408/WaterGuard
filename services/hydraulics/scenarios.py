@@ -4,6 +4,7 @@ from .compiler import VERSION, assets
 from .datasets import ROOT, NETWORKS
 from .adapter import write
 from waterguard_contracts.core import file_hash, task_hash, plan_hash, task_ref, load
+from .configuration import defaults, demand_domain
 
 
 def refresh_catalogs():
@@ -12,16 +13,17 @@ def refresh_catalogs():
 
 
 def case(network_id='epa-net1', kind='normal', engine='wntr'):
+    config = defaults()
     wn,source,scene,catalog=assets(network_id)
     assumptions=load(ROOT/source['overlays'][0]['ref'])['assumptions']
-    link={'epa-net1':'12','epa-net3':'123','china-zhijiang':'1'}[network_id]
+    link=config['scenario_links'][network_id]['fault_link_id']
     fault=None
     if kind in ('closure','leak','rupture','isolation'):
-        fault=dict(kind=kind,link_id=link,start_s=3600,end_s=7200,mapping='See entity-map.json for the actual physical compilation.')
+        fault=dict(kind=kind,link_id=link,start_s=config['fault']['start_s'],end_s=config['fault']['end_s'],mapping='See entity-map.json for the actual physical compilation.')
         if kind in ('leak','rupture'):
-            fault.update(location_fraction=0.5,discharge_coefficient=0.75)
+            fault.update(location_fraction=config['fault']['location_fraction'],discharge_coefficient=config['fault']['discharge_coefficient'])
         if kind=='leak':
-            fault['leak_area_m2']=0.0005
+            fault['leak_area_m2']=config['fault']['leak_area_m2']
         if kind=='isolation':
             if network_id=='epa-net1':
                 fault.update(link_id='31',boundary_link_ids=['121','122'])
@@ -32,24 +34,24 @@ def case(network_id='epa-net1', kind='normal', engine='wntr'):
                 fault['boundary_link_ids']=sorted(n for n,p in wn.links() if (p.start_node_name in nodes)!=(p.end_node_name in nodes))
     task=dict(schema_version=VERSION,task_id=f'{network_id}-{kind}-{engine}-v3',revision=1,
         network_ref=dict(network_id=network_id,revision=source['revision'],sha256=source['sha256'],overlay_hash=source['overlays'][0]['sha256']),
-        fault=fault,time_window=dict(start_s=0,end_s=10800,step_s=900,warmup_end_s=3600,evaluation_start_s=3600),
-        objectives=['minimize_shortage','minimize_action_cost'],hard_constraints=dict(min_pressure_m=20,min_supply_ratio=0.95,node_ids=wn.junction_name_list,pressure_tolerance_m=1e-6,ratio_tolerance=1e-6,source='Engineering acceptance thresholds, not field calibration.'),
+        fault=fault,time_window=copy.deepcopy(config['time_window']),
+        objectives=list(config['objectives']),hard_constraints=dict(**config['hard_constraints'],node_ids=wn.junction_name_list,source='Configured engineering acceptance thresholds, not field calibration.'),
         soft_preferences=[],action_catalog_ref=f'data/catalogs/{network_id}-v3.json',action_catalog_hash=file_hash(ROOT/f'data/catalogs/{network_id}-v3.json'),
-        action_limits=dict(max_actions=8,allowed_link_ids=[f['link_id'] for f in catalog['facilities']],allowed_kinds=['link_open','link_close','pump_on','pump_off'],earliest_s=3600,latest_s=9900,min_switch_interval_s=900),
-        perturbation_domain=dict(required=['demand-plus-10pct'],demand_multipliers=[1,1.1]),assumptions=assumptions+['Original source controls retained unless exactly acknowledged in control_policy.','Fault and manual-control parameters are declared scenario assumptions.'],
-        budget=dict(max_simulations=40,max_parallel=2,max_wall_time_s=120,max_revisions=4),
-        hydraulic_options=dict(engine=engine,minimum_pressure_m=0,required_pressure_m=20,pressure_exponent=0.5,hydraulic_timestep_s=300,demand_multiplier=1),
+        action_limits=dict(**config['action_limits'],allowed_link_ids=[f['link_id'] for f in catalog['facilities']],allowed_kinds=['link_open','link_close','pump_on','pump_off']),
+        perturbation_domain=demand_domain(config['demand_increase_pct'], config['hydraulic_options']['demand_multiplier']),assumptions=assumptions+['Original source controls retained unless exactly acknowledged in control_policy.','Fault and manual-control parameters are declared scenario assumptions.'],
+        budget=copy.deepcopy(config['budget']),
+        hydraulic_options=dict(config['hydraulic_options'], engine=engine),
         control_policy=dict(overrides=[]))
     actions=[]
     if kind=='pump-cycle':
         if not wn.pump_name_list:
             raise ValueError('This network has no pump; pump-cycle is not available')
-        pump='9' if network_id=='epa-net1' else '335'
+        pump=config['scenario_links'][network_id]['pump_cycle_id']
         facility=next(f for f in catalog['facilities'] if f['link_id']==pump)
         task['control_policy']['overrides']=[dict(link_id=pump,control_names=facility['native_control_names'],reason='Explicit manual pump-cycle acceptance scenario, applies to the whole task timeline.')]
-        actions=[dict(kind='pump_off',link_id=pump,simulation_time_s=3600),dict(kind='pump_on',link_id=pump,simulation_time_s=7200)]
+        actions=[dict(kind='pump_off',link_id=pump,simulation_time_s=config['fault']['start_s']),dict(kind='pump_on',link_id=pump,simulation_time_s=config['fault']['end_s'])]
     elif kind=='link-cycle':
-        actions=[dict(kind='link_close',link_id=link,simulation_time_s=3600),dict(kind='link_open',link_id=link,simulation_time_s=7200)]
+        actions=[dict(kind='link_close',link_id=link,simulation_time_s=config['fault']['start_s']),dict(kind='link_open',link_id=link,simulation_time_s=config['fault']['end_s'])]
     elif kind not in ('normal','closure','leak','rupture','isolation'):
         raise ValueError('Unknown acceptance case')
     task['constraint_hash']=task_hash(task)
@@ -85,8 +87,7 @@ def feedback_pair():
 def physical_case(network_id='epa-net3',kind='rupture',engine='wntr'):
     task,plan=case(network_id,kind,engine)
     task['schema_version']=plan['schema_version']='0.4.0'
-    task['physical_parameters']=dict(roughness_multiplier=1,reservoir_head_offset_m=0,tank_level_offset_m=0,
-        node_demand_multipliers={},node_pdd={},background_leaks=[],solver_tolerance=1e-8)
+    task['physical_parameters']=copy.deepcopy(defaults()['physical_parameters'])
     rebind(task,plan)
     return task,plan
 

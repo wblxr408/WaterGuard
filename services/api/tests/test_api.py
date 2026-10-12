@@ -47,8 +47,10 @@ class ApiTests(unittest.TestCase):
         again = self.client.post(f"/api/runs/{run_id}/cancel")
         self.assertEqual(again.status_code, 200)
         resumed = self.client.get(f"/api/runs/{run_id}/events", headers={"Last-Event-ID": "1"})
-        self.assertIn("id: 2", resumed.text)
-        self.assertNotIn("id: 1", resumed.text)
+        resumed_ids = [int(line.removeprefix('id: ')) for line in resumed.text.splitlines() if line.startswith('id: ')]
+        self.assertIn(2, resumed_ids)
+        self.assertTrue(all(sequence > 1 for sequence in resumed_ids))
+        self.assertEqual(resumed_ids, sorted(set(resumed_ids)))
 
     def test_live_run_is_rejected_without_agh_host(self):
         self.client.post("/api/tasks", json=self.task)

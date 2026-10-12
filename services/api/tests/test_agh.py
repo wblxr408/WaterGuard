@@ -120,6 +120,7 @@ class AghBoundaryTests(unittest.TestCase):
             nominal = created.json()
             self.store.transition(nominal['run_id'], 'RUNNING', 'SIMULATING')
             self.store.transition(nominal['run_id'], 'COMPLETED', 'PACKAGING')
+            self.store._write_json(f"{nominal['run_id']}/candidates/{plan['candidate_id']}/verification.json", {'validity': 'valid', 'violations': []})
             response = client.post(f"/api/runs/{nominal['run_id']}/perturbations",
                                    headers={'X-WG-AGH-Session': 'isolated-sdk-test-session'},
                                    json={'demand_multiplier': 1.1})
@@ -162,7 +163,24 @@ class AghBoundaryTests(unittest.TestCase):
         self.assertEqual(evidence['association_ref'], 'artifact:agh/association.json')
         self.assertNotIn('native_agh_trace', evidence['missing_items'])
         self.assertNotIn('agh_host_not_configured', evidence['missing_items'])
+        self.assertFalse(evidence['live_export_allowed'])
+        self.assertIn('execution_in_progress', evidence['missing_items'])
+        parent = self.store.transition(parent['run_id'], 'COMPLETED', 'PACKAGING')
+        evidence = build_evidence(self.store.artifacts, parent)
         self.assertTrue(evidence['live_export_allowed'])
+        self.assertNotIn('execution_in_progress', evidence['missing_items'])
+
+    def test_active_evidence_is_readable_but_not_archived_or_downloadable(self):
+        with TestClient(create_app(self.store)) as client:
+            parent = self.parent()
+            response = client.get(f"/api/runs/{parent['run_id']}/evidence")
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertFalse(response.json()['live_export_allowed'])
+            self.assertIn('execution_in_progress', response.json()['missing_items'])
+            trace = client.get(f"/api/runs/{parent['run_id']}/execution").json()
+            self.assertIsNone(trace['evidence'])
+            self.assertEqual(client.get(f"/api/runs/{parent['run_id']}/evidence/download").status_code, 409)
+            self.store.transition(parent['run_id'], 'CANCELLED')
 
     def test_restart_revokes_old_session_even_if_native_cancel_fails(self):
         from services.api.agh import LiveExecutor

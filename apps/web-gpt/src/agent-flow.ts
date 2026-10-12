@@ -149,6 +149,7 @@ export const nodeOfEvent: Record<RunEvent["type"], string> = {
   "run.started": "start",
   "clarification.requested": "model",
   "candidate.submitted": "plan",
+  "candidate.revised": "plan",
   "simulation.completed": "sim",
   "verification.completed": "verify",
   "run.completed": "pack",

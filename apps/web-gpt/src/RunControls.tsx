@@ -30,7 +30,7 @@ function OperationDialog({ title, busy, close, children }: { title: string; busy
 
 type Fault = "normal" | "closure" | "leak" | "rupture" | "isolation";
 function CreateRun({ close, created, initialTask, waitForResult = false }: { close: () => void; created: (run: RunRecord) => void; initialTask?: TaskSpec; waitForResult?: boolean }) {
-  const [network, setNetwork] = useState(initialTask?.network_ref.network_id ?? "china-zhijiang");
+  const [network, setNetwork] = useState(initialTask?.network_ref.network_id ?? "");
   const [networks, setNetworks] = useState<string[]>([]);
   const [links, setLinks] = useState<string[]>([]);
   const [link, setLink] = useState("");
@@ -39,7 +39,12 @@ function CreateRun({ close, created, initialTask, waitForResult = false }: { clo
   const [recommendation, setRecommendation] = useState<ThresholdRecommendation | null>(null);
   const [pressure, setPressure] = useState<number | ''>(initialTask?.hard_constraints.min_pressure_m ?? '');
   const [ratio, setRatio] = useState<number | ''>(initialTask ? initialTask.hard_constraints.min_supply_ratio * 100 : '');
-  const [limit, setLimit] = useState(waitForResult ? 1 : 3);
+  const [limit, setLimit] = useState(waitForResult ? 1 : initialTask?.budget.max_simulations ?? 0);
+  const [increase, setIncrease] = useState<number | ''>(() => {
+    const label = initialTask?.perturbation_domain.required.find(value => value.startsWith('demand-plus-') && value.endsWith('pct'));
+    const value = label ? Number(label.slice('demand-plus-'.length, -'pct'.length)) : NaN;
+    return Number.isFinite(value) && value > 0 ? value : '';
+  });
   const [mode, setMode] = useState(waitForResult ? "benchmark" : "live");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -50,9 +55,13 @@ function CreateRun({ close, created, initialTask, waitForResult = false }: { clo
     const controller = new AbortController();
     api<{ network_id: string }[]>("/api/networks", controller.signal).then((rows) => setNetworks(rows.map((row) => row.network_id)))
       .catch((error) => { if (!controller.signal.aborted) setError(errorText(error)); });
+    api<{ demand_increase_pct: number; proposal: { network_id: string; candidate_limit: number } }>("/api/dispatch/defaults", controller.signal)
+      .then(value => { if (!initialTask) { setNetwork(value.proposal.network_id); setIncrease(value.demand_increase_pct); if (!waitForResult) setLimit(value.proposal.candidate_limit); } })
+      .catch(error => { if (!controller.signal.aborted) setError(errorText(error)); });
     return () => { controller.abort(); request.current?.abort(); };
   }, []);
   useEffect(() => {
+    if (!network) return;
     const controller = new AbortController(); setLoading(true); setLinks([]); setLink(""); setRecommendation(null); setError("");
     api<{ fault_link_ids: string[]; threshold_recommendation: ThresholdRecommendation }>(`/api/networks/${encodeURIComponent(network)}`, controller.signal).then((details) => {
       setLinks(details.fault_link_ids); setLink(initialTask?.network_ref.network_id === network && details.fault_link_ids.includes(initialTask.fault?.link_id ?? '') ? initialTask.fault!.link_id : details.fault_link_ids[0] ?? "");
@@ -70,7 +79,7 @@ function CreateRun({ close, created, initialTask, waitForResult = false }: { clo
     event.preventDefault(); if (busy || loading) return;
     setBusy(true); setError(""); const controller = request.current = new AbortController();
     try {
-      const proposal = { network_id: network, fault_kind: fault, ...(requiresLink ? { link_id: link } : {}), threshold_mode: thresholdMode, ...(thresholdMode === 'manual' ? { min_pressure_m: pressure, min_supply_ratio: Number(ratio) / 100 } : {}), candidate_limit: limit };
+      const proposal = { network_id: network, fault_kind: fault, ...(requiresLink ? { link_id: link } : {}), threshold_mode: thresholdMode, ...(thresholdMode === 'manual' ? { min_pressure_m: pressure, min_supply_ratio: Number(ratio) / 100 } : {}), candidate_limit: limit, demand_increase_pct: increase };
       const signature = JSON.stringify(proposal);
       if (frozen.current?.signature !== signature) {
         const task = await api<{ task_id: string }>("/api/tasks/from-proposal", controller.signal, proposal);
@@ -105,7 +114,8 @@ function CreateRun({ close, created, initialTask, waitForResult = false }: { clo
       <label className="operation-wide">阈值模式<select value={thresholdMode} onChange={(event) => setThresholdMode(event.target.value as 'adaptive' | 'manual')}><option value="adaptive">自适应 · 依据无故障基线</option><option value="manual">手动设置</option></select></label>
       <label>用户节点最低压力（m）<input type="number" min="0" max="100" step="any" required disabled={thresholdMode === 'adaptive'} value={pressure} onChange={(event) => setPressure(event.target.value === '' ? '' : event.target.valueAsNumber)} /></label>
       <label>用户节点最低供需比（%）<input type="number" min="0" max="100" step="any" required disabled={thresholdMode === 'adaptive'} value={ratio} onChange={(event) => setRatio(event.target.value === '' ? '' : event.target.valueAsNumber)} /></label>
-      <label>最多仿真次数（含基线）<input type="number" min="1" max="6" step="1" required value={limit} onChange={(event) => setLimit(event.target.valueAsNumber)} /></label>
+      <label>需求增加 x（%）<input type="number" min="0" step="any" required value={increase} onChange={(event) => setIncrease(event.target.value === '' ? '' : event.target.valueAsNumber)} /></label>
+      <label>最多仿真次数（含基线和复验）<input type="number" min="1" max="100" step="1" required value={limit} onChange={(event) => setLimit(event.target.valueAsNumber)} /></label>
       <label className="operation-wide">运行模式<select value={mode} onChange={(event) => setMode(event.target.value)}><option value="benchmark">水力计算</option>{!waitForResult && <option value="live">Agnes 实时规划</option>}</select></label>
     </fieldset>
     <div className="operation-message">{recommendation && !recommendation.available && <p className="operation-error">无法生成自适应阈值：{recommendation.message}。请切换手动模式。</p>}{loading && <p role="status">正在计算无故障基线并读取管网…</p>}{error && <p className="operation-error" role="alert">{error}</p>}</div>

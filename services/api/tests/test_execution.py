@@ -11,6 +11,17 @@ from services.api.workbench import TaskProposal, propose_task
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_revision_refusal_is_failed_even_when_the_native_http_call_returned(self):
+        calls = {}
+        project_tool_event({'type': 'tool/call', 'data': {'toolUseId': 'revision-refused', 'name': 'wg_revise_plan', 'args': {}}},
+                           1, 'isolated-session', calls)
+        result = project_tool_event({'type': 'tool/result', 'data': {'toolUseId': 'revision-refused', 'isError': False,
+            'structured': {'accepted': False, 'code': 'INVALID_REVISION', 'message': 'Unauthorized revision facility: 330'}}},
+            2, 'isolated-session', calls)
+        self.assertTrue(result['failed'])
+        self.assertEqual(result['summary'], '方案修订被拒绝 · INVALID_REVISION')
+        self.assertNotIn('candidate_plan', result)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
@@ -91,6 +102,22 @@ class ExecutionTests(unittest.TestCase):
             row = project_tool_event({'type': 'tool/result', 'data': {'toolUseId': 'jev', 'structured': {
                 'configured': configured, 'answers': {'next': {'choice': 'a'}}}}}, 2, 's', calls)
             self.assertEqual(row.get('jev_choice'), 'a' if configured else None)
+
+    def test_bounded_feedback_preserves_full_violation_count(self):
+        from services.api.execution import assessment_summary
+        summary = assessment_summary({'validity': 'valid', 'violations': [{}]*12, 'violation_count': 4217})
+        self.assertEqual(summary['violation_count'], 4217)
+        for invalid_count in (True, -1, 3, '4217'):
+            summary = assessment_summary({'violations': [{}]*12, 'violation_count': invalid_count})
+            self.assertEqual(summary['violation_count'], 12)
+
+    def test_business_rejection_stays_failed_even_when_transport_returned_successfully(self):
+        calls = {}
+        project_tool_event({'type': 'tool/call', 'data': {'toolUseId': 'bad', 'name': 'wg_submit_plan'}}, 1, 's', calls)
+        row = project_tool_event({'type': 'tool/result', 'data': {'toolUseId': 'bad', 'isError': False,
+            'structured': {'accepted': False, 'code': 'INVALID_ACTION'}}}, 2, 's', calls)
+        self.assertTrue(row['failed'])
+        self.assertEqual(row['summary'], '动作被拒绝 · INVALID_ACTION')
 
 
 if __name__ == '__main__':

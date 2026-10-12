@@ -104,7 +104,7 @@ class WorkbenchTests(unittest.TestCase):
 
     def test_cancel_reaches_adapter_and_cannot_be_overwritten(self):
         entered, stopped = threading.Event(), threading.Event()
-        def simulate(_adapter, _task, _plan, *, timeout_s, cancel_event):
+        def simulate(_adapter, _task, _plan, *, timeout_s, cancel_event, perturbation=None):
             entered.set()
             self.assertTrue(cancel_event.wait(5))
             stopped.set()

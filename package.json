@@ -4,6 +4,7 @@
   "workspaces": ["packages/contracts"],
   "scripts": {
     "start": "python scripts/start_agh.py",
+    "start:fullstack": "pwsh -NoProfile -ExecutionPolicy Bypass -File apps/web-gpt/scripts/start-demo.ps1",
     "start:api": "python scripts/start_workbench.py",
     "start:web": "pwsh -NoProfile -ExecutionPolicy Bypass -File apps/web-gpt/scripts/start-demo.ps1",
     "api:check": "python scripts/check_backend_api.py",

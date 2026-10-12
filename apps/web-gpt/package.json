@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
-    "test:workflow": "node --experimental-strip-types --test tests/agent-workflow.test.mjs",
+    "test:workflow": "node --experimental-strip-types --test tests/agent-workflow.test.mjs tests/service-outcome.test.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },

@@ -6,6 +6,7 @@ import {
   download,
   engineStatus,
   loadWorkspace,
+  deliveredCandidate,
   networkName,
   num,
   sources,
@@ -685,7 +686,7 @@ function Overview({
         <span
           className={`badge ${c.verification.admission.recommendation_eligible}`}
         >
-          {c.verification.admission.recommendation_eligible === "fail"
+          {w.run?.mitigation_candidate_id === c.id ? '尽力挽救 · 未完全达标' : c.verification.admission.recommendation_eligible === "fail"
             ? "不可推荐"
             : statusText[c.verification.admission.recommendation_eligible]}
         </span>
@@ -728,8 +729,10 @@ export default function App() {
     const requested = params.get("page");
     return navigation.some((item) => item.id === requested) ? requested as Page : params.has("run") ? "agent" : "cover";
   });
-  const [source, setSource] = useState<Source>("china");
-  const [selection, setSelection] = useState("");
+  const [source, setSource] = useState<Source>(() =>
+    new URLSearchParams(window.location.search).has('run') ? 'runtime' : 'china');
+  const [selection, setSelection] = useState(() =>
+    new URLSearchParams(window.location.search).get('run') ?? '');
   const [activeRun, setActiveRun] = useState<RunRecord | null>(null);
   const followRun = useCallback((id: string) => {
     setSource('runtime'); setSelection(id);
@@ -798,7 +801,7 @@ export default function App() {
       try {
         const data = await loadWorkspace('runtime', selection, controller.signal);
         if (controller.signal.aborted) return;
-        const candidate = data.candidates.at(-1)!;
+        const candidate = deliveredCandidate(data)!;
         setW(data); setActiveRun(data.run); setError('');
         setCandidateId(candidate.id);
         if (first) {
