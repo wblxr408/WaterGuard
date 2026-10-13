@@ -12,4 +12,3 @@
   "max_wall_time_s": 1200,
   "response_latency": {"decision_wall_clock_s": 569.632, "measurement": "declared", "source": "Declared decision wall-clock for a deterministic offline bound; live acceptance overrides it with the measured native-session value."}
 }
-

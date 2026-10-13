@@ -85,4 +85,3 @@ export function refusalFeedback(value, httpStatus, code) {
     'Request was explicitly refused by the server.'
   return { accepted: false, code, http_status: httpStatus, message }
 }
-

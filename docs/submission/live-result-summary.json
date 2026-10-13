@@ -187,5 +187,130 @@
         "nodes_reaching_emergency_service": 76
       }
     }
+  },
+  "paired_experiment_summary": {
+    "protocol": {
+      "repeats": 3,
+      "scenarios": [
+        "net3-closure-123",
+        "net1-leak-22"
+      ],
+      "simulation_cap": 4,
+      "wall_time_cap_s": 600,
+      "max_actions": 4,
+      "declared_decision_s": 1200,
+      "strategies": [
+        "fixed_order",
+        "agh_feedback",
+        "agh_zero_revision"
+      ],
+      "ablation": "Only max_revisions changes from 4 to 0; no production tool/prompt change",
+      "execution": "Sequential, shared local host/provider; no significance claim for n=3",
+      "metrics": [
+        "min_node_time_pass_ratio",
+        "mean_node_time_pass_ratio",
+        "emergency_mean_node_time_pass_ratio",
+        "fully_compliant_node_count",
+        "nodes_reaching_emergency_service",
+        "shortage_m3",
+        "simulations",
+        "model_calls",
+        "wall_time_s"
+      ]
+    },
+    "original_paired_repeats": 6,
+    "original_native_completed": 10,
+    "original_native_errors": 2,
+    "supplementary_recovery": [
+      {
+        "reason": "Actual service interruption; original ERROR trial retained, not replaced",
+        "source_run_id": "run-a3084f72de10455abc3a90bc0d671822",
+        "changed_frozen_physical_conditions": false,
+        "audit": {
+          "run_id": "run-baf31e38330b49f5a6962d503e2e5b7a",
+          "task_ref": {
+            "constraint_hash": "sha256:661033fcc1182769835fdaef498341a1452439b741342cab83c2226c2119e47d",
+            "network_hash": "sha256:607510a01287d60d27b280a39df31a001363175a438a5de1b39e749cec6ddbc8",
+            "revision": 1,
+            "task_id": "web-7366278873ff4da387fa02b897d97ff7-zero-revision-delivery-recovery"
+          },
+          "status": "COMPLETED",
+          "conclusion": "NO_FEASIBLE_FOUND",
+          "selected_candidate_id": null,
+          "mitigation_candidate_id": null,
+          "budget": {
+            "max_parallel": 2,
+            "max_revisions": 0,
+            "max_simulations": 4,
+            "max_wall_time_s": 600
+          },
+          "budget_usage": {
+            "model_calls": 23,
+            "simulations": 4,
+            "wall_time_s": 341.5
+          },
+          "native_session_duration_s": 339.879,
+          "successful_native_tools": [
+            "wg_get_task",
+            "wg_inspect_network",
+            "wg_generate_candidates",
+            "wg_jev_decide",
+            "wg_submit_plan",
+            "wg_simulate_candidate",
+            "wg_verify_candidate",
+            "wg_jev_decide",
+            "wg_submit_plan",
+            "wg_simulate_candidate",
+            "wg_verify_candidate",
+            "wg_jev_decide",
+            "wg_submit_plan",
+            "wg_simulate_candidate",
+            "wg_verify_candidate",
+            "wg_jev_decide",
+            "wg_submit_plan",
+            "wg_simulate_candidate",
+            "wg_verify_candidate",
+            "wg_jev_decide",
+            "wg_compare_candidates",
+            "wg_build_evidence"
+          ],
+          "native_export_allowed": true,
+          "missing_items": [
+            "required_stress_tests"
+          ],
+          "independently_remeasured_candidates": 4,
+          "candidate_audit_failures": [],
+          "model": {
+            "id": "agnes-ai",
+            "route": "account-agnes-ai",
+            "baseUrl": "https://api.agnes-ai.cn/v1",
+            "model": "agnes-3.0-flash",
+            "credentialConfigured": true
+          },
+          "best": {
+            "candidate_id": "web-candidate-0",
+            "actions": [],
+            "validity": "valid",
+            "violation_count": 3,
+            "remaining_nodes": 1,
+            "recommendation_eligible": "fail",
+            "metrics": {
+              "shortage_m3": 0.018608243,
+              "supply_ratio": 0.9999661447814339,
+              "min_pressure_m": 19.830642262307464,
+              "critical_node_time_pass_ratio": null,
+              "action_cost": 0,
+              "fully_compliant_node_count": 8,
+              "assessed_node_count": 9,
+              "min_node_time_pass_ratio": 0.875,
+              "mean_node_time_pass_ratio": 0.9861111111111112,
+              "emergency_min_node_time_pass_ratio": 1.0,
+              "emergency_mean_node_time_pass_ratio": 1.0,
+              "nodes_reaching_emergency_service": 9
+            }
+          }
+        }
+      }
+    ]
   }
 }

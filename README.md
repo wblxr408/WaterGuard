@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-2026-10-12最新交付：已完成真实AGH尽力挽救运行，方案对照突出正常/降级覆盖、相对基线改善和剩余违规。[本科组提交材料](docs/submission/README.md)提供50字简介、4975字详情、最新实测摘要及实际截图；[尽力挽救验收](docs/尽力挽救交付验收.md)区分本次结果与下文历史六场景。完整原始证据和演示数据库随无视频提交ZIP提供，入口见[证据索引](docs/submission/证据索引.md)。提交版直接启动与复现以[最新说明](docs/submission/复现与运行.md)为准。
+2026-10-13提交版：已完成真实AGH尽力挽救运行，方案对照突出正常/降级覆盖、相对基线改善和剩余违规。[本科组提交材料](docs/submission/README.md)提供50字简介、4978字详情、最新实测摘要及实际截图；[尽力挽救验收](docs/尽力挽救交付验收.md)区分本次结果与下文历史六场景。完整原始证据和演示数据库随无视频提交ZIP提供，入口见[证据索引](docs/submission/证据索引.md)。提交版直接启动与复现以[最新说明](docs/submission/复现与运行.md)为准。
 
 已拉取官方 AGH 源码作为 Git 子模块基座，并构建官方 Web 与 daemon。WaterGuard 原生插件提供任务读取、受限候选、真实水力仿真、独立验证与证据工具；AGH 中的模型负责工具选择和反馈后的下一步决策。EPA Net1/Net3 的真实计算、任务存储、取消、Fixture、Replay 与证据导出已接入 FastAPI，公共契约为 0.4.0。2026-10-06 已使用保存的 `agnes-3.0-flash` 凭据完成真实 Live 闭环、受控 `INVALID_ACTION` 后修正、运行中取消和服务重启后的关联后继运行；正式记录均带原生 trace、探针、关联表与哈希证据包。
 
@@ -92,3 +92,5 @@ AGH 是核心任务的执行基座。选定的模型在其中承担任务建模�
 - [WNTR 水力仿真](https://usepa.github.io/WNTR/hydraulics.html)
 - [WNTR 阀门图层](https://usepa.github.io/WNTR/layers.html)
 
+
+本次完整源码与原始证据ZIP见[提交版Release](https://github.com/wblxr408/WaterGuard/releases/tag/submission-20261013)，视频单独提供，不进入ZIP。

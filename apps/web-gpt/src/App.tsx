@@ -932,7 +932,7 @@ export default function App() {
           <header className="topbar">
             <div className="data-mode-note">
               <Icon name="shield" size={14} />
-              {source === 'runtime' && activeRun?.mode === 'live' ? `Agnes · ${activeRun.status === 'RUNNING' ? '实时执行' : activeRun.status === 'COMPLETED' ? '运行完成' : '任务运行'} · ${activeRun.phase}` : w?.mode === 'fixture' ? '开发样例' : '供水管网 · 水力状态'}
+              {source === 'runtime' && activeRun?.mode === 'live' ? `Agnes · ${activeRun.status === 'RUNNING' ? '实时执行' : activeRun.status === 'COMPLETED' ? '运行完成' : activeRun.status === 'BUDGET_EXHAUSTED' ? '预算耗尽' : activeRun.status === 'ERROR' ? '运行失败' : activeRun.status === 'CANCELLED' ? '已取消' : '任务运行'} · ${activeRun.phase}` : w?.mode === 'fixture' ? '开发样例' : '供水管网 · 水力状态'}
             </div>
             <div className="topbar-actions">
               <RunControls run={source === 'runtime' ? activeRun : null} created={(run) => { followRun(run.run_id); }} updated={() => setRetry((n) => n + 1)} />
