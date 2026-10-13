@@ -48,7 +48,7 @@ export const waterguardTools = {
       { task_id: string() }, ({ task_id }) => api(`/api/tasks/${segment(task_id)}`))
     register('wg_generate_candidates', 'Return bounded topology-ranked controls including staged restoration, under frozen action permissions. AGH selects from actual simulation feedback.',
       { task_id: string() }, ({ task_id }) => api(`/api/tasks/${segment(task_id)}/candidate-plans`))
-    register('wg_diagnose_failure', 'Revalidate a completed nominal failure from original artifacts. Return exact failed node-time burden, worst nodes, nearby permitted facilities and frozen action times; topology proximity does not predict hydraulic benefit.',
+    register('wg_diagnose_failure', 'Revalidate a completed nominal failure from original artifacts. Return exact failed node-time burden, worst nodes, nearby permitted facilities and frozen action times. facility_effects is observed from the failed run\'s original flows: for each permitted facility it lists which failed nodes lie downstream of its flow, their share of failed demand, and whether it feeds the fault; idle standby sources are listed too. Closing a facility that feeds failed nodes can worsen them. It is evidence, not a predicted benefit.',
       { run_id: string() }, ({ run_id }) => api(`/api/runs/${segment(run_id)}/failure-diagnosis`))
     register('wg_revise_plan', 'Revise controls after a valid same-session nominal failure. actions_json is an array of {kind,link_id,simulation_time_s}; use only frozen permissions/times, at most max_actions, and cite actual failure in reason. Server checks the source, action domain, native controls and revision budget; returns a new candidate ID, never a pass.',
       { task_id: string(), source_run_id: string(), actions_json: string(4096), reason: string(1000) },
@@ -78,7 +78,7 @@ export const waterguardTools = {
         }
         throw new Error('Simulation did not reach a terminal state within the tool deadline')
       }, false)
-    register('wg_verify_candidate', 'Independently recompute original hydraulic intervals. Returns exact admission and true violation counts plus the server-owned workflow. Follow workflow.required_next: a failed action can require diagnosis and plan revision before another static candidate; a nominal pass requires same-plan stress.',
+    register('wg_verify_candidate', 'Independently recompute original hydraulic intervals. Returns exact admission and true violation counts plus the server-owned workflow. Follow workflow.required_next: first_aid lists fixed fast candidates to verify before any model search; a remaining livelihood_gap with refinement_required requires diagnosis and plan revision; refinement_required=false means compare and archive; a nominal pass requires same-plan stress.',
       { run_id: string() }, async ({ run_id }) => {
         const reports = await api(`/api/runs/${segment(run_id)}/verify`, 'POST')
         const workflow = await api(`/api/runs/${segment(run_id)}/workflow`)

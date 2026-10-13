@@ -44,6 +44,10 @@
     "detection_latency_s": 60,
     "actuation_latency_s": 120
   },
+  "first_aid": {
+    "limit": 4,
+    "reserve_simulations": 2
+  },
   "budget": {
     "max_simulations": 40,
     "max_parallel": 2,

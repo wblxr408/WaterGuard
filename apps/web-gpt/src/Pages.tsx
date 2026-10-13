@@ -11,6 +11,7 @@ import {
   num,
   networkName,
   recommendationBlockerText,
+  recommendedDispatch,
   runStatusText,
   statusText,
   time,
@@ -205,6 +206,7 @@ export function Compare({
   const sameTask = w.candidates.every(
     (c) => c.task.constraint_hash === w.candidates[0].task.constraint_hash,
   );
+  const dispatch = recommendedDispatch(w);
   return (
     <div className="page-enter">
       <div className="section-intro">
@@ -225,14 +227,16 @@ export function Compare({
                 {String.fromCharCode(65 + i)}
               </span>
               <span
-                className={`badge ${c.verification.admission.recommendation_eligible}`}
+                className={`badge ${dispatch?.candidate.id === c.id ? (dispatch.tier === 'fully_compliant' ? 'pass' : 'pending') : c.verification.admission.recommendation_eligible}`}
               >
-                {c.verification.admission.recommendation_eligible === "pass"
-                  ? "可推荐"
+                {dispatch?.candidate.id === c.id
+                  ? dispatch.tier === 'fully_compliant' ? '完全达标推荐' : '应急处置推荐'
+                  : c.verification.admission.recommendation_eligible === "pass"
+                  ? "完整准入通过"
                   : c.verification.admission.recommendation_eligible ===
                       "pending"
                     ? "待验证"
-                    : "不可推荐"}
+                    : "未完全达标"}
               </span>
             </div>
             <h2>{c.name}</h2>
@@ -270,7 +274,7 @@ export function Compare({
             </div>
             <p>最差节点正常供水时间：{c.verification.metrics.min_node_time_pass_ratio == null ? '—' : `${num(c.verification.metrics.min_node_time_pass_ratio * 100)}%`}</p>
             <p>全程完全达标节点：{c.verification.metrics.fully_compliant_node_count ?? '—'} / {c.verification.metrics.assessed_node_count ?? '—'}</p>
-            {w.run?.mitigation_candidate_id === c.id && <p>正式尽力挽救方案 · 仍未完全达标，详见下方准入与违规。</p>}
+            {dispatch?.candidate.id === c.id && dispatch.tier === 'best_effort' && <p>推荐用于应急尽力挽救 · 已测方案中优先保障基本供水，仍未完全达标，详见下方准入与违规。</p>}
             {c.task.emergency_floor && <p>应急降级服务（≥{c.task.emergency_floor.min_pressure_m} m／≥{num(c.task.emergency_floor.min_supply_ratio * 100)}%）：全程覆盖 {c.verification.metrics.nodes_reaching_emergency_service ?? '—'} 个节点；平均 {c.verification.metrics.emergency_mean_node_time_pass_ratio == null ? '—' : `${num(c.verification.metrics.emergency_mean_node_time_pass_ratio * 100)}%`}，最差 {c.verification.metrics.emergency_min_node_time_pass_ratio == null ? '—' : `${num(c.verification.metrics.emergency_min_node_time_pass_ratio * 100)}%`}。</p>}
             {w.mitigation?.candidate_id === c.id && <details><summary>相对无动作基线的逐节点改善{w.mitigation.any_node_regressed ? '（含回退节点）' : ''}</summary><table><thead><tr><th>节点</th><th>基线正常秒数</th><th>挽救正常秒数</th><th>变化（秒）</th><th>降级覆盖变化（秒）</th></tr></thead><tbody>{w.mitigation.per_node.map(row => <tr key={row.node_id}><td>{row.node_id}</td><td>{num(row.baseline_normal_s, 0)}</td><td>{num(row.selected_normal_s, 0)}</td><td>{num(row.delta_s, 0)}</td><td>{row.emergency_delta_s == null ? '未配置' : num(row.emergency_delta_s, 0)}</td></tr>)}</tbody></table></details>}
             {c.verification.metrics.node_availability && <details><summary>各节点正常供水时长与占比</summary><table><thead><tr><th>节点</th><th>正常供水 / 评估时长（秒）</th><th>占比</th></tr></thead><tbody>{c.verification.metrics.node_availability.map(row => <tr key={row.node_id}><td>{row.node_id}</td><td>{num(row.normal_supply_duration_s, 0)} / {num(row.assessed_duration_s, 0)}</td><td>{row.normal_supply_time_ratio == null ? '—' : `${num(row.normal_supply_time_ratio * 100)}%`}</td></tr>)}</tbody></table></details>}
@@ -316,9 +320,10 @@ export function Compare({
         <Icon name="shield" size={25} />
         <div>
           <strong>
-            {selected.verification.admission.recommendation_eligible === "pass"
-              ? "验收接口允许推荐"
-              : "验收尚未允许推荐"}
+            {dispatch?.candidate.id === selected.id && dispatch.tier === 'best_effort'
+              ? '应急处置推荐 · 完全达标准入未通过'
+              : selected.verification.admission.recommendation_eligible === "pass"
+                ? "完全达标推荐准入通过" : "完全达标推荐准入未通过"}
           </strong>
           <p>
             {selected.verification.recommendation_blockers.length
@@ -853,7 +858,7 @@ export function FixtureEvents({
           <span>
             {w.run.selected_candidate_id
               ? `选定 ${w.run.selected_candidate_id}`
-              : w.run.mitigation_candidate_id ? `尽力挽救 ${w.run.mitigation_candidate_id}（未完全达标）`
+              : w.run.mitigation_candidate_id ? `应急处置推荐 ${w.run.mitigation_candidate_id}（尽力挽救，未完全达标）`
               : "未选定推荐方案"}
           </span>
         </p>

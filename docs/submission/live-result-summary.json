@@ -311,6 +311,20 @@
           }
         }
       }
-    ]
+    ],
+    "observed_exception": {
+      "run_id": "run-a83913df16394c8c86d506a8e35ebffe",
+      "shortage_m3": 89.605251221,
+      "emergency_mean": 0.9415760869565217,
+      "full_emergency_nodes": 76,
+      "interpretation": "One feedback trial improved duration and shortage but not full emergency node count; previous blanket equal-quality prose corrected."
+    }
+  },
+  "current_livelihood_delivery": {
+    "summary": "livelihood-result-summary.json",
+    "report": "民生优先与混合策略验收.md",
+    "run_id": "run-efda67724ab043ccaf9a49a30373f161",
+    "dispatch_tier": "best_effort",
+    "full_admission_unchanged": true
   }
 }

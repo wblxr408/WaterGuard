@@ -21,6 +21,18 @@ test('a premature model finish preserves pending server work and requires fresh 
   assert.equal(unfinishedWorkflow(events, 'parent'), null)
 })
 
+test('a pending first-aid stage keeps the session working, and a no-gap archive verdict ends the search', () => {
+  const call = (id, name) => ({ type: 'tool/call', data: { toolUseId: id, name } })
+  const result = (id, structured) => ({ type: 'tool/result', data: { toolUseId: id, structured } })
+  const workflow = { parent_run_id: 'parent', required_next: 'first_aid', remaining_simulations: 7,
+    first_aid_candidate_ids: ['web-candidate-1', 'web-candidate-2'] }
+  const events = [call('v', 'wg_verify_candidate'), result('v', [{ workflow }])]
+  assert.deepEqual(unfinishedWorkflow(events, 'parent'), workflow)
+  workflow.required_next = 'compare_and_archive'
+  workflow.refinement_required = false
+  assert.equal(unfinishedWorkflow(events, 'parent'), null)
+})
+
 test('received gateway refusals retain the actionable reason instead of claiming an unknown outcome', () => {
   const refusal = refusalFeedback({ detail: { code: 'INPUT_INVALID', message: 'Unauthorized revision facility: 330' } }, 422, 'INVALID_REVISION')
   assert.deepEqual(refusal, { accepted: false, code: 'INVALID_REVISION', http_status: 422, message: 'Unauthorized revision facility: 330' })

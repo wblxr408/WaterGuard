@@ -104,9 +104,23 @@ def summarize_failure(task, plan, report):
 
 
 def diagnose_failure(store, run_id):
+    from .hydraulic_evidence import observed_failure_effects
+    from .workbench import network_details
     task, plan, report, path = reviewed_failure(store, run_id)
+    details = network_details(task['network_ref']['network_id'])
+    excluded = {(task.get('fault') or {}).get('link_id'), *(task.get('fault') or {}).get('boundary_link_ids', [])}
+    overrides = {o['link_id'] for o in task.get('control_policy', {}).get('overrides', [])}
+    permitted = [f['link_id'] for f in details['catalog']['facilities']
+                 if f['link_id'] in task['action_limits']['allowed_link_ids'] and f['link_id'] not in excluded
+                 and (not f['requires_explicit_override'] or f['link_id'] in overrides)
+                 and set(f['allowed_actions']) & set(task['action_limits']['allowed_kinds'])]
+    folder = store._run_directory(run_id) / 'simulations' / report['simulation_id']
+    effects = observed_failure_effects(task, report, folder, details['scene'], details['catalog'], permitted)
     return dict(summarize_failure(task, plan, report), source_run_id=run_id,
-                source_report_sha256=file_hash(path), full_report_ref=f'{run_id}/candidates/{plan["candidate_id"]}/verification.json')
+                source_report_sha256=file_hash(path), full_report_ref=f'{run_id}/candidates/{plan["candidate_id"]}/verification.json',
+                facility_effects=effects,
+                effect_interpretation='Observed water paths in the failed run, not a predicted benefit: a facility that '
+                                      'feeds failed nodes can hurt them if closed, and idle standby sources show where new supply could enter.')
 
 
 def revision_records(store, parent):

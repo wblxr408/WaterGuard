@@ -29,6 +29,29 @@ def reviews(store, task, children):
     return nominal, pending, complete
 
 
+def livelihood_gap(task, report):
+    """Users still without basic service in the best tested plan; None when the report cannot say."""
+    m = report.get('metrics') or {}
+    served_key = 'nodes_reaching_emergency_service' if 'emergency_floor' in task else 'fully_compliant_node_count'
+    served, total = m.get(served_key), m.get('assessed_node_count')
+    if served is None or total is None:
+        return None
+    priority_unserved = 0
+    if 'service_priorities' in task:
+        declared, reached = m.get('priority_node_count'), m.get('priority_nodes_reaching_emergency_service')
+        if declared is None or reached is None:
+            return None
+        priority_unserved = declared - reached
+    return dict(unserved_nodes=total - served, priority_unserved_nodes=priority_unserved, assessed_node_count=total)
+
+
+def first_aid_allotment(task, remaining, tested):
+    """How many enumerated first-aid plans may be simulated, keeping room to refine and to stress-review."""
+    from services.hydraulics.configuration import defaults
+    config = defaults().get('first_aid', {})
+    return max(0, min(config.get('limit', 4), remaining + tested - config.get('reserve_simulations', 2)))
+
+
 def workflow_hint(store, parent):
     from .workbench import benchmark_plans, network_details
     task = store.get_task(parent['task_ref']['task_id'], parent['task_ref']['revision'])
@@ -62,15 +85,32 @@ def workflow_hint(store, parent):
     untested_revisions = [r['plan']['candidate_id'] for r in revisions if r['plan']['candidate_id'] not in tested]
     action_failures = [row for row in nominal if not row['passed'] and row['report']['validity'] == 'valid' and row['plan_actions']]
     revision_tested = any(row['plan_source'] == 'agh' for row in nominal)
+    baseline_failed = any(not row['plan_actions'] and not row['passed'] and row['report']['validity'] == 'valid' for row in nominal)
+    first_aid_done = sum(1 for row in nominal if row['plan_actions'] and row['plan_source'] != 'agh')
+    allotment = first_aid_allotment(task, remaining, first_aid_done)
+    if baseline_failed and not revision_tested and task['action_limits']['max_actions'] > 0 and first_aid_done < allotment:
+        untested = [p['candidate_id'] for p in plans if p['actions'] and p['source'] != 'agh' and p['candidate_id'] not in tested]
+        return dict(result, required_next='first_aid', first_aid_candidate_ids=untested[:allotment - first_aid_done],
+            first_aid_allotment=allotment, first_aid_tested=first_aid_done,
+            reason='The no-action baseline fails. Simulate the listed first-aid candidates first: they are the fixed, fast, '
+                   'topology-ranked controls. Only a remaining service gap in the best of them calls for model refinement.')
+    from services.hydraulics.configuration import ranking_key
+    best = min(action_failures, key=lambda row: ranking_key(task, row['report'])) if action_failures else None
+    gap = livelihood_gap(task, best['report']) if best else None
+    if best and not revision_tested and gap is not None and gap['unserved_nodes'] == 0 and gap['priority_unserved_nodes'] == 0:
+        return dict(result, required_next='compare_and_archive', refinement_required=False, livelihood_gap=gap,
+            best_first_aid=dict(run_id=best['run_id'], candidate_id=best['candidate_id']),
+            reason='Every assessed user keeps basic service in the best first-aid plan, so no model refinement is requested. '
+                   'Remaining normal-tier violations stay on the record; compare and archive.')
     if (task['schema_version'] == '0.4.0' and action_failures and not revision_tested and remaining >= 2 and
             task['action_limits']['max_actions'] > 0 and (untested_revisions or len(revisions) < task['budget']['max_revisions'])):
-        from services.hydraulics.configuration import ranking_key
-        source = min(action_failures, key=lambda row: ranking_key(task, row['report']))
         return dict(result, required_next='simulate_revision' if untested_revisions else 'diagnose_and_revise',
-            candidate_ids=untested_revisions, source_run_id=source['run_id'], source_candidate_id=source['candidate_id'],
+            candidate_ids=untested_revisions, source_run_id=best['run_id'], source_candidate_id=best['candidate_id'],
+            refinement_required=True, livelihood_gap=gap, first_aid_candidate_ids=[],
             revision_budget_remaining=max(0, task['budget']['max_revisions'] - len(revisions)),
             revision_tools=['wg_diagnose_failure', 'wg_revise_plan'],
-            reason='A tested action still violates the frozen constraints. Diagnose that real failure, register revised controls and simulate them before another static candidate. The revision is never a predicted pass.')
+            reason='The best first-aid plan still leaves users without basic service or priority points uncovered. Diagnose that real failure '
+                   '(facility_effects shows where the water actually goes), register revised controls and simulate them. The revision is never a predicted pass.')
     return dict(result, required_next='choose_candidate', candidate_ids=[p['candidate_id'] for p in plans if p['candidate_id'] not in tested],
                 revision_budget_remaining=max(0, task['budget']['max_revisions'] - len(revisions)),
                 failed_source_runs=[dict(run_id=row['run_id'], candidate_id=row['candidate_id']) for row in nominal

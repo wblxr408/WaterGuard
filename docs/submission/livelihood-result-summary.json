@@ -1,0 +1,161 @@
+{
+  "task_ref": {
+    "constraint_hash": "sha256:e27a632b6ea2b54b4b2eb8ade701a8e9fc4778084381c11ee3cf46fca0eb2eb4",
+    "network_hash": "sha256:ea3e825c4fef0b5cba47fb06301bc85253f18b6364dc96c44d9fb492c40faa52",
+    "revision": 1,
+    "task_id": "web-49d14097441e49c8a7f0f538f6ea1daa"
+  },
+  "objective_order": [
+    "maximize_emergency_node_coverage",
+    "maximize_emergency_mean_availability",
+    "maximize_min_node_availability",
+    "maximize_mean_node_availability",
+    "minimize_shortage",
+    "minimize_action_cost"
+  ],
+  "earliest_s": 5400,
+  "rows": [
+    {
+      "strategy": "fixed_order",
+      "simulations": 8,
+      "model_calls": 0,
+      "wall_time_s": 51.84400000000005,
+      "candidate_id": "web-candidate-1",
+      "actions": [
+        {
+          "kind": "pump_on",
+          "link_id": "10",
+          "simulation_time_s": 5400
+        }
+      ],
+      "violations": 398,
+      "priority_nodes_reaching_emergency_service": null,
+      "nodes_reaching_emergency_service": 76,
+      "assessed_node_count": 92,
+      "emergency_mean_node_time_pass_ratio": 0.9307065217391305,
+      "emergency_min_node_time_pass_ratio": 0.0,
+      "fully_compliant_node_count": 51,
+      "min_node_time_pass_ratio": 0.0,
+      "mean_node_time_pass_ratio": 0.8673007246376813,
+      "shortage_m3": 94.198346147,
+      "served_nodes_vs_baseline": 2,
+      "shortage_reduction_m3": 96.944794223
+    },
+    {
+      "strategy": "first_aid",
+      "simulations": 5,
+      "model_calls": 0,
+      "wall_time_s": 31.21900000000005,
+      "candidate_id": "web-candidate-1",
+      "actions": [
+        {
+          "kind": "pump_on",
+          "link_id": "10",
+          "simulation_time_s": 5400
+        }
+      ],
+      "violations": 398,
+      "priority_nodes_reaching_emergency_service": null,
+      "nodes_reaching_emergency_service": 76,
+      "assessed_node_count": 92,
+      "emergency_mean_node_time_pass_ratio": 0.9307065217391305,
+      "emergency_min_node_time_pass_ratio": 0.0,
+      "fully_compliant_node_count": 51,
+      "min_node_time_pass_ratio": 0.0,
+      "mean_node_time_pass_ratio": 0.8673007246376813,
+      "shortage_m3": 94.198346147,
+      "served_nodes_vs_baseline": 2,
+      "shortage_reduction_m3": 96.944794223
+    },
+    {
+      "strategy": "hybrid",
+      "simulations": 8,
+      "model_calls": 40,
+      "wall_time_s": 605.594,
+      "candidate_id": "web-candidate-1",
+      "actions": [
+        {
+          "kind": "pump_on",
+          "link_id": "10",
+          "simulation_time_s": 5400
+        }
+      ],
+      "violations": 398,
+      "priority_nodes_reaching_emergency_service": null,
+      "nodes_reaching_emergency_service": 76,
+      "assessed_node_count": 92,
+      "emergency_mean_node_time_pass_ratio": 0.9307065217391305,
+      "emergency_min_node_time_pass_ratio": 0.0,
+      "fully_compliant_node_count": 51,
+      "min_node_time_pass_ratio": 0.0,
+      "mean_node_time_pass_ratio": 0.8673007246376813,
+      "shortage_m3": 94.198346148,
+      "served_nodes_vs_baseline": 2,
+      "shortage_reduction_m3": 96.94479422100001,
+      "run_id": "run-efda67724ab043ccaf9a49a30373f161",
+      "status": "COMPLETED",
+      "conclusion": "BEST_EFFORT_MITIGATION",
+      "delivery_source": "first_aid",
+      "refinement_gain": {
+        "first_aid_candidate_id": "web-candidate-1",
+        "refinement_candidate_id": "agh-revision-9b9e04618179d3204bfc14a3",
+        "improved": false,
+        "raw_difference": {
+          "nodes_reaching_emergency_service": 0,
+          "priority_nodes_reaching_emergency_service": 0,
+          "emergency_mean_node_time_pass_ratio": 0.0,
+          "mean_node_time_pass_ratio": 0.0,
+          "shortage_reduction_m3": -1.4019810089999964
+        },
+        "nodes_reaching_emergency_service": 0,
+        "priority_nodes_reaching_emergency_service": 0,
+        "emergency_mean_node_time_pass_ratio": 0,
+        "mean_node_time_pass_ratio": 0,
+        "shortage_reduction_m3": 0,
+        "scope": "Difference between the best verified model refinement and the best fixed first-aid plan in the frozen order; zero unless strictly better. Only tested candidates; no significance or optimality claim."
+      },
+      "error": null
+    }
+  ],
+  "native_duration_s": 603.169,
+  "independently_recomputed_reports": 8,
+  "native_export_allowed": true,
+  "dispatch_recommendation": {
+    "recommendation": {
+      "candidate_id": "web-candidate-1",
+      "tier": "best_effort",
+      "fully_compliant": false
+    },
+    "full_admission": {
+      "action_valid": "pass",
+      "simulation_valid": "pass",
+      "nominal_constraints_pass": "fail",
+      "required_stress_tests_pass": "pending",
+      "recommendation_eligible": "fail"
+    },
+    "violation_count": 398,
+    "run_selected": null,
+    "delivery": {
+      "source": "first_aid",
+      "refinement_gain": {
+        "first_aid_candidate_id": "web-candidate-1",
+        "refinement_candidate_id": "agh-revision-9b9e04618179d3204bfc14a3",
+        "improved": false,
+        "raw_difference": {
+          "nodes_reaching_emergency_service": 0,
+          "priority_nodes_reaching_emergency_service": 0,
+          "emergency_mean_node_time_pass_ratio": 0.0,
+          "mean_node_time_pass_ratio": 0.0,
+          "shortage_reduction_m3": -1.4019810089999964
+        },
+        "nodes_reaching_emergency_service": 0,
+        "priority_nodes_reaching_emergency_service": 0,
+        "emergency_mean_node_time_pass_ratio": 0,
+        "mean_node_time_pass_ratio": 0,
+        "shortage_reduction_m3": 0,
+        "scope": "Difference between the best verified model refinement and the best fixed first-aid plan in the frozen order; zero unless strictly better. Only tested candidates; no significance or optimality claim."
+      }
+    }
+  },
+  "new_solutions_rerun_after_display_change": false
+}

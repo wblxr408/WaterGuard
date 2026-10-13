@@ -552,10 +552,14 @@ def create_app(store: RunStore | None = None) -> FastAPI:
             if not candidates:
                 raise ConflictError('Run has no verified results yet')
             summary_path = root / 'recommendation-summary.json'
-            mitigation = store._read_json(summary_path).get('mitigation') if summary_path.is_file() else None
+            summary = store._read_json(summary_path) if summary_path.is_file() else {}
+            mitigation = summary.get('mitigation')
+            delivery = dict(source=summary.get('delivery_source'), refinement_gain=summary.get('refinement_gain'))
+            from .dispatch_recommendation import dispatch_recommendation
             return dict(source='runtime', mode=run['mode'], base='/wg', run=run,
                         scene=details['scene'], manifest=details['manifest'], candidates=candidates, index=None,
-                        mitigation=mitigation)
+                        mitigation=mitigation, delivery=delivery,
+                        dispatch_recommendation=dispatch_recommendation(summary, candidates))
         except Exception as error:
             fail(error)
 

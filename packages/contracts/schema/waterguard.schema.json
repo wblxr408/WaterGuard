@@ -538,6 +538,29 @@
       ],
       "additionalProperties": false
     },
+    "ServicePriorities": {
+      "type": "object",
+      "description": "Dispatcher-declared priority service points (for example hospitals or schools). Frozen with the task; only adds coverage metrics and an ordering objective, never relaxes a constraint.",
+      "properties": {
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "node_ids",
+        "basis"
+      ],
+      "additionalProperties": false
+    },
     "Budget": {
       "type": "object",
       "properties": {
@@ -636,7 +659,10 @@
               "minimize_shortage",
               "minimize_action_cost",
               "maximize_min_node_availability",
-              "maximize_mean_node_availability"
+              "maximize_mean_node_availability",
+              "maximize_priority_emergency_coverage",
+              "maximize_emergency_node_coverage",
+              "maximize_emergency_mean_availability"
             ]
           },
           "minItems": 1
@@ -693,6 +719,9 @@
         },
         "emergency_floor": {
           "$ref": "#/definitions/EmergencyFloor"
+        },
+        "service_priorities": {
+          "$ref": "#/definitions/ServicePriorities"
         }
       },
       "required": [
@@ -1733,6 +1762,26 @@
         "nodes_reaching_emergency_service": {
           "type": "integer",
           "minimum": 0
+        },
+        "priority_node_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "priority_nodes_reaching_emergency_service": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priority_emergency_min_node_time_pass_ratio": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "assessed_node_count": {
           "type": "integer",

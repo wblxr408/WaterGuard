@@ -24,11 +24,14 @@ def mitigation_record(task, baseline, report):
             baseline_emergency_s=eb, selected_emergency_s=es,
             emergency_delta_s=None if eb is None or es is None else es-eb))
     improved = any(r['delta_s'] > 0 for r in rows)
+    emergency_improved = any((r['emergency_delta_s'] or 0) > 0 for r in rows)
+    emergency_regressed = any((r['emergency_delta_s'] or 0) < 0 for r in rows)
     metrics = report['metrics']
     return dict(candidate_id=report['candidate_id'], baseline_candidate_id=baseline['candidate_id'],
-        improves_baseline=improved and ranking_key(task, report)[:-1] < ranking_key(task, baseline)[:-1],
+        improves_baseline=(improved or emergency_improved) and ranking_key(task, report)[:-1] < ranking_key(task, baseline)[:-1],
         is_recommendation=False, objective_order=task['objectives'], per_node=rows,
         any_node_improved=improved, any_node_regressed=any(r['delta_s'] < 0 for r in rows),
+        any_emergency_improved=emergency_improved, any_emergency_regressed=emergency_regressed,
         fully_compliant_node_count=metrics.get('fully_compliant_node_count'),
         assessed_node_count=metrics.get('assessed_node_count'),
         min_node_time_pass_ratio=metrics.get('min_node_time_pass_ratio'),

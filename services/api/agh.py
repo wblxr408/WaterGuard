@@ -63,6 +63,42 @@ def _write_probe(store, run_id, model, scenario):
     return store._write_json(f'{run_id}/agh/probe.json', snapshot)
 
 
+def _prefer_first_aid(task, nominal, pool):
+    """Best by the frozen order; a model refinement must be strictly better than the best first-aid plan to replace it."""
+    from services.hydraulics.configuration import ranking_key
+    key = lambda cid: ranking_key(task, nominal[cid][1])
+    first_aid = [cid for cid in pool if nominal[cid][2]['source'] != 'agh']
+    refined = [cid for cid in pool if nominal[cid][2]['source'] == 'agh']
+    best_first_aid = min(first_aid, key=key) if first_aid else None
+    best_refined = min(refined, key=key) if refined else None
+    if best_refined and (best_first_aid is None or key(best_refined)[:-1] < key(best_first_aid)[:-1]):
+        return best_refined
+    return best_first_aid
+
+
+def _refinement_gain(task, nominal, pool):
+    """What Agnes refinement added over the best fixed first-aid plan; zero unless strictly better in the frozen order."""
+    from services.hydraulics.configuration import ranking_key
+    first_aid = [cid for cid in pool if nominal[cid][2]['source'] != 'agh']
+    refined = [cid for cid in pool if nominal[cid][2]['source'] == 'agh']
+    if not first_aid or not refined:
+        return None
+    key = lambda cid: ranking_key(task, nominal[cid][1])
+    base, tried = min(first_aid, key=key), min(refined, key=key)
+    a, b = nominal[base][1]['metrics'], nominal[tried][1]['metrics']
+    count = lambda m, name: (m.get(name) or 0)
+    raw = dict(nodes_reaching_emergency_service=count(b, 'nodes_reaching_emergency_service') - count(a, 'nodes_reaching_emergency_service'),
+               priority_nodes_reaching_emergency_service=count(b, 'priority_nodes_reaching_emergency_service') - count(a, 'priority_nodes_reaching_emergency_service'),
+               emergency_mean_node_time_pass_ratio=count(b, 'emergency_mean_node_time_pass_ratio') - count(a, 'emergency_mean_node_time_pass_ratio'),
+               mean_node_time_pass_ratio=count(b, 'mean_node_time_pass_ratio') - count(a, 'mean_node_time_pass_ratio'),
+               shortage_reduction_m3=count(a, 'shortage_m3') - count(b, 'shortage_m3'))
+    improved = key(tried)[:-1] < key(base)[:-1]
+    shown = raw if improved else {name: 0 for name in raw}
+    return dict(first_aid_candidate_id=base, refinement_candidate_id=tried, improved=improved, raw_difference=raw, **shown,
+                scope='Difference between the best verified model refinement and the best fixed first-aid plan in the frozen order; '
+                      'zero unless strictly better. Only tested candidates; no significance or optimality claim.')
+
+
 def _finalize_recommendation(store, run_id, task, child_runs):
     """Aggregate independent nominal and stress reports into a host conclusion."""
     import copy
@@ -123,7 +159,12 @@ def _finalize_recommendation(store, run_id, task, child_runs):
             rescue = mitigation_record(task, nominal[baseline_id][1], nominal[cid][1])
             if rescue and rescue['improves_baseline']:
                 rescues[cid] = rescue
-    mitigation_id = min(rescues, key=lambda cid: ranking_key(task, nominal[cid][1])) if provenance and rescues and not selected else None
+    mitigation_id = None
+    if provenance and rescues and not selected:
+        mitigation_id = _prefer_first_aid(task, nominal, list(rescues))
+    delivered_id = selected or mitigation_id
+    delivery_source = None if delivered_id is None else ('refinement' if nominal[delivered_id][2]['source'] == 'agh' else 'first_aid')
+    refinement_gain = _refinement_gain(task, nominal, [cid for cid in valid if nominal[cid][2]['actions']])
     if selected:
         conclusion = 'FEASIBLE_FOUND'
     elif mitigation_id:
@@ -164,6 +205,8 @@ def _finalize_recommendation(store, run_id, task, child_runs):
         'best_effort_is_recommendation': best_effort in eligible,
         'mitigation_candidate_id': mitigation_id,
         'mitigation': rescues.get(mitigation_id),
+        'delivery_source': delivery_source,
+        'refinement_gain': refinement_gain,
         'conclusion': conclusion,
     }
     store._write_json(f'{run_id}/recommendation-summary.json', summary)

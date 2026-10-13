@@ -135,6 +135,31 @@ class PlanningTests(unittest.TestCase):
         client.close()
         app.state.benchmark_executor.close()
 
+    def test_diagnosis_reports_observed_facility_effects_for_permitted_facilities_only(self):
+        diagnosis = diagnose_failure(self.store, self.source['run_id'])
+        effects = diagnosis['facility_effects']
+        permitted = set(self.task['action_limits']['allowed_link_ids']) - {self.task['fault']['link_id']}
+        self.assertTrue(effects)
+        self.assertTrue({row['link_id'] for row in effects} <= permitted)
+        failed = {v['node_id'] for v in self.report['violations']}
+        for row in effects:
+            self.assertIn('observed', row['basis'])
+            self.assertTrue(set(row['downstream_failed_nodes']) <= failed)
+        self.assertGreater(max(row['downstream_failed_demand_share'] for row in effects), 0)
+        self.assertEqual(effects[-1]['direction'], 'idle')
+        self.assertEqual(next(row for row in effects if row['link_id'] == '10')['direction'], 'idle')
+
+    def test_facility_effects_are_deterministic_and_declared_as_observation(self):
+        first = diagnose_failure(self.store, self.source['run_id'])
+        second = diagnose_failure(self.store, self.source['run_id'])
+        self.assertEqual(first['facility_effects'], second['facility_effects'])
+        self.assertIn('not a predicted', first['effect_interpretation'])
+
+    def test_revision_records_do_not_depend_on_observed_effects(self):
+        record = self.revision()
+        self.assertNotIn('facility_effects', record['diagnosis'])
+        self.assertEqual(load_revision_plan(self.store, self.parent, self.task, record['plan']['candidate_id']), record['plan'])
+
     def test_failure_duration_unions_pressure_and_supply_on_the_same_node(self):
         report = copy.deepcopy(self.report)
         report['violations'] = [dict(code='MIN_PRESSURE', node_id='20', start_s=3600, end_s=3900, observed=1., threshold=20., unit='m'),

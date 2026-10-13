@@ -55,3 +55,47 @@ test('regression stays negative and a different emergency floor cannot produce a
   c.verification.validity = 'invalid';
   assert.equal(outcome(c, [b, c]), null);
 });
+
+const gain = (over = {}) => ({ first_aid_candidate_id: 'web-candidate-1', refinement_candidate_id: 'agh-revision-1', improved: true,
+  nodes_reaching_emergency_service: 3, priority_nodes_reaching_emergency_service: 0, emergency_mean_node_time_pass_ratio: .02,
+  mean_node_time_pass_ratio: .01, shortage_reduction_m3: 4.5, raw_difference: {}, ...over });
+
+test('delivery provenance names who produced the delivered plan and only claims measured model gain', () => {
+  const refined = data.deliveryProvenance?.({ delivery: { source: 'refinement', refinement_gain: gain() } });
+  assert.equal(refined.source, 'refinement');
+  assert.equal(refined.claimsModelGain, true);
+  assert.equal(refined.gain.nodes, 3);
+  assert.equal(refined.gain.shortageM3, 4.5);
+
+  const fixedWins = data.deliveryProvenance?.({ delivery: { source: 'first_aid',
+    refinement_gain: gain({ improved: false, nodes_reaching_emergency_service: 0, shortage_reduction_m3: 0 }) } });
+  assert.equal(fixedWins.source, 'first_aid');
+  assert.equal(fixedWins.claimsModelGain, false);
+  assert.equal(fixedWins.refinementTried, true);
+});
+
+test('delivery provenance is absent rather than zero when nothing was delivered or refined', () => {
+  assert.equal(data.deliveryProvenance?.({ delivery: { source: null, refinement_gain: null } }), null);
+  assert.equal(data.deliveryProvenance?.({}), null);
+  const noModelSearch = data.deliveryProvenance?.({ delivery: { source: 'first_aid', refinement_gain: null } });
+  assert.equal(noModelSearch.refinementTried, false);
+  assert.equal(noModelSearch.gain, null);
+});
+
+test('emergency dispatch selects the verified preferred plan without changing full admission', () => {
+  const b = baseline(), c = rescue();
+  c.verification.admission = { recommendation_eligible: 'fail' };
+  const w = { candidates: [b, c], run: { selected_candidate_id: null, mitigation_candidate_id: c.id },
+    dispatch_recommendation: { candidate_id: c.id, tier: 'best_effort', fully_compliant: false } };
+  const dispatch = data.recommendedDispatch?.(w);
+  assert.equal(dispatch?.candidate.id, c.id);
+  assert.equal(dispatch?.tier, 'best_effort');
+  assert.equal(c.verification.admission.recommendation_eligible, 'fail');
+  assert.equal(c.verification.violations.length, 2);
+  const fallback = { ...w, run: { selected_candidate_id: null, mitigation_candidate_id: null },
+    dispatch_recommendation: { candidate_id: b.id, tier: 'best_effort', fully_compliant: false } };
+  assert.equal(data.deliveredCandidate(fallback).id, b.id);
+  c.verification.validity = 'invalid';
+  assert.equal(data.recommendedDispatch?.(w), null);
+  assert.equal(data.recommendedDispatch?.({ candidates: [b, c] }), null);
+});

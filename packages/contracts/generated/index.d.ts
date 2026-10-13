@@ -28,12 +28,23 @@ export type TaskSpec = {
    * @minItems 1
    */
   objectives: [
-    "minimize_shortage" | "minimize_action_cost" | "maximize_min_node_availability" | "maximize_mean_node_availability",
+    (
+      | "minimize_shortage"
+      | "minimize_action_cost"
+      | "maximize_min_node_availability"
+      | "maximize_mean_node_availability"
+      | "maximize_priority_emergency_coverage"
+      | "maximize_emergency_node_coverage"
+      | "maximize_emergency_mean_availability"
+    ),
     ...(
       | "minimize_shortage"
       | "minimize_action_cost"
       | "maximize_min_node_availability"
       | "maximize_mean_node_availability"
+      | "maximize_priority_emergency_coverage"
+      | "maximize_emergency_node_coverage"
+      | "maximize_emergency_mean_availability"
     )[]
   ];
   hard_constraints: HardConstraints;
@@ -56,6 +67,7 @@ export type TaskSpec = {
   physical_parameters?: PhysicalParameters;
   response_latency?: ResponseLatency;
   emergency_floor?: EmergencyFloor;
+  service_priorities?: ServicePriorities;
 };
 export type Fault = {
   [k: string]: unknown;
@@ -295,6 +307,16 @@ export interface EmergencyFloor {
   min_supply_ratio: number;
   source?: string;
 }
+/**
+ * Dispatcher-declared priority service points (for example hospitals or schools). Frozen with the task; only adds coverage metrics and an ordering objective, never relaxes a constraint.
+ */
+export interface ServicePriorities {
+  /**
+   * @minItems 1
+   */
+  node_ids: [string, ...string[]];
+  basis: string;
+}
 export interface ActionPlan {
   schema_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
   candidate_id: string;
@@ -455,6 +477,9 @@ export interface Metrics {
   emergency_min_node_time_pass_ratio?: number | null;
   emergency_mean_node_time_pass_ratio?: number | null;
   nodes_reaching_emergency_service?: number;
+  priority_node_count?: number;
+  priority_nodes_reaching_emergency_service?: number;
+  priority_emergency_min_node_time_pass_ratio?: number | null;
   assessed_node_count?: number;
   fully_compliant_node_count?: number;
 }

@@ -155,6 +155,13 @@ def check_task(task, catalog, scene):
                 'Emergency pressure floor must be positive and no stricter than the hard constraint')
         require(0 < emergency['min_supply_ratio'] <= task['hard_constraints']['min_supply_ratio'],
                 'Emergency supply floor must be positive and no stricter than the hard constraint')
+    priorities = task.get('service_priorities')
+    if priorities is not None:
+        # Priority points only add coverage accounting on top of the service tier.
+        require(emergency is not None, 'Priority service points require the service tier (emergency floor)')
+        ids = priorities['node_ids']
+        require(len(set(ids)) == len(ids), 'Priority service points contain duplicate IDs')
+        require(all(i in users for i in ids), 'Priority service points must be user nodes of this network')
     require(task['schema_version'] in ('0.3.0','0.4.0') or task['fault'] is None or task['fault']['kind'] == 'closure', 'Reference verifier supports closure only before 0.3.0')
 
 
@@ -311,6 +318,15 @@ def _verify_result(task, plan, result, catalog, scene, mode, verifier_version, p
                 emergency_mean_node_time_pass_ratio=sum(emerg_ratios) / len(emerg_ratios) if emerg_ratios else None,
                 nodes_reaching_emergency_service=sum(1 for r in emerg_ratios if r >= 1 - 1e-9),
                 assessed_node_count=len(emerg_ratios))
+            priorities = task.get('service_priorities')
+            if priorities is not None:
+                declared = set(priorities['node_ids'])
+                priority_ratios = [row['emergency_supply_time_ratio'] for row in availability
+                                   if row['node_id'] in declared and row.get('emergency_supply_time_ratio') is not None]
+                report['metrics'].update(
+                    priority_node_count=len(declared),
+                    priority_nodes_reaching_emergency_service=sum(1 for r in priority_ratios if r >= 1 - 1e-9),
+                    priority_emergency_min_node_time_pass_ratio=min(priority_ratios) if priority_ratios else None)
     validate('VerificationReport', report)
     return report
 

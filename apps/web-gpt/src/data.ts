@@ -94,10 +94,12 @@ export interface Candidate {
   mapping: Mapping | null;
 }
 export interface Workspace {
+  dispatch_recommendation?: { candidate_id: string; tier: 'fully_compliant' | 'best_effort'; fully_compliant: boolean } | null;
   mitigation?: { candidate_id: string; any_node_regressed: boolean; per_node: {
     node_id: string; baseline_normal_s: number; selected_normal_s: number; delta_s: number;
     emergency_delta_s: number | null;
   }[] } | null;
+  delivery?: { source: 'first_aid' | 'refinement' | null; refinement_gain: RefinementGain | null } | null;
   source: Source;
   mode: Mode;
   base: string;
@@ -108,13 +110,38 @@ export interface Workspace {
   run: RunRecord | null;
 }
 
-export function deliveredCandidate(w: Pick<Workspace, 'run' | 'candidates'>): Candidate | undefined {
-  const id = w.run?.selected_candidate_id ?? w.run?.mitigation_candidate_id;
+export interface RefinementGain {
+  first_aid_candidate_id: string; refinement_candidate_id: string; improved: boolean;
+  nodes_reaching_emergency_service: number; priority_nodes_reaching_emergency_service: number;
+  emergency_mean_node_time_pass_ratio: number; mean_node_time_pass_ratio: number; shortage_reduction_m3: number;
+}
+
+/** Who produced the delivered plan, and the measured model gain; never inferred, zero only when the server says so. */
+export function deliveryProvenance(w: Pick<Workspace, 'delivery'>) {
+  const d = w.delivery;
+  if (!d?.source) return null;
+  const g = d.refinement_gain;
+  return { source: d.source, refinementTried: g != null, claimsModelGain: d.source === 'refinement' && g?.improved === true,
+    gain: g == null ? null : { nodes: g.nodes_reaching_emergency_service, priorityNodes: g.priority_nodes_reaching_emergency_service,
+      emergencyMeanPp: g.emergency_mean_node_time_pass_ratio * 100, normalMeanPp: g.mean_node_time_pass_ratio * 100,
+      shortageM3: g.shortage_reduction_m3, firstAidId: g.first_aid_candidate_id, refinementId: g.refinement_candidate_id } };
+}
+
+export function recommendedDispatch(w: Pick<Workspace, 'dispatch_recommendation' | 'candidates'>) {
+  const r = w.dispatch_recommendation;
+  const candidate = r && w.candidates.find(c => c.id === r.candidate_id && c.verification.validity === 'valid');
+  if (!candidate || !r) return null;
+  if (r.tier === 'fully_compliant' && candidate.verification.admission.recommendation_eligible !== 'pass') return null;
+  return { candidate, tier: r.tier };
+}
+
+export function deliveredCandidate(w: Pick<Workspace, 'run' | 'candidates' | 'dispatch_recommendation'>): Candidate | undefined {
+  const id = recommendedDispatch(w)?.candidate.id ?? w.run?.selected_candidate_id ?? w.run?.mitigation_candidate_id;
   return w.candidates.find(c => c.id === id) ?? w.candidates.at(-1);
 }
 
 /** Display only comparable, independently verified service outcomes; never infer delivery. */
-export function serviceOutcome(c: Candidate, w: Pick<Workspace, 'run' | 'candidates'>) {
+export function serviceOutcome(c: Candidate, w: Pick<Workspace, 'run' | 'candidates' | 'dispatch_recommendation'>) {
   if (c.verification.validity !== 'valid') return null;
   const m = c.verification.metrics;
   const nodes = m.node_availability;
@@ -142,13 +169,15 @@ export function serviceOutcome(c: Candidate, w: Pick<Workspace, 'run' | 'candida
       worst: (emergency ? m.emergency_min_node_time_pass_ratio : m.min_node_time_pass_ratio) ?? null,
       deltaPp: delta(mean, before, 100), deltaCount: delta(count, beforeCount) };
   };
+  const dispatch = recommendedDispatch(w);
   return { baselineId: baseline?.id ?? null, normal: layer(false),
     emergency: c.task.emergency_floor ? layer(true) : null,
     total: m.assessed_node_count ?? null, shortage: m.shortage_m3,
     shortageReduction: delta(bm?.shortage_m3, m.shortage_m3),
     residualNodeCount: new Set(c.verification.violations.map(v => v.node_id)).size,
     violationCount: c.verification.violations.length,
-    delivery: w.run?.selected_candidate_id === c.id ? 'recommendation'
+    delivery: dispatch?.candidate.id === c.id ? (dispatch.tier === 'fully_compliant' ? 'recommendation' : 'mitigation')
+      : w.run?.selected_candidate_id === c.id ? 'recommendation'
       : w.run?.mitigation_candidate_id === c.id ? 'mitigation' : 'candidate' };
 }
 
@@ -331,7 +360,7 @@ export const runStatusText: Record<string, string> = {
 export const conclusionText: Record<string, string> = {
   FEASIBLE_FOUND: "找到可行方案",
   NO_FEASIBLE_FOUND: "预算内未找到可行方案",
-  BEST_EFFORT_MITIGATION: "尽力挽救 · 未完全达标",
+  BEST_EFFORT_MITIGATION: "应急处置推荐 · 尽力挽救",
   INCOMPLETE: "未完成工程推荐",
   INVALID: "无效",
 };
@@ -358,7 +387,7 @@ export const gates: [keyof Admission, string][] = [
   ["simulation_valid", "仿真有效"],
   ["nominal_constraints_pass", "硬约束"],
   ["required_stress_tests_pass", "扰动复验"],
-  ["recommendation_eligible", "推荐准入"],
+  ["recommendation_eligible", "完全达标推荐准入"],
 ];
 export const actionText = {
   link_open: "打开管段",

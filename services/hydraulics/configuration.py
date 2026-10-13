@@ -66,9 +66,26 @@ def stress_multiplier(task):
     return matches[0]
 
 
+def livelihood_objectives(base, *, service_tier, priorities):
+    """Protect basic service for the most users first; the normal tier only breaks ties.
+
+    Full compliance implies basic service, so a fully compliant candidate still ranks first.
+    Objectives that need an absent service tier or priority declaration are left out."""
+    order = [o for o in base if o not in ('maximize_emergency_node_coverage', 'maximize_emergency_mean_availability',
+                                          'maximize_priority_emergency_coverage')]
+    if service_tier:
+        order = ['maximize_emergency_node_coverage', 'maximize_emergency_mean_availability'] + order
+        if priorities:
+            order = ['maximize_priority_emergency_coverage'] + order
+    return order
+
+
 def ranking_key(task, report):
     """Frozen lexicographic objective order, never a claim of global optimality."""
     axes = {
+        'maximize_priority_emergency_coverage': ('priority_nodes_reaching_emergency_service', -1),
+        'maximize_emergency_node_coverage': ('nodes_reaching_emergency_service', -1),
+        'maximize_emergency_mean_availability': ('emergency_mean_node_time_pass_ratio', -1),
         'maximize_min_node_availability': ('min_node_time_pass_ratio', -1),
         'maximize_mean_node_availability': ('mean_node_time_pass_ratio', -1),
         'minimize_shortage': ('shortage_m3', 1),

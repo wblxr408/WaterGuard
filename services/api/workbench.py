@@ -33,6 +33,7 @@ class TaskProposal(BaseModel):
     control_overrides: list[dict] | None = None
     response_latency: dict | None = None
     emergency_floor: dict | None = None
+    service_priorities: dict | None = None
     candidate_limit: int = Field(default_factory=lambda: defaults()['proposal']['candidate_limit'], ge=1, le=100)
     max_actions: int = Field(default_factory=lambda: defaults()['proposal']['max_actions'], ge=1, le=100)
     max_wall_time_s: int = Field(default_factory=lambda: defaults()['proposal']['max_wall_time_s'], ge=60, le=7200)
@@ -149,6 +150,11 @@ def propose_task(proposal: TaskProposal) -> dict:
             raise ValueError('Emergency floor requires both a pressure and a supply ratio (config or proposal)')
         floor_spec['source'] = spec.get('source', config_floor.get('source', 'Explicit best-effort livelihood service floor; not a recommendation gate.'))
         task['emergency_floor'] = floor_spec
+    if proposal.service_priorities is not None:
+        task['service_priorities'] = copy.deepcopy(proposal.service_priorities)
+    from services.hydraulics.configuration import livelihood_objectives
+    task['objectives'] = livelihood_objectives(task['objectives'], service_tier='emergency_floor' in task,
+                                               priorities='service_priorities' in task)
     task["constraint_hash"] = task_hash(task)
     check_task(task, details["catalog"], details["scene"])
     from services.hydraulics.compiler import compile_task
