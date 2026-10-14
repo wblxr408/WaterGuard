@@ -29,4 +29,4 @@
 当前评测场景几乎饱和，混合策略的精修增益很可能为零或很小，此时系统价值体现在速度、民生排序和如实归因，而非模型提升质量；文档与展示不得越出实测。关键用水点由调度员提供，本变更不推断哪些节点是医院。动作栅格为900秒，决策耗时低于约720秒时三种策略的动作下限相同，因此实测延迟差异多数情况下不改变下限。
 
 ## 完整交付结构
-两段视频原样保存在docs/submission/videos并进入ZIP。Windows x64便携安装包包含Python3.12、Node、固定Python依赖、现有Vite预览依赖与编译界面，配合source与demo运行；安装包不承担新AGH配置。测试样例导出既有task/plan/result/verification并列出预期结果，历史数据不改写。
+两段视频原样保存在docs/submission/videos并进入ZIP。Windows x64便携安装包包含Python3.11、Node、固定Python依赖、现有Vite预览依赖与编译界面，配合source与demo运行；安装包不承担新AGH配置。测试样例导出既有task/plan/result/verification并列出预期结果，历史数据不改写。
