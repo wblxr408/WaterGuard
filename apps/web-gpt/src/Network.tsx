@@ -180,7 +180,7 @@ export function Network({
     !!frame &&
     frame.time_s >= fault.start_s &&
     frame.time_s < fault.end_s;
-  // 当前帧落在违规时段 [start, end) 内的节点：由验收报告给出，不由前端判定。
+  // 当前帧落在剩余供水缺口时段 [start, end) 内的节点：由验收报告给出，不由前端判定。
   const violating = new Set(
     frame
       ? c.verification.violations
@@ -377,7 +377,7 @@ export function Network({
   useEffect(() => {
     setView(FIT);
   }, [w.scene]);
-  // 外部选中（违规列表、搜索）的实体若在视野外，平移过去。
+  // 外部选中（剩余供水缺口列表、搜索）的实体若在视野外，平移过去。
   useEffect(() => {
     const p = worldOf(entity);
     if (!p) return;
@@ -650,7 +650,7 @@ export function Network({
           "",
         ],
       ] as [string, string, string][],
-      note: violating.has(node.id) ? "当前时段违规（验收报告）" : "",
+      note: violating.has(node.id) ? "当前时段剩余供水缺口（验收报告）" : "",
     };
   })();
   function isFaultLink(id: string) {
@@ -850,7 +850,7 @@ export function Network({
               </span>
               <span className="map-chip">
                 <i className="dot ring" />
-                当前违规 <b>{violating.size}</b>
+                当前剩余供水缺口 <b>{violating.size}</b>
               </span>
             </>
           )}
@@ -1251,7 +1251,7 @@ export function Network({
               </span>
               <span>
                 <i className="dot ring" />
-                当前时段违规
+                当前时段剩余供水缺口
               </span>
             </>
           )}

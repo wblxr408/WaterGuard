@@ -1,7 +1,7 @@
 import type { Workspace } from "./data";
 
 /* 首页背景舞台：把真实管网画成深色背景上的发光「全息沙盘」。
-   只读当前接口结果（拓扑、各方案逐帧压力与流量、故障、动作、违规节点）；
+   只读当前接口结果（拓扑、各方案逐帧压力与流量、故障、动作、剩余供水缺口节点）；
    镜头和状态由外部给目标值，这里每帧按时间常数平滑逼近，滚动再快画面也是连续的。 */
 
 export interface StageFrame {
@@ -486,7 +486,7 @@ export class StageRenderer {
           `${l.kind === "pump" ? "水泵" : "管段"} ${l.id}`,
         );
       }
-    // 违规节点红圈
+    // 剩余供水缺口节点红圈
     if (v.violations > 0.02)
       for (const ni of d.violationNodes) {
         const [x, y] = pts[ni];

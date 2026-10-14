@@ -221,7 +221,7 @@ export function mindState(
         const r = nodes.revise;
         r.count += 1;
         if (r.state !== "off") r.state = "ok";
-        r.note = `${c?.name ?? "方案"}：硬约束未通过 → 修改（第 ${r.count} 次）`;
+        r.note = `${c?.name ?? "方案"}：正常供水仍有缺口 → 继续挽救（第 ${r.count} 次）`;
       } else {
         edges.add("review");
         reviewed = a.required_stress_tests_pass === "pass";

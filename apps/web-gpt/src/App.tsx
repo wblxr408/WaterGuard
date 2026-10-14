@@ -7,10 +7,10 @@ import {
   engineStatus,
   loadWorkspace,
   deliveredCandidate,
+  dispatchStatus,
   networkName,
   num,
   sources,
-  statusText,
   time,
 } from "./data";
 import type { Candidate, Source, Workspace } from "./data";
@@ -157,7 +157,6 @@ function Inspector({
         : link?.kind === "valve"
           ? "阀门"
           : "管段";
-  const eligible = c.verification.admission.recommendation_eligible;
   return (
     <aside className="inspector">
       <div className="inspector-top">
@@ -313,15 +312,11 @@ function Inspector({
               : "方案来源：固定工程脚本"}
         </p>
       </div>
-      <div className={`inspector-verdict ${eligible}`}>
+      <div className={`inspector-verdict ${dispatchStatus(c, w).tone}`}>
         <Icon name="shield" size={19} />
         <div>
           <strong>
-            {eligible === "pass"
-              ? "可推荐"
-              : eligible === "pending"
-                ? "推荐待验证"
-                : "当前不可推荐"}
+            {dispatchStatus(c, w).label}
           </strong>
         </div>
       </div>
@@ -684,11 +679,9 @@ function Overview({
         </div>
         <Admission key={c.id} candidate={c} />
         <span
-          className={`badge ${c.verification.admission.recommendation_eligible}`}
+          className={`badge ${dispatchStatus(c, w).tone}`}
         >
-          {w.run?.mitigation_candidate_id === c.id ? '尽力挽救 · 未完全达标' : c.verification.admission.recommendation_eligible === "fail"
-            ? "不可推荐"
-            : statusText[c.verification.admission.recommendation_eligible]}
+          {dispatchStatus(c, w).label}
         </span>
       </div>
       <div className="lower-grid">

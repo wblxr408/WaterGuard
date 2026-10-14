@@ -19,7 +19,7 @@ export const recommendationBlockerText: Record<string, string> = {
   benchmark_only: "仅有固定脚本计算结果",
   fixture_only: "仅有人工样例结果",
   native_agh_trace_missing: "缺少原生 AGH 记录",
-  nominal_constraints_failed: "名义硬约束未通过",
+  nominal_constraints_failed: "正常供水仍有缺口",
   required_stress_tests_failed: "同方案扰动复验未通过",
   required_stress_tests_pending: "扰动复验未完成",
 };
@@ -130,7 +130,8 @@ export function deliveryProvenance(w: Pick<Workspace, 'delivery'>) {
 export function recommendedDispatch(w: Pick<Workspace, 'dispatch_recommendation' | 'candidates'>) {
   const r = w.dispatch_recommendation;
   const candidate = r && w.candidates.find(c => c.id === r.candidate_id && c.verification.validity === 'valid');
-  if (!candidate || !r) return null;
+  if (!candidate || !r || candidate.verification.admission?.action_valid === 'fail'
+      || candidate.verification.admission?.simulation_valid === 'fail') return null;
   if (r.tier === 'fully_compliant' && candidate.verification.admission.recommendation_eligible !== 'pass') return null;
   return { candidate, tier: r.tier };
 }
@@ -138,6 +139,23 @@ export function recommendedDispatch(w: Pick<Workspace, 'dispatch_recommendation'
 export function deliveredCandidate(w: Pick<Workspace, 'run' | 'candidates' | 'dispatch_recommendation'>): Candidate | undefined {
   const id = recommendedDispatch(w)?.candidate.id ?? w.run?.selected_candidate_id ?? w.run?.mitigation_candidate_id;
   return w.candidates.find(c => c.id === id) ?? w.candidates.at(-1);
+}
+
+/** Emergency dispatch identity is independent of full normal-service restoration. */
+export function dispatchStatus(c: Pick<Candidate, 'id' | 'verification'>,
+  w: Pick<Workspace, 'run' | 'candidates' | 'dispatch_recommendation'>) {
+  const a = c.verification.admission;
+  const normalRestored = a?.nominal_constraints_pass === 'pass';
+  if (a?.action_valid === 'fail') return { kind: 'illegal_action' as const, normalRestored, tone: 'fail' as const, label: '操作违规 · 不予推荐' };
+  if (c.verification.validity !== 'valid' || a?.simulation_valid === 'fail')
+    return { kind: 'invalid_evidence' as const, normalRestored, tone: 'fail' as const, label: '证据无效 · 待核实' };
+  const dispatch = recommendedDispatch(w);
+  if (a?.recommendation_eligible === 'pass' && ((dispatch?.candidate.id === c.id && dispatch.tier === 'fully_compliant') || w.run?.selected_candidate_id === c.id))
+    return { kind: 'fully_compliant' as const, normalRestored, tone: 'pass' as const, label: '完全达标推荐' };
+  if ((dispatch?.candidate.id === c.id && dispatch.tier === 'best_effort') || w.run?.mitigation_candidate_id === c.id) {
+    return { kind: 'emergency' as const, normalRestored, tone: 'pass' as const, label: '应急处置推荐 · 尽力挽救' };
+  }
+  return { kind: 'candidate' as const, normalRestored, tone: 'pending' as const, label: '候选方案 · 待调度比较' };
 }
 
 /** Display only comparable, independently verified service outcomes; never infer delivery. */
@@ -169,16 +187,17 @@ export function serviceOutcome(c: Candidate, w: Pick<Workspace, 'run' | 'candida
       worst: (emergency ? m.emergency_min_node_time_pass_ratio : m.min_node_time_pass_ratio) ?? null,
       deltaPp: delta(mean, before, 100), deltaCount: delta(count, beforeCount) };
   };
-  const dispatch = recommendedDispatch(w);
+  const status = dispatchStatus(c, w);
   return { baselineId: baseline?.id ?? null, normal: layer(false),
     emergency: c.task.emergency_floor ? layer(true) : null,
     total: m.assessed_node_count ?? null, shortage: m.shortage_m3,
     shortageReduction: delta(bm?.shortage_m3, m.shortage_m3),
+    shortageReductionPct: bm?.shortage_m3 != null && bm.shortage_m3 > 0 && m.shortage_m3 != null
+      ? Math.round((bm.shortage_m3 - m.shortage_m3) / bm.shortage_m3 * 100 * 1e8) / 1e8 : null,
     residualNodeCount: new Set(c.verification.violations.map(v => v.node_id)).size,
     violationCount: c.verification.violations.length,
-    delivery: dispatch?.candidate.id === c.id ? (dispatch.tier === 'fully_compliant' ? 'recommendation' : 'mitigation')
-      : w.run?.selected_candidate_id === c.id ? 'recommendation'
-      : w.run?.mitigation_candidate_id === c.id ? 'mitigation' : 'candidate' };
+    supplyGapCount: c.verification.violations.length,
+    delivery: status.kind === 'fully_compliant' ? 'recommendation' : status.kind === 'emergency' ? 'mitigation' : 'candidate' };
 }
 
 export async function get<T>(
@@ -359,7 +378,7 @@ export const runStatusText: Record<string, string> = {
 };
 export const conclusionText: Record<string, string> = {
   FEASIBLE_FOUND: "找到可行方案",
-  NO_FEASIBLE_FOUND: "预算内未找到可行方案",
+  NO_FEASIBLE_FOUND: "预算内未找到完全恢复方案",
   BEST_EFFORT_MITIGATION: "应急处置推荐 · 尽力挽救",
   INCOMPLETE: "未完成工程推荐",
   INVALID: "无效",
@@ -385,7 +404,7 @@ export const statusText = { pass: "通过", fail: "未通过", pending: "待验�
 export const gates: [keyof Admission, string][] = [
   ["action_valid", "动作合法"],
   ["simulation_valid", "仿真有效"],
-  ["nominal_constraints_pass", "硬约束"],
+  ["nominal_constraints_pass", "正常供水恢复"],
   ["required_stress_tests_pass", "扰动复验"],
   ["recommendation_eligible", "完全达标推荐准入"],
 ];

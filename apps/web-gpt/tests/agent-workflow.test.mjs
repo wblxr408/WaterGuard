@@ -128,14 +128,14 @@ test('opening a completed rescue selects the delivered candidate rather than the
   const candidates = [{ id: 'baseline' }, { id: 'rescue' }, { id: 'last-tested' }];
   assert.equal(data.deliveredCandidate?.({ candidates, run: { mitigation_candidate_id: 'rescue', selected_candidate_id: null } })?.id, 'rescue');
 });
-test('formal mitigation ends as delivered with its own candidate, not a recommendation', () => {
+test('emergency rescue ends as delivered without rewriting full normal-service admission', () => {
   const run = { status: 'COMPLETED', conclusion: 'BEST_EFFORT_MITIGATION', selected_candidate_id: null, mitigation_candidate_id: 'rescue' };
   const frames = executionFrames({ events: [], evidence: null }, [{ type: 'run.completed', occurred_at: event(1).occurred_at }]);
   for (const graph of [executionGraph(frames, run), branchGraph(frames, run)]) {
     const final = graph.nodes.find(n => n.id === 'host-final-admission');
     assert.equal(final.state, 'ok');
     assert.equal(final.candidateId, 'rescue');
-    assert.equal(final.statusLabel, '尽力挽救 · 未完全达标');
+    assert.equal(run.selected_candidate_id, null);
   }
 });
 test('wall budget termination still exposes the verified mitigation in both workflow views', () => {
@@ -145,7 +145,7 @@ test('wall budget termination still exposes the verified mitigation in both work
     const final = graph.nodes.find(n => n.id === 'host-final-admission');
     assert.equal(final?.candidateId, 'rescue');
     assert.equal(final.state, 'ok');
-    assert.equal(final.statusLabel, '尽力挽救 · 未完全达标');
+    assert.equal(run.status, 'BUDGET_EXHAUSTED');
   }
 });
 test('candidate branches appear only after the planning return and stay unassessed until selected', () => {

@@ -72,7 +72,7 @@ export function branchGraph(frames: ExecutionFrame[], run: RunRecord | null) {
       const state = group.some(c => c.state === 'running') ? 'running' : group.some(c => c.state === 'fail') ? 'fail' : group.some(c => c.state === 'interrupted') ? 'interrupted' : 'ok';
       const n = place({ ...last, id: `evaluation:${group[0].id}`, title: group.length > 1 ? '仿真与验收' : last.title,
         state, startedAt: group[0].startedAt, events: group.flatMap(c => c.events), assessment,
-        summary: assessment ? `最低压力 ${assessment.metrics.min_pressure_m?.toFixed(2) ?? '—'} m · 违规 ${assessment.violation_count}` : last.summary }, 2, y + i * 286);
+        summary: assessment ? `最低压力 ${assessment.metrics.min_pressure_m?.toFixed(2) ?? '—'} m · 剩余供水缺口 ${assessment.violation_count}` : last.summary }, 2, y + i * 286);
       group.forEach(c => mapped.set(c.id, n.id));
       const preceding = submissions.filter(c => Date.parse(c.startedAt) <= Date.parse(group[0].startedAt)).at(-1);
       connect(preceding?.id ?? candidate.id, n.id, 'chosen');
@@ -83,7 +83,7 @@ export function branchGraph(frames: ExecutionFrame[], run: RunRecord | null) {
         const gate = place({ id: `${n.id}:${key}`, title: `${title}${result === 'pass' ? '通过' : result === 'fail' ? '未通过' : '待验证'}`,
           kind: 'condition', tool: '调用时验收报告', state: result === 'pass' ? 'ok' : result === 'fail' ? 'fail' : 'wait',
           statusLabel: result === 'pass' ? '通过' : result === 'fail' ? '未通过' : '待验证',
-          summary: key === 'nominal_constraints_pass' ? `违规 ${assessment.violation_count} 项` : result === 'pending' ? '等待扰动验收结果' : result === 'pass' ? '扰动验收已通过' : '扰动验收未通过',
+          summary: key === 'nominal_constraints_pass' ? `剩余供水缺口 ${assessment.violation_count} 项` : result === 'pending' ? '等待扰动验收结果' : result === 'pass' ? '扰动验收已通过' : '扰动验收未通过',
           startedAt: report!.occurred_at, events: [], candidateId: id, assessment, x: 0, y: 0 }, 3, n.y + j * 134);
         connect(n.id, gate.id, 'outcome', title); bottom = Math.max(bottom, gate.y + L.h);
       }

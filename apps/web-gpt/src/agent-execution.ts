@@ -139,9 +139,9 @@ export function executionGraph(frames: ExecutionFrame[], run: RunRecord | null, 
     const noFeasible = run.conclusion === 'NO_FEASIBLE_FOUND';
     nodes.push({ id: 'host-final-admission', title: '最终准入汇总', tool: '运行服务汇总', kind: 'condition',
       state: feasible || mitigation ? 'ok' : noFeasible ? 'fail' : 'wait',
-      statusLabel: feasible ? '可推荐' : mitigation ? '尽力挽救 · 未完全达标' : noFeasible ? '已测范围无可行方案' : '证据不完整',
+      statusLabel: feasible ? '可推荐' : mitigation ? '应急处置推荐 · 尽力挽救' : noFeasible ? '已测范围无可行方案' : '证据不完整',
       summary: feasible ? `${run.selected_candidate_id}：名义约束、同方案扰动与原生记录均通过` :
-        mitigation ? `${run.mitigation_candidate_id}：已交付基线改善方案；仍有准入未通过，不可推荐为完全达标` :
+        mitigation ? `${run.mitigation_candidate_id}：已交付相对无动作的挽救方案；剩余供水缺口和完整恢复状态另列` :
         noFeasible ? '已测候选未满足冻结约束；保留失败与改进证据' : '必要验收或关联证据尚不完整',
       candidateId: run.selected_candidate_id ?? run.mitigation_candidate_id, startedAt: frames.find(f => f.type === 'end')!.occurred_at,
       events: [], x: 0, y: 0 });

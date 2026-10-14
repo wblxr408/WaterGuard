@@ -660,8 +660,8 @@ function NodePanel({
             <dd>{conclusionText[run.conclusion] ?? run.conclusion}</dd>
           </div>
           <div className="wide">
-            <dt>选定方案</dt>
-            <dd>{run.selected_candidate_id ?? "未选定"}</dd>
+            <dt>交付方案</dt>
+            <dd>{run.selected_candidate_id ?? run.mitigation_candidate_id ?? "尚无已验证交付"}</dd>
           </div>
         </dl>
       )}
@@ -785,7 +785,7 @@ function EventDetail({
           <Gates c={c} />
           {c.verification.violations.length > 0 && (
             <p className="wf-line">
-              违规 {c.verification.violations.length} 条，例：节点{" "}
+              剩余供水缺口 {c.verification.violations.length} 条，例：节点{" "}
               <span className="mono">
                 {c.verification.violations[0].node_id}
               </span>{" "}
@@ -803,7 +803,7 @@ function EventDetail({
           )}
           {c.verification.recommendation_blockers.length > 0 && (
             <p className="wf-line muted">
-              不能推荐的原因：
+              完整恢复尚待满足的条件：
               {c.verification.recommendation_blockers.map((reason) => recommendationBlockerText[reason] ?? reason).join("、")}
             </p>
           )}

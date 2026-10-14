@@ -99,3 +99,43 @@ test('emergency dispatch selects the verified preferred plan without changing fu
   assert.equal(data.recommendedDispatch?.(w), null);
   assert.equal(data.recommendedDispatch?.({ candidates: [b, c] }), null);
 });
+
+test('lawful rescue remains recommended for emergency use despite unmet normal targets', () => {
+  const b = baseline(), c = rescue();
+  c.verification.admission = { action_valid: 'pass', simulation_valid: 'pass', nominal_constraints_pass: 'fail',
+    required_stress_tests_pass: 'pending', recommendation_eligible: 'fail' };
+  const w = { candidates: [b, c], run: { selected_candidate_id: null, mitigation_candidate_id: c.id },
+    dispatch_recommendation: { candidate_id: c.id, tier: 'best_effort', fully_compliant: false } };
+  const result = outcome(c, [b, c], w.run);
+  assert.equal(data.dispatchStatus?.(c, w)?.kind, 'emergency');
+  assert.equal(data.dispatchStatus(c, w).normalRestored, false);
+  assert.equal(result.shortageReductionPct, 60);
+  assert.equal(result.supplyGapCount, 2);
+  assert.equal(result.residualNodeCount, 1);
+  assert.equal(c.verification.admission.recommendation_eligible, 'fail');
+  assert.equal(w.run.selected_candidate_id, null);
+  assert.equal(data.dispatchStatus(b, w).kind, 'candidate');
+});
+
+test('illegal actions and invalid evidence cannot inherit a cached emergency recommendation', () => {
+  const c = rescue();
+  const w = { candidates: [c], run: { mitigation_candidate_id: c.id },
+    dispatch_recommendation: { candidate_id: c.id, tier: 'best_effort', fully_compliant: false } };
+  c.verification.admission = { action_valid: 'fail', simulation_valid: 'pass', recommendation_eligible: 'fail' };
+  assert.equal(data.dispatchStatus?.(c, w)?.kind, 'illegal_action');
+  assert.equal(data.recommendedDispatch(w), null);
+  c.verification.admission.action_valid = 'pass';
+  c.verification.validity = 'invalid';
+  assert.equal(data.dispatchStatus(c, w).kind, 'invalid_evidence');
+  assert.equal(data.recommendedDispatch(w), null);
+});
+
+test('rescue reduction percentage requires a positive comparable no-action shortage and preserves regressions', () => {
+  const b = baseline(), c = rescue();
+  c.verification.metrics.shortage_m3 = 130;
+  assert.equal(outcome(c, [b, c]).shortageReductionPct, -30);
+  b.verification.metrics.shortage_m3 = 0;
+  assert.equal(outcome(c, [b, c]).shortageReductionPct, null);
+  b.task.time_window.end_s = 12000;
+  assert.equal(outcome(c, [b, c]).shortageReductionPct, null);
+});

@@ -4,6 +4,9 @@
 .service-outcome-heading h2 { margin: 8px 0; font-size: 24px; }
 .service-outcome-heading p, .service-outcome-note { color: #657575; font-size: 12px; line-height: 1.7; margin: 0; }
 .service-outcome-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.service-rescue-highlight { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 18px; padding: 20px; margin-bottom: 20px; border-radius: 8px; background: #e7f2ed; }
+.service-rescue-highlight span, .service-rescue-highlight small { display: block; color: #526760; font-size: 12px; line-height: 1.7; }
+.service-rescue-highlight strong { display: block; margin: 7px 0; color: #165f51; font-size: clamp(21px, 2.3vw, 30px); font-variant-numeric: tabular-nums; }
 .service-layer { padding: 20px; background: #f3f7f6; border-radius: 8px; min-width: 0; }
 .service-layer.emergency { background: #e7f2ed; }
 .service-layer-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -29,6 +32,7 @@
   .service-outcome-heading h2 { font-size: 20px; }
   .service-outcome-heading > a { display: inline-block; margin-top: 12px; }
   .service-outcome-grid { grid-template-columns: 1fr; }
+  .service-rescue-highlight { grid-template-columns: 1fr; padding: 16px; }
   .service-layer { padding: 16px; }
   .service-layer-values strong { font-size: 30px; }
   .service-outcome-residual { grid-template-columns: 1fr; gap: 16px; }

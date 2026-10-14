@@ -234,8 +234,8 @@ export function flowState(
         nodes.cond.count += 1;
         nodes.cond.state = nominal ? "wait" : "fail";
         nodes.cond.note = nominal
-          ? "硬约束通过；扰动复验未做，不能推荐"
-          : `${c?.name ?? "方案"} 硬约束未通过 → 修改`;
+          ? "正常供水已恢复；完整恢复仍待扰动复验"
+          : `${c?.name ?? "方案"} 正常供水仍有缺口 → 继续挽救`;
         if (nominal) {
           edges.add("cond>review");
           if (nodes.review.state !== "off") nodes.review.state = "wait";
