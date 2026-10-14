@@ -94,3 +94,7 @@ AGH 是核心任务的执行基座。选定的模型在其中承担任务建模�
 
 
 2026-10-14交付同步版的完整源码、原始证据与演示数据库ZIP，以及单独的最新界面视频，统一从[提交版Release](https://github.com/wblxr408/WaterGuard/releases/tag/submission-20261013)下载。使用Release的完整无视频附件；GitHub自动生成的Source code压缩包仅包含仓库源码，不能替代完整证据包。最新混合运行是`run-efda67724ab043ccaf9a49a30373f161`，录制只回看既有记录，没有重跑方案。版本与材料入口见[提交材料](docs/submission/README.md)，视频内容见[时间索引](docs/submission/视频时间索引.md)。赛事报名与上传由团队自行完成。
+
+## 完整提交交付
+
+[两段演示视频](docs/submission/videos/README.md)均在仓库归档。[最新Release](https://github.com/wblxr408/WaterGuard/releases/tag/submission-20261013)包含代码、Windows x64便携安装包、运行说明、双视频和测试样例的完整ZIP；按[完整包运行说明](docs/submission/完整包运行说明.md)离线回看。
