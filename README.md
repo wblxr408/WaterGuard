@@ -2,8 +2,19 @@
 
 ## 演示视频
 
-- ▶ **[团队演示视频（点击下载 MP4）](https://github.com/wblxr408/WaterGuard/releases/download/submission-20261013/WaterGuard-team-demonstration.mp4)** · 4分55秒 · 有声音
-- ▶ **[最新挽救演示视频（点击下载 MP4）](https://github.com/wblxr408/WaterGuard/releases/download/submission-20261013/WaterGuard-rescue-demonstration-20261014.mp4)** · 3分38秒 · 无音轨
+点击下方播放器即可在线观看，也可下载 MP4。
+
+### 团队演示视频 · 4分55秒 · 有声音
+
+https://github.com/user-attachments/assets/55beeaad-4009-4589-8524-9733017b9317
+
+在线播放为完整压缩版；[下载原清晰版 MP4](https://github.com/wblxr408/WaterGuard/releases/download/submission-20261013/WaterGuard-team-demonstration.mp4)。
+
+### 最新挽救演示视频 · 3分38秒 · 无音轨
+
+https://github.com/user-attachments/assets/00c9076a-00e1-4f04-b3c1-5a980a80e3fd
+
+[下载 MP4](https://github.com/wblxr408/WaterGuard/releases/download/submission-20261013/WaterGuard-rescue-demonstration-20261014.mp4) · [视频时间索引](docs/submission/视频时间索引.md)
 
 面向供水管网突发故障的应急调度、仿真验证与决策证据工作台。默认展示中国 Zhi Jiang 城市管网研究模型（113 个用水节点、1 个水源、164 条管道），并提供实际水力计算的正常、关闭、泄漏、断裂和隔离工况。来源与复现见 [中国管网接入](docs/中国管网接入.md)。
 
