@@ -1,5 +1,10 @@
 # WaterGuard · 水脉卫士
 
+## 演示视频
+
+- ▶ **[团队演示视频（点击下载 MP4）](https://github.com/wblxr408/WaterGuard/releases/download/submission-20261013/WaterGuard-team-demonstration.mp4)** · 4分55秒 · 有声音
+- ▶ **[最新挽救演示视频（点击下载 MP4）](https://github.com/wblxr408/WaterGuard/releases/download/submission-20261013/WaterGuard-rescue-demonstration-20261014.mp4)** · 3分38秒 · 无音轨
+
 面向供水管网突发故障的应急调度、仿真验证与决策证据工作台。默认展示中国 Zhi Jiang 城市管网研究模型（113 个用水节点、1 个水源、164 条管道），并提供实际水力计算的正常、关闭、泄漏、断裂和隔离工况。来源与复现见 [中国管网接入](docs/中国管网接入.md)。
 
 ## 当前状态
