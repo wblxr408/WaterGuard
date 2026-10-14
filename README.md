@@ -98,3 +98,7 @@ AGH 是核心任务的执行基座。选定的模型在其中承担任务建模�
 ## 完整提交交付
 
 [两段演示视频](docs/submission/videos/README.md)均在仓库归档。[最新Release](https://github.com/wblxr408/WaterGuard/releases/tag/submission-20261013)包含代码、Windows x64便携安装包、运行说明、双视频和测试样例的完整ZIP；按[完整包运行说明](docs/submission/完整包运行说明.md)离线回看。
+
+## 报名系统200MB限制
+
+当前报名文件改用不含视频的200MB以内精简ZIP，保留源码、便携安装包、运行说明、最新两例回看与必要测试样例；[200MB报名包说明](docs/submission/200MB报名包说明.md)。两段视频保留在仓库与Release。此前526MB完整包是扩展历史交付，不用于本次文件栏上传。
