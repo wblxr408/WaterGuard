@@ -14,6 +14,23 @@ import type {
 } from "@waterguard/contracts";
 
 export type Source = "china" | "pair" | "bench" | "fixture" | "runtime";
+export type StudyKind = 'boundary' | 'rescue' | 'event';
+export interface RescueChange {
+  label: string; cost: number; repair_end_s?: number;
+  extra_action?: {kind: 'link_open' | 'link_close' | 'pump_on' | 'pump_off'; link_id: string; simulation_time_s: number};
+}
+export function decisionStudyInput(task: TaskSpec, plan: ActionPlan, kind: StudyKind,
+  options: {budget: number; rescueOptions?: RescueChange[]; target?: 'normal' | 'basic'; eventTime?: number; responseTime?: number; repairEnd?: number; useSurrogate?: boolean; highBudget?: number}) {
+  const fault = task.fault!;
+  const step = task.time_window.step_s;
+  return {task, plan, kind, max_simulations: options.budget, max_wall_time_s: 300,
+    demand_multipliers: [.9, 1, 1.1, 1.2, 1.3].map(x => Number((x * task.hydraulic_options!.demand_multiplier).toFixed(6))),
+    repair_end_times_s: [...new Set([-2,-1,0,1,2].map(x => fault.end_s + x * step)
+      .filter(x => x > fault.start_s && x <= task.time_window.end_s))],
+    ...(kind === 'boundary' ? {use_surrogate: options.useSurrogate ?? false, high_fidelity_budget: options.highBudget ?? 3} : {}),
+    ...(kind === 'rescue' ? {rescue_options: options.rescueOptions, rescue_target: options.target ?? 'normal'} : {}),
+    ...(kind === 'event' ? {event_time_s: options.eventTime, response_time_s: options.responseTime, new_repair_end_s: options.repairEnd} : {})};
+}
 export const networkName = (id: string) => id === "china-zhijiang" ? "中国 Zhi Jiang" : id.toUpperCase();
 export const recommendationBlockerText: Record<string, string> = {
   benchmark_only: "仅有固定脚本计算结果",

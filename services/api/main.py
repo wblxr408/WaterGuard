@@ -17,6 +17,7 @@ from starlette.responses import FileResponse, StreamingResponse, JSONResponse, R
 
 from .runtime import ConflictError, NotFoundError, ROOT, RunStore, now
 from .workbench import BenchmarkExecutor, TaskProposal, network_details, propose_task, run_results
+from .decision_studies import DecisionStudies, StudyRequest
 from waterguard_contracts.core import FIXTURES, digest, load, task_ref
 
 
@@ -77,17 +78,53 @@ def create_app(store: RunStore | None = None) -> FastAPI:
     executor = BenchmarkExecutor(store)
     from .agh import LiveExecutor
     live = LiveExecutor(store, executor)
+    studies = DecisionStudies(store)
 
     @asynccontextmanager
     async def lifespan(_app):
         executor.recover()
         live.recover()
+        studies.recover()
         yield
+        studies.close()
         live.close()
         executor.close()
 
     app = FastAPI(title="WaterGuard API", version="0.1.0", lifespan=lifespan)
     app.state.benchmark_executor = executor
+    app.state.decision_studies = studies
+
+    @app.get('/api/decision-studies')
+    def decision_study_list():
+        return studies.recent()
+
+    @app.post('/api/decision-studies/preview')
+    def decision_study_preview(request: StudyRequest):
+        try:
+            return studies.preview(request)
+        except (ValueError, StopIteration) as error:
+            raise HTTPException(422, detail=str(error))
+
+    @app.post('/api/decision-studies', status_code=202)
+    def decision_study_create(request: StudyRequest):
+        try:
+            return studies.create(request)
+        except (ValueError, StopIteration) as error:
+            raise HTTPException(422, detail=str(error))
+
+    @app.get('/api/decision-studies/{study_id}')
+    def decision_study_get(study_id: str):
+        try:
+            return studies.get(study_id)
+        except (ValueError, NotFoundError) as error:
+            raise HTTPException(404, detail=str(error))
+
+    @app.post('/api/decision-studies/{study_id}/cancel')
+    def decision_study_cancel(study_id: str):
+        try:
+            return studies.cancel(study_id)
+        except (ValueError, NotFoundError) as error:
+            raise HTTPException(404, detail=str(error))
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request, error):

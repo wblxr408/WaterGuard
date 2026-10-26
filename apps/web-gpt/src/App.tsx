@@ -15,6 +15,7 @@ import {
 } from "./data";
 import type { Candidate, Source, Workspace } from "./data";
 import AgentPage from "./AgentPage";
+import DecisionLab from './DecisionLab';
 import RunControls, { ThresholdControls } from './RunControls';
 import JevPanel from './JevPanel';
 import { AgentRunStrip } from "./AgentRun";
@@ -33,7 +34,7 @@ import {
   Violations,
 } from "./Pages";
 
-type Page = "cover" | "overview" | "agent" | "compare" | "model" | "evidence";
+type Page = "cover" | "overview" | "agent" | "compare" | "model" | "evidence" | "lab";
 const navigation: { id: Page; label: string; icon: string; english: string }[] =
   [
     { id: "cover", label: "首页", icon: "home", english: "Home" },
@@ -51,6 +52,7 @@ const navigation: { id: Page; label: string; icon: string; english: string }[] =
       english: "Comparison",
     },
     { id: "model", label: "建模与仿真", icon: "cube", english: "Model studio" },
+    { id: "lab", label: "决策实验", icon: "network", english: "Decision studio" },
     { id: "evidence", label: "证据中心", icon: "file", english: "Evidence" },
   ];
 
@@ -741,7 +743,7 @@ export default function App() {
     null,
   );
   const [focus, setFocus] = useState(false);
-  const loadHydraulics = page !== "agent";
+  const loadHydraulics = page !== "agent" && page !== "lab";
   const inspect = (title: string, data: unknown) => setDialog({ title, data });
   useEffect(() => {
     if (!loadHydraulics || source === 'runtime') return;
@@ -911,6 +913,8 @@ export default function App() {
         <main id="main-content" className="cover-main">
           <Cover w={w} openPage={openPage} />
         </main>
+      ) : page === "lab" ? (
+        <div className="app-main"><main id="main-content"><DecisionLab candidate={c} runId={w?.run?.run_id} inspect={inspect}/></main></div>
       ) : page === "agent" ? (
         <div className="app-main">
           <header className="topbar">
